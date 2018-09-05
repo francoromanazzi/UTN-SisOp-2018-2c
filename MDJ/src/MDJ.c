@@ -1,7 +1,19 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include "MDJ.h"
 
 int main(void) {
-	puts("Hello, World"); /* prints Hello, World */
+	config_create_fixed("../../configs/MDJ.txt");
+	logger = log_create("../../logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
+
+	mdj_exit();
 	return EXIT_SUCCESS;
+}
+
+void config_create_fixed(char* path){
+	config = config_create(path);
+	util_config_fix_comillas(&config, "PUNTO_MONTAJE");
+}
+
+void mdj_exit(){
+	log_destroy(logger);
+	config_destroy(config);
 }

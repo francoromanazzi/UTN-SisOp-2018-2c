@@ -3,6 +3,8 @@
 	<name>S-AFA</name>
 	<comment></comment>
 	<projects>
+		<project>commons</project>
+		<project>shared</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
