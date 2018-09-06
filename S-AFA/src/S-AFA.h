@@ -19,6 +19,7 @@
 
 	/* Variables globales */
 	pthread_t thread_consola;
+	pthread_t thread_planificador;
 	t_config* config;
 	t_log* logger;
 	int listening_socket;

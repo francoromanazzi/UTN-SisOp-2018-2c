@@ -7,7 +7,8 @@
 	#include <commons/string.h>
 	#include <readline/readline.h>
 	#include <readline/history.h>
-
+	#include "S-AFA.h"
+	#include "planificador.h"
 
 	void gestor_consola_iniciar();
 

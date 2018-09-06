@@ -22,7 +22,6 @@ int main(void) {
 	log_info(logger, "Recibi conexion en el socket %d", nuevo_cliente_socket);
 
 	/* Ya sali del estado corrupto, y estoy en estado  operativo */
-
 	/* Creo el hilo consola del gestor de programas */
 	if(pthread_create( &thread_consola, NULL, (void*) gestor_consola_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo para la consola");
@@ -32,8 +31,17 @@ int main(void) {
 	log_info(logger, "Creo el hilo para la consola");
 	pthread_detach(thread_consola);
 
+	/* Creo el hilo para el planificador */
+	if(pthread_create( &thread_planificador, NULL, (void*) planificador_iniciar, NULL) ){
+		log_error(logger,"No pude crear el hilo para el planificador");
+		safa_exit();
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger, "Creo el hilo para el planificador");
+	pthread_detach(thread_planificador);
 
 	/* TODO: Gestionar las conexiones. select() ??? */
+
 	for(;;);
 	safa_exit();
 	return EXIT_SUCCESS;

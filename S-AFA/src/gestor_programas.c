@@ -1,5 +1,4 @@
 #include "gestor_programas.h"
-#include "S-AFA.h"
 
 static void gestor_procesar_comando(char*);
 
@@ -7,7 +6,7 @@ void gestor_consola_iniciar(){
 	char * linea;
 	printf("Bienvenido! Ingrese \"ayuda\" para ver una lista con todos los comandos disponibles \n");
 	while(1) {
-		linea = readline("S-AFA>");
+		linea = readline("S-AFA> ");
 		if(linea)
 			add_history(linea);
 		if(!strncmp(linea, "salir", 5)) {
@@ -51,7 +50,7 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando ejecutar [ruta]*/
 	else if(argc == 2 && !strcmp(argv[0],"ejecutar")){
-
+		planificador_crear_dtb_y_encolar(argv[1]);
 		split_liberar(argv);
 	}
 	/* Comando status*/
@@ -61,7 +60,14 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando status [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "status")){
-
+		char* estado_actual;
+		t_dtb* dtb = planificador_encontrar_dtb( (unsigned) atoi(argv[1]) , &estado_actual);
+		if(dtb != NULL)
+			dtb_mostrar(dtb, estado_actual);
+		else
+			printf("No se encontro el DTB con ID = %s\n", argv[1]);
+		dtb_destroy(dtb);
+		free(estado_actual);
 		split_liberar(argv);
 	}
 	/* Comando finalizar [pcb_id] */
