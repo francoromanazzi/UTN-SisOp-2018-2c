@@ -3,5 +3,6 @@
 
 
 	void pcp_iniciar();
+	void pcp_desencolar(unsigned int id, char* cola);
 
 #endif /* PCP_H_ */

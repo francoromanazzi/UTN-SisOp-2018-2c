@@ -16,13 +16,15 @@
 
 	t_list* cola_new;
 	t_list* cola_ready;
-	pthread_mutex_t mutex_cola_ready;
+	pthread_mutex_t mutex_cola_ready; // Porque tanto PCP como PLP acceden a esta lista
 	t_list* cola_block;
+	t_list* cola_exec;
 
 	int cant_procesos;
 
 	void planificador_iniciar();
 	void planificador_crear_dtb_y_encolar(char* path);
+	bool planificador_finalizar_dtb(unsigned int id);
 	t_dtb* planificador_encontrar_dtb(unsigned int id, char** estado_actual);
 
 

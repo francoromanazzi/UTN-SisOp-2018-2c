@@ -6,6 +6,7 @@ void planificador_iniciar(){
 	cola_ready = list_create();
 	pthread_mutex_init(&mutex_cola_ready, NULL);
 	cola_block = list_create();
+	cola_exec = list_create();
 
 	if(pthread_create( &thread_pcp, NULL, (void*) pcp_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PCP");
@@ -25,9 +26,7 @@ void planificador_iniciar(){
 }
 
 void planificador_crear_dtb_y_encolar(char* path){
-	t_dtb* nuevo_dtb = dtb_create(path);
-	list_add(cola_new, nuevo_dtb);
-	log_info(logger, "Creo el DTB con ID: %d del escriptorio: %s", nuevo_dtb->gdt_id, path);
+	plp_crear_dtb_y_encolar(path);
 }
 
 t_dtb* planificador_encontrar_dtb(unsigned int id_target, char** estado_actual){
@@ -43,8 +42,40 @@ t_dtb* planificador_encontrar_dtb(unsigned int id_target, char** estado_actual){
 		*estado_actual = strdup("READY");
 	else if( (dtb = dtb_copiar( list_find(cola_block, _tiene_mismo_id)) ) != NULL)
 		*estado_actual = strdup("BLOCK");
-	// TODO: y si esta en ejecucion? si esta en exit?
+	else if( (dtb = dtb_copiar( list_find(cola_exec, _tiene_mismo_id)) ) != NULL)
+		*estado_actual = strdup("EXEC");
 	else
 		*estado_actual= strdup("No encontrado");
 	return dtb;
 }
+
+bool planificador_finalizar_dtb(unsigned int id){
+	char* estado;
+	t_dtb* dtb = planificador_encontrar_dtb(id, &estado);
+	dtb_destroy(dtb);
+
+	if(!strcmp(estado,"NEW"))
+		plp_desencolar(id);
+	else if(!strcmp(estado,"READY") || !strcmp(estado,"BLOCK") || !strcmp(estado,"EXEC")){
+		pcp_desencolar(id, estado);
+	}
+	else{ // No encontrado
+		free(estado);
+		return false;
+	}
+	free(estado);
+	return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

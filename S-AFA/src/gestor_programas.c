@@ -67,6 +67,10 @@ static void gestor_procesar_comando(char* linea){
 		for(i = 0; i < cola_block->elements_count; i++){
 			dtb_mostrar(list_get(cola_block, i), "BLOCK");
 		}
+		printf("\n-----------------Cola EXEC-----------------:\n");
+		for(i = 0; i < cola_exec->elements_count; i++){
+			dtb_mostrar(list_get(cola_exec, i), "EXEC");
+		}
 		split_liberar(argv);
 	}
 	/* Comando status [pcb_id] */
@@ -76,14 +80,17 @@ static void gestor_procesar_comando(char* linea){
 		if(dtb != NULL)
 			dtb_mostrar(dtb, estado_actual);
 		else
-			printf("No se encontro el DTB con ID = %s\n", argv[1]);
+			printf("No se encontro el proceso con ID = %s\n\n", argv[1]);
 		dtb_destroy(dtb);
 		free(estado_actual);
 		split_liberar(argv);
 	}
 	/* Comando finalizar [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "finalizar")){
-
+		if(planificador_finalizar_dtb((unsigned) atoi(argv[1])))
+			printf("El proceso con ID = %s ha sido finalizado satisfactoriamente\n\n", argv[1]);
+		else
+			printf("No se encontro el proceso con ID = %s\n\n", argv[1]);
 		split_liberar(argv);
 	}
 	/* Comando metricas */
@@ -98,7 +105,7 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Error al ingresar comando */
 	else{
-		printf("No se pudo reconocer el comando\n");
+		printf("No se pudo reconocer el comando\n\n");
 		split_liberar(argv);
 	}
 }
