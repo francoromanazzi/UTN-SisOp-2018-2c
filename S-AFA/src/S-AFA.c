@@ -1,6 +1,4 @@
 #include "S-AFA.h"
-#include "gestor_programas.h"
-#include "planificador.h"
 
 int main(void) {
 	config = config_create("../../configs/S-AFA.txt");
@@ -22,8 +20,20 @@ int main(void) {
 	int nuevo_cliente_socket = accept(listening_socket, (struct sockaddr *) &addr, &addrlen);
 	log_info(logger, "Recibi conexion en el socket %d", nuevo_cliente_socket);
 
-	/* TODO: Gestionar las conexiones. select() ??? */
+	/* Ya sali del estado corrupto, y estoy en estado  operativo */
 
+	/* Creo el hilo consola del gestor de programas */
+	if(pthread_create( &thread_consola, NULL, (void*) gestor_consola_iniciar, NULL) ){
+		log_error(logger,"No pude crear el hilo para la consola");
+		safa_exit();
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger, "Creo el hilo para la consola");
+	pthread_detach(thread_consola);
+
+
+	/* TODO: Gestionar las conexiones. select() ??? */
+	for(;;);
 	safa_exit();
 	return EXIT_SUCCESS;
 }

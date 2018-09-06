@@ -1,5 +1,15 @@
 #ifndef GESTOR_PROGRAMAS_H_
 #define GESTOR_PROGRAMAS_H_
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <unistd.h>
+	#include <commons/log.h>
+	#include <commons/string.h>
+	#include <readline/readline.h>
+	#include <readline/history.h>
+
+
+	void gestor_consola_iniciar();
 
 
 
