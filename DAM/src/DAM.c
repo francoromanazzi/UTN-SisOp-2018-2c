@@ -2,6 +2,7 @@
 
 int main(void) {
 	config_create_fixed("../../configs/DAM.txt");
+	mkdir("../../logs",0777);
 	logger = log_create("../../logs/DAM.log", "DAM", false, LOG_LEVEL_TRACE);
 
 	/* Me conecto a S-AFA, FM9 y MDJ */

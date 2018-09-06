@@ -2,6 +2,7 @@
 
 int main(void) {
 	config_create_fixed("../../configs/MDJ.txt");
+	mkdir("../../logs",0777);
 	logger = log_create("../../logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
 	mdj_exit();

@@ -2,6 +2,7 @@
 
 int main(void) {
 	config_create("../../configs/FM9.txt");
+	mkdir("../../logs",0777);
 	logger = log_create("../../logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
 
 	fm9_exit();

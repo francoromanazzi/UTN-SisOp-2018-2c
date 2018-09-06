@@ -2,6 +2,7 @@
 
 int main(void) {
 	config = config_create("../../configs/S-AFA.txt");
+	mkdir("../../logs",0777);
 	logger = log_create("../../logs/S-AFA.log", "S-AFA", false, LOG_LEVEL_TRACE);
 
 	/* Empiezo en estado corrupto */
