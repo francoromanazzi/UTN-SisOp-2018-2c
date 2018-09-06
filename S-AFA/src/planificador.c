@@ -38,11 +38,11 @@ t_dtb* planificador_encontrar_dtb(unsigned int id_target, char** estado_actual){
 	}
 
 	if( (dtb = dtb_copiar( list_find(cola_new, _tiene_mismo_id)) ) != NULL)
-		*estado_actual = strdup("New");
+		*estado_actual = strdup("NEW");
 	else if( (dtb = dtb_copiar( list_find(cola_ready, _tiene_mismo_id)) ) != NULL)
-		*estado_actual = strdup("Ready");
+		*estado_actual = strdup("READY");
 	else if( (dtb = dtb_copiar( list_find(cola_block, _tiene_mismo_id)) ) != NULL)
-		*estado_actual = strdup("Block");
+		*estado_actual = strdup("BLOCK");
 	// TODO: y si esta en ejecucion? si esta en exit?
 	else
 		*estado_actual= strdup("No encontrado");

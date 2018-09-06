@@ -33,7 +33,6 @@ static void gestor_procesar_comando(char* linea){
 		return i;
 	}
 
-
 	char** argv = string_split(linea, " ");
 	int argc = split_cant_elem(argv);
 
@@ -55,7 +54,19 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando status*/
 	else if(argc == 1 && !strcmp(argv[0], "status")){
-
+		int i;
+		printf("\n-----------------Cola NEW-----------------:\n");
+		for(i = 0; i < cola_new->elements_count; i++){
+			dtb_mostrar(list_get(cola_new, i), "NEW");
+		}
+		printf("\n-----------------Cola READY-----------------:\n");
+		for(i = 0; i < cola_ready->elements_count; i++){
+			dtb_mostrar(list_get(cola_ready, i), "READY");
+		}
+		printf("\n-----------------Cola BLOCK-----------------:\n");
+		for(i = 0; i < cola_block->elements_count; i++){
+			dtb_mostrar(list_get(cola_block, i), "BLOCK");
+		}
 		split_liberar(argv);
 	}
 	/* Comando status [pcb_id] */
