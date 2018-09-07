@@ -20,6 +20,8 @@
 	int dtb_get_gdt_id_count();
 
 	t_dtb* dtb_create(char* path_escriptorio);
+	t_dtb* dtb_create_dummy();
+
 	void dtb_mostrar(t_dtb* dtb, char* estado_actual);
 	t_dtb* dtb_copiar(t_dtb* otro_dtb);
 	void dtb_destroy(t_dtb* dtb);

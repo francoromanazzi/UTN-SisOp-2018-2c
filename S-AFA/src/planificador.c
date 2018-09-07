@@ -6,7 +6,9 @@ void planificador_iniciar(){
 	cola_ready = list_create();
 	pthread_mutex_init(&mutex_cola_ready, NULL);
 	cola_block = list_create();
+	list_add(cola_block, dtb_create_dummy());
 	cola_exec = list_create();
+	cola_exit = list_create();
 
 	if(pthread_create( &thread_pcp, NULL, (void*) pcp_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PCP");
@@ -55,9 +57,9 @@ bool planificador_finalizar_dtb(unsigned int id){
 	dtb_destroy(dtb);
 
 	if(!strcmp(estado,"NEW"))
-		plp_desencolar(id);
+		plp_mover_dtb(id, "EXIT");
 	else if(!strcmp(estado,"READY") || !strcmp(estado,"BLOCK") || !strcmp(estado,"EXEC")){
-		pcp_desencolar(id, estado);
+		pcp_mover_dtb(id, estado, "EXIT");
 	}
 	else{ // No encontrado
 		free(estado);

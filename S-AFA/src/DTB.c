@@ -9,8 +9,12 @@ t_dtb* dtb_create(char* path_escriptorio){
 	return ret;
 }
 
+t_dtb* dtb_create_dummy(){
+	return dtb_create("");
+}
+
 int dtb_get_gdt_id_count(){
-	static int count = 1;
+	static int count = 0;
 	return count++;
 }
 

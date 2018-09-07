@@ -71,6 +71,10 @@ static void gestor_procesar_comando(char* linea){
 		for(i = 0; i < cola_exec->elements_count; i++){
 			dtb_mostrar(list_get(cola_exec, i), "EXEC");
 		}
+		printf("\n-----------------Cola EXIT-----------------:\n");
+		for(i = 0; i < cola_exit->elements_count; i++){
+			dtb_mostrar(list_get(cola_exit, i), "EXIT");
+		}
 		split_liberar(argv);
 	}
 	/* Comando status [pcb_id] */
@@ -87,6 +91,8 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando finalizar [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "finalizar")){
+		if(atoi(argv[1]) == 0)
+			printf("No se puede finalizar el proceso dummy\n\n");
 		if(planificador_finalizar_dtb((unsigned) atoi(argv[1])))
 			printf("El proceso con ID = %s ha sido finalizado satisfactoriamente\n\n", argv[1]);
 		else
