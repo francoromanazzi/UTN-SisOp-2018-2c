@@ -8,13 +8,21 @@
 	#include <commons/log.h>
 	#include <shared/socket.h>
 	#include <shared/util.h>
+	#include <unistd.h>
+	#include <sys/socket.h>
+
 
 	/* Constantes */
-	#define IP "127.0.0.1"
+	//#define IP "127.0.0.1"
+	#define IP "192.168.1.4"
+
+	#define BACKLOG 10
 
 	/* Variables globales */
 	t_config* config;
 	t_log* logger;
+	int listening_socket;
+	int nuevo_cliente_socket;
 
 	void fm9_exit();
 
