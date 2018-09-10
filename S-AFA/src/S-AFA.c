@@ -1,14 +1,7 @@
 #include "S-AFA.h"
 
 int main(void){
-	estado_operatorio = false;
-	cpu_conectado = false;
-	dam_conectado = false;
-	config = config_create("../../configs/S-AFA.txt");
-	retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
-	mkdir("../../logs",0777);
-	logger = log_create("../../logs/S-AFA.log", "S-AFA", false, LOG_LEVEL_TRACE);
-	cpu_sockets = list_create();
+	safa_initialize();
 
 	/* Empiezo en estado corrupto */
 	/* Como salgo? Conexion con DAM y por lo menos un CPU */
@@ -23,6 +16,17 @@ int main(void){
 
 	safa_exit();
 	return EXIT_SUCCESS;
+}
+
+void safa_initialize(){
+	estado_operatorio = false;
+	cpu_conectado = false;
+	dam_conectado = false;
+	config = config_create("../../configs/S-AFA.txt");
+	retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
+	mkdir("../../logs",0777);
+	logger = log_create("../../logs/S-AFA.log", "S-AFA", false, LOG_LEVEL_TRACE);
+	cpu_conexiones = list_create();
 }
 
 void safa_iniciar_estado_operatorio(){
@@ -48,9 +52,10 @@ void safa_iniciar_estado_operatorio(){
 }
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
+	t_dtb* dtb_recibido;
 
-	bool _mismo_fd_socket(void* socket_en_lista){
-		return (int) socket_en_lista == socket;
+	bool _mismo_fd_socket(void* conexion_cpu_en_lista){
+		return ((t_conexion_cpu*) conexion_cpu_en_lista)->socket == socket;
 	}
 
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
@@ -66,6 +71,15 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 					safa_iniciar_estado_operatorio();
 				}
 			break;
+
+			case DESCONEXION:
+				log_error(logger, "Se desconecto DAM");
+				return -1;
+			break;
+
+			case RESULTADO_ABRIR:
+			break;
+
 			default:
 				log_info(logger, "No entendi el mensaje de DAM");
 			break;
@@ -77,7 +91,12 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				log_info(logger, "Se conecto un CPU");
 				cpu_conectado = true;
 
-				list_add(cpu_sockets, (void*) socket);
+				// Agrego el nuevo socket a la lista de CPUs
+				t_conexion_cpu*  nueva_conexion_cpu = malloc(sizeof(t_conexion_cpu));
+				nueva_conexion_cpu->socket = socket;
+				nueva_conexion_cpu->en_uso = 0;
+				list_add(cpu_conexiones, (void*) nueva_conexion_cpu);
+
 				// Le mando el quantum
 				int quantum = config_get_int_value(config, "QUANTUM");
 				t_msg* mensaje_a_enviar = msg_create(SAFA, HANDSHAKE, (void*) quantum, sizeof(int));
@@ -91,12 +110,36 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case DESCONEXION:
-				list_remove_by_condition(cpu_sockets, _mismo_fd_socket);
+				log_info(logger, "Se desconecto un CPU");
+				list_remove_and_destroy_by_condition(cpu_conexiones, _mismo_fd_socket, free);
 				return -1;
 			break;
+
+			case BLOCK:
+				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				dtb_recibido = desempaquetar_dtb(msg);
+				// TODO: Actualizar los datos del DTB del sistema, con los del DTB recibido
+
+				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
+			break;
+
+			case READY:
+				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				dtb_recibido = desempaquetar_dtb(msg);
+				// TODO: Actualizar los datos del DTB del sistema, con los del DTB recibido
+
+				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
+			break;
+
+			case EXIT:
+				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				dtb_recibido = desempaquetar_dtb(msg);
+				planificador_finalizar_dtb(dtb_recibido->gdt_id);
+				dtb_destroy(dtb_recibido);
+			break;
+
 			default:
 				log_info(logger, "No entendi el mensaje de CPU");
-			break;
 		}
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
@@ -109,7 +152,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 void safa_exit(){
 	close(listening_socket);
 	close(dam_socket);
-	list_destroy_and_destroy_elements(cpu_sockets,(void*) close);
+	list_destroy_and_destroy_elements(cpu_conexiones, free);
 	log_destroy(logger);
 	config_destroy(config);
 }

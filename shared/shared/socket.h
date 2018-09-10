@@ -8,7 +8,7 @@
 	#include <commons/collections/list.h>
 	#include <netdb.h>
 	#include <unistd.h>
-	#include "msg.h"
+	#include "protocol.h"
 
 	#define BACKLOG 100
 

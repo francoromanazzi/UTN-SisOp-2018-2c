@@ -12,6 +12,7 @@
 	#include <shared/socket.h>
 	#include "gestor_programas.h"
 	#include "planificador.h"
+	#include "conexion_cpu.h"
 
 	/* Constantes */
 	#define IP "127.0.0.1"
@@ -31,11 +32,11 @@
 
 	int listening_socket;
 	int dam_socket;
-	t_list* cpu_sockets;
+	t_list* cpu_conexiones;
 
 
-	// Devuelvo -1 si quiero cerrar esa conexion
-	int safa_manejador_de_eventos(int socket, t_msg* msg);
+	void safa_initialize();
+	int safa_manejador_de_eventos(int socket, t_msg* msg); 	// Devuelvo -1 si quiero cerrar esa conexion
 	void safa_iniciar_estado_operatorio();
 	void safa_exit();
 

@@ -1,5 +1,23 @@
 #include "CPU.h"
 
+void dtb_mostraar(t_dtb* dtb, char* estado_actual){
+	void dictionary_print_element(char* key, void* data){
+		printf("\t%s: %d\n", key, (int) data);
+	}
+
+	if(dtb->gdt_id == 0)
+		printf("ID: DUMMY (0)\n");
+	else
+		printf("ID: %d\n",dtb->gdt_id);
+	printf("Estado actual: %s\n", estado_actual);
+	printf("Escriptorio: %s\n",dtb->ruta_escriptorio);
+	printf("PC: %d\n",dtb->pc);
+	printf("Inicializado: %d\n",dtb->flags.inicializado);
+	printf("Archivos abiertos:\n");
+	dictionary_iterator(dtb->archivos_abiertos,(void*) dictionary_print_element);
+	printf("\n");
+}
+
 int main(void) {
 	config_create_fixed("../../configs/CPU.txt");
 	mkdir("../../logs",0777);
@@ -19,6 +37,9 @@ int main(void) {
 	}
 	log_info(logger, "Me conecte a DAM");
 
+	while(1)
+		cpu_iniciar();
+
 	for(;;) sleep(10);
 	cpu_exit();
 	return EXIT_SUCCESS;
@@ -28,6 +49,36 @@ void config_create_fixed(char* path){
 	config = config_create(path);
 	util_config_fix_comillas(&config, "IP_SAFA");
 	util_config_fix_comillas(&config, "IP_DIEGO");
+}
+
+void cpu_iniciar(){
+	t_msg* msg = malloc(sizeof(t_msg));
+	msg_await(safa_socket, msg);
+	if(msg->header->tipo_mensaje == EXEC){
+		t_dtb* dtb = desempaquetar_dtb(msg);
+		//dtb_mostrar(dtb, "EXEC");
+		cpu_ejecutar_dtb(dtb);
+	}
+	else{
+		log_error(logger, "No entendi el mensaje de SAFA");
+		msg_free(&msg);
+		return;
+	}
+}
+
+void cpu_ejecutar_dtb(t_dtb* dtb){
+	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
+
+	dtb_mostraar(dtb, "EXEC"); // Sacar despues
+
+	if(dtb->gdt_id == 0){ // DUMMY
+		mensaje_a_enviar = msg_create(CPU, BLOCK, (void**) 1, sizeof(int));
+		msg_send(safa_socket, *mensaje_a_enviar);
+		msg_free(&mensaje_a_enviar);
+	}
+	else { // NO DUMMY
+
+	}
 }
 
 int cpu_connect_to_safa(){
@@ -47,6 +98,7 @@ int cpu_connect_to_safa(){
 		msg_free(&msg);
 	}
 	else{
+		log_error(logger, "No entendi el mensaje de SAFA");
 		msg_free(&msg);
 		return -1;
 	}

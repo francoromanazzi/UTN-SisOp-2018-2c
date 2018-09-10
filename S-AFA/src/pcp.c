@@ -4,7 +4,51 @@ void pcp_iniciar(){
 	/* Tengo que revisar constantemente la cola de ready, y mandarle a las CPU los dtb */
 	while(1){
 		usleep(retardo_planificacion);
+		int cpu_socket;
+		if(!list_is_empty(cola_ready) && (cpu_socket = pcp_buscar_cpu_ociosa()) != -1){ // Hay CPU ociosa y proceso esperando en ready
+			t_dtb* dtb_elegido = pcp_aplicar_algoritmo();
+
+			t_msg* dtb_empaquetado = empaquetar_dtb(dtb_elegido);
+			dtb_empaquetado->header->emisor = SAFA;
+			dtb_empaquetado->header->tipo_mensaje = EXEC;
+
+			list_add(cola_exec, dtb_elegido);
+			log_info(logger, "Muevo a EXEC el DTB con ID: %d", dtb_elegido->gdt_id);
+
+			msg_send(cpu_socket, *dtb_empaquetado);
+			log_info(logger, "PCP le mando a ejecutar un DTB a CPU");
+
+			msg_free(&dtb_empaquetado);
+		}
+
 	}
+}
+
+t_dtb* pcp_aplicar_algoritmo(){
+	char* algoritmo = config_get_string_value(config, "ALGORITMO");
+	// TODO: Gestionar algoritmo
+
+	// DUMMY tiene prioridad maxima
+	bool _es_dummy(void* data){
+		return  ((t_dtb*) data) -> gdt_id == 0;
+	}
+	t_dtb* dtb = list_remove_by_condition(cola_ready, _es_dummy);
+	if(dtb != NULL) return dtb;
+
+	// Aplico FIFO:
+	return (t_dtb*) list_remove(cola_ready, 0);
+}
+
+int pcp_buscar_cpu_ociosa(){
+	int i;
+	for(i=0;i<cpu_conexiones->elements_count; i++){
+		t_conexion_cpu* cpu = list_get(cpu_conexiones, i);
+		if(cpu->en_uso == 0){
+			cpu->en_uso = 1;
+			return cpu->socket;
+		}
+	}
+	return -1;
 }
 
 void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){

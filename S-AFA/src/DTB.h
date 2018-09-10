@@ -3,6 +3,7 @@
 	#include <string.h>
 	#include <stdlib.h>
 	#include <stdio.h>
+	#include <commons/collections/dictionary.h>
 
 	typedef struct dtb_flags {
 		int inicializado;
@@ -13,7 +14,7 @@
 		char* ruta_escriptorio;
 		unsigned int pc;
 		struct dtb_flags flags;
-		/* TODO: Tabla de direcciones de archivos abiertos */
+		t_dictionary* archivos_abiertos;
 	} t_dtb ;
 
 

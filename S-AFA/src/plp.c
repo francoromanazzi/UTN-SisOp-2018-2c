@@ -27,14 +27,21 @@ void plp_iniciar(){
 			free(estado_dummy);
 
 			/* Espero a que el gestor me diga que CPU termino la operacion dummy, y lo bloqueo */
-			//pcp_mover_dtb(0, "EXEC", "BLOCK");
-			pcp_mover_dtb(0, "READY", "EXEC"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
-			pcp_mover_dtb(0, "EXEC", "BLOCK"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
+
+			sleep(2); // Despues sacarlo!!!!
+			pcp_mover_dtb(0, "EXEC", "BLOCK");
+			//pcp_mover_dtb(0, "READY", "EXEC"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
+			//pcp_mover_dtb(0, "EXEC", "BLOCK"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
 
 			/* Se tienen que cargar en memoria los archivos necesarios */
 
+
 			/* Fin operacion dummy */
 			t_dtb* dtb = dtb_copiar(list_get(cola_new, 0));
+			void dictionary_copy_element(char* key, void* data){
+				dictionary_put(dtb->archivos_abiertos, key, (int*) data);
+			}
+			dictionary_iterator(dummy_a_enviar->archivos_abiertos, dictionary_copy_element);
 			plp_mover_dtb(dtb->gdt_id, "READY");
 			dtb_destroy(dtb);
 		}
