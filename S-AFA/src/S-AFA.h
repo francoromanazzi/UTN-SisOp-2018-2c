@@ -36,7 +36,7 @@
 
 	// Devuelvo -1 si quiero cerrar esa conexion
 	int safa_manejador_de_eventos(int socket, t_msg* msg);
-
+	void safa_iniciar_estado_operatorio();
 	void safa_exit();
 
 

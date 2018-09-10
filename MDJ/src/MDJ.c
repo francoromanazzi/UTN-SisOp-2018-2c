@@ -5,6 +5,16 @@ int main(void) {
 	mkdir("../../logs",0777);
 	logger = log_create("../../logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
+	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
+		log_error(logger, "No pude crear el socket de escucha");
+		mdj_exit();
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger,"Escucho en el socket %d", listenning_socket);
+	dam_socket = socket_aceptar_conexion(listenning_socket);
+	log_info(logger,"Se me conecto DAM, en el socket %d", dam_socket);
+
+	for(;;) sleep(20);
 	mdj_exit();
 	return EXIT_SUCCESS;
 }

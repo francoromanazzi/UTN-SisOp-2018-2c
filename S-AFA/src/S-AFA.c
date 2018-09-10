@@ -19,17 +19,7 @@ int main(void){
 	}
 	log_info(logger, "Escucho en el socket %d",listening_socket);
 
-
 	socket_start_listening_select(listening_socket, safa_manejador_de_eventos);
-
-
-	/*
-	struct sockaddr_in addr;	// Esta estructura contendra los datos de la conexion del cliente. IP, puerto, etc.
-	socklen_t addrlen = sizeof(addr);
-
-	int nuevo_cliente_socket = accept(listening_socket, (struct sockaddr *) &addr, &addrlen);
-	log_info(logger, "Recibi conexion en el socket %d", nuevo_cliente_socket);
-	*/
 
 	safa_exit();
 	return EXIT_SUCCESS;
@@ -58,6 +48,11 @@ void safa_iniciar_estado_operatorio(){
 }
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
+
+	bool _mismo_fd_socket(void* socket_en_lista){
+		return (int) socket_en_lista == socket;
+	}
+
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
 
 	if(msg->header->emisor == DAM){
@@ -71,6 +66,9 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 					safa_iniciar_estado_operatorio();
 				}
 			break;
+			default:
+				log_info(logger, "No entendi el mensaje de DAM");
+			break;
 		}
 	}
 	else if(msg->header->emisor == CPU){
@@ -79,7 +77,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				log_info(logger, "Se conecto un CPU");
 				cpu_conectado = true;
 
-				list_add(cpu_sockets, socket);
+				list_add(cpu_sockets, (void*) socket);
 				// Le mando el quantum
 				int quantum = config_get_int_value(config, "QUANTUM");
 				t_msg* mensaje_a_enviar = msg_create(SAFA, HANDSHAKE, (void*) quantum, sizeof(int));
@@ -93,7 +91,11 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case DESCONEXION:
+				list_remove_by_condition(cpu_sockets, _mismo_fd_socket);
 				return -1;
+			break;
+			default:
+				log_info(logger, "No entendi el mensaje de CPU");
 			break;
 		}
 	}

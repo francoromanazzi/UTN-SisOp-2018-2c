@@ -22,6 +22,7 @@
 
 	void config_create_fixed(char* path);
 	int cpu_connect_to_safa();
+	int cpu_connect_to_dam();
 	void cpu_exit();
 
 #endif /* CPU_H_ */

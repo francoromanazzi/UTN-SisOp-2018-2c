@@ -25,6 +25,9 @@
 
 
 	int dam_connect_to_safa();
+	int dam_connect_to_mdj();
+	int dam_connect_to_fm9();
+	int dam_manejador_de_eventos(int socket, t_msg* msg);
 	void config_create_fixed(char* path);
 	void dam_exit();
 

@@ -20,8 +20,9 @@
 	t_config* config;
 	t_log* logger;
 	int listening_socket;
-	int nuevo_cliente_socket;
 
+
+	int fm9_manejador_de_eventos(int socket, t_msg* msg);
 	void fm9_exit();
 
 #endif /* FM9_H_ */

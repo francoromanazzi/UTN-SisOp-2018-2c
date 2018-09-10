@@ -15,6 +15,8 @@
 	/* Variables globales */
 	t_config* config;
 	t_log* logger;
+	int listenning_socket;
+	int dam_socket;
 
 	void config_create_fixed(char* path);
 	void mdj_exit();
