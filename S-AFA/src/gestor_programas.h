@@ -9,9 +9,10 @@
 	#include <readline/history.h>
 	#include "S-AFA.h"
 	#include "planificador.h"
+	#include "DTB.h"
 
 	void gestor_consola_iniciar();
-
+	void gestor_iniciar_op_dummy(t_dtb* dummy);
 
 
 #endif /* GESTOR_PROGRAMAS_H_ */

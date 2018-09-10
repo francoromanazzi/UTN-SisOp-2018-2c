@@ -1,9 +1,14 @@
 #include "S-AFA.h"
 
-int main(void) {
+int main(void){
+	estado_operatorio = false;
+	cpu_conectado = false;
+	dam_conectado = false;
 	config = config_create("../../configs/S-AFA.txt");
+	retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
 	mkdir("../../logs",0777);
 	logger = log_create("../../logs/S-AFA.log", "S-AFA", false, LOG_LEVEL_TRACE);
+	cpu_sockets = list_create();
 
 	/* Empiezo en estado corrupto */
 	/* Como salgo? Conexion con DAM y por lo menos un CPU */
@@ -14,18 +19,29 @@ int main(void) {
 	}
 	log_info(logger, "Escucho en el socket %d",listening_socket);
 
-	listen(listening_socket, BACKLOG);
+
+	socket_start_listening_select(listening_socket, safa_manejador_de_eventos);
+
+
+	/*
 	struct sockaddr_in addr;	// Esta estructura contendra los datos de la conexion del cliente. IP, puerto, etc.
 	socklen_t addrlen = sizeof(addr);
 
 	int nuevo_cliente_socket = accept(listening_socket, (struct sockaddr *) &addr, &addrlen);
 	log_info(logger, "Recibi conexion en el socket %d", nuevo_cliente_socket);
+	*/
 
-	/* Ya sali del estado corrupto, y estoy en estado  operativo */
+	safa_exit();
+	return EXIT_SUCCESS;
+}
+
+void safa_iniciar_estado_operatorio(){
+	estado_operatorio = true;
+
 	/* Creo el hilo consola del gestor de programas */
 	if(pthread_create( &thread_consola, NULL, (void*) gestor_consola_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo para la consola");
-		safa_exit();
+			safa_exit();
 		exit(EXIT_FAILURE);
 	}
 	log_info(logger, "Creo el hilo para la consola");
@@ -39,17 +55,59 @@ int main(void) {
 	}
 	log_info(logger, "Creo el hilo para el planificador");
 	pthread_detach(thread_planificador);
-
-	/* TODO: Gestionar las conexiones. select() ??? */
-
-	for(;;);
-	safa_exit();
-	return EXIT_SUCCESS;
 }
 
-void safa_exit(void){
+int safa_manejador_de_eventos(int socket, t_msg* msg){
+	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+
+	if(msg->header->emisor == DAM){
+		switch(msg->header->tipo_mensaje){
+			case CONEXION:
+				log_info(logger, "Se conecto DAM");
+				dam_conectado = true;
+				dam_socket = socket;
+
+				if(!estado_operatorio && cpu_conectado){
+					safa_iniciar_estado_operatorio();
+				}
+			break;
+		}
+	}
+	else if(msg->header->emisor == CPU){
+		switch(msg->header->tipo_mensaje){
+			case CONEXION:
+				log_info(logger, "Se conecto un CPU");
+				cpu_conectado = true;
+
+				list_add(cpu_sockets, socket);
+				// Le mando el quantum
+				int quantum = config_get_int_value(config, "QUANTUM");
+				t_msg* mensaje_a_enviar = msg_create(SAFA, HANDSHAKE, (void*) quantum, sizeof(int));
+				msg_send(socket, *mensaje_a_enviar);
+				msg_free(&mensaje_a_enviar);
+				msg_free(&msg);
+
+				if(!estado_operatorio && dam_conectado){
+					safa_iniciar_estado_operatorio();
+				}
+			break;
+
+			case DESCONEXION:
+				return -1;
+			break;
+		}
+	}
+	else if(msg->header->emisor == DESCONOCIDO){
+		log_info(logger, "Me hablo alguien desconocido");
+	}
+	return 1;
+}
+
+
+void safa_exit(){
 	close(listening_socket);
-	close(nuevo_cliente_socket);
+	close(dam_socket);
+	list_destroy_and_destroy_elements(cpu_sockets,(void*) close);
 	log_destroy(logger);
 	config_destroy(config);
 }

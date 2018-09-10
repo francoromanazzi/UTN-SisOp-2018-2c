@@ -15,19 +15,29 @@
 
 	/* Constantes */
 	#define IP "127.0.0.1"
-	#define BACKLOG 10
 
 	/* Variables globales */
+	int retardo_planificacion;
+
 	pthread_t thread_consola;
 	pthread_t thread_planificador;
+
 	t_config* config;
 	t_log* logger;
+
+	bool estado_operatorio;
+	bool cpu_conectado;
+	bool dam_conectado;
+
 	int listening_socket;
-	int nuevo_cliente_socket;
 	int dam_socket;
+	t_list* cpu_sockets;
 
 
-	void safa_exit(void);
+	// Devuelvo -1 si quiero cerrar esa conexion
+	int safa_manejador_de_eventos(int socket, t_msg* msg);
+
+	void safa_exit();
 
 
 #endif /* S_AFA_H_ */

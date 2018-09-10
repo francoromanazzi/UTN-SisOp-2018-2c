@@ -12,4 +12,10 @@
 	*/
 	void util_config_fix_comillas(t_config** config, char* key);
 
+	/**
+	* @NAME: free_memory
+	* @DESC: Libera la memoria de un puntero, si no es NULL
+	*/
+	void free_memory(void** puntero);
+
 #endif /* SHARED_UTIL_H_ */

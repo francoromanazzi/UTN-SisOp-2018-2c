@@ -2,7 +2,9 @@
 
 void pcp_iniciar(){
 	/* Tengo que revisar constantemente la cola de ready, y mandarle a las CPU los dtb */
-
+	while(1){
+		usleep(retardo_planificacion);
+	}
 }
 
 void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
@@ -37,7 +39,7 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 		log_info(logger, "Bloqueo el DTB con ID: %d", id);
 		list_add(cola_block, dtb);
 	}
-	else if(!strcmp(cola_inicio, "EXEC") && !strcmp(cola_destino, "BLOCK")){ // READY-> EXEC
+	else if(!strcmp(cola_inicio, "READY") && !strcmp(cola_destino, "EXEC")){ // READY-> EXEC
 		log_info(logger, "Muevo a EXEC el DTB con ID: %d", id);
 		list_add(cola_exec, dtb);
 	}

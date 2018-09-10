@@ -13,10 +13,8 @@
 
 
 	/* Constantes */
-	//#define IP "127.0.0.1"
-	#define IP "192.168.1.4"
+	#define IP "127.0.0.1"
 
-	#define BACKLOG 10
 
 	/* Variables globales */
 	t_config* config;

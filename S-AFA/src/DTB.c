@@ -26,7 +26,10 @@ void dtb_destroy(t_dtb* dtb){
 }
 
 void dtb_mostrar(t_dtb* dtb, char* estado_actual){
-	printf("ID: %d\n",dtb->gdt_id);
+	if(dtb->gdt_id == 0)
+		printf("ID: DUMMY (0)\n");
+	else
+		printf("ID: %d\n",dtb->gdt_id);
 	printf("Estado actual: %s\n", estado_actual);
 	printf("Escriptorio: %s\n",dtb->ruta_escriptorio);
 	printf("PC: %d\n",dtb->pc);

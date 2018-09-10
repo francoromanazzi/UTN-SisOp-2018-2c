@@ -1,5 +1,12 @@
 #include "util.h"
 
+void free_memory(void** puntero){
+	if((*puntero) != NULL){
+		free(*puntero);
+		*puntero = NULL;
+	}
+}
+
 void util_config_fix_comillas(t_config** config, char* key){
 	char* string_sacar_comillas(char* str){
 		char* ret = string_substring(str, 1, strlen(str) - 2);

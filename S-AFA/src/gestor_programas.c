@@ -54,6 +54,12 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando status*/
 	else if(argc == 1 && !strcmp(argv[0], "status")){
+		printf("\nNEW:%d READY:%d BLOCK:%d EXEC: %d EXIT:%d \n",
+				cola_new->elements_count,
+				cola_ready->elements_count,
+				cola_block->elements_count,
+				cola_exec->elements_count,
+				cola_exit->elements_count);
 		int i;
 		printf("\n-----------------Cola NEW-----------------:\n");
 		for(i = 0; i < cola_new->elements_count; i++){
@@ -115,3 +121,8 @@ static void gestor_procesar_comando(char* linea){
 		split_liberar(argv);
 	}
 }
+
+void gestor_iniciar_op_dummy(t_dtb* dummy){
+
+}
+
