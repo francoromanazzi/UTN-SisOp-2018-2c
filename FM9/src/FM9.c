@@ -1,9 +1,7 @@
 #include "FM9.h"
 
 int main(void) {
-	config = config_create("../../configs/FM9.txt");
-	mkdir("../../logs",0777);
-	logger = log_create("../../logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
+
 	fm9_initialize();
 
 	if((listening_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
@@ -20,6 +18,17 @@ int main(void) {
 }
 
 void fm9_initialize(){
+	config = config_create("../../configs/FM9.txt");
+	mkdir("../../logs",0777);
+	logger = log_create("../../logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
+
+	modo=config_get_string_value(config, "MODO");
+	tamanio = config_get_int_value(config, "TAMANIO");
+	max_linea = config_get_int_value(config, "MAX_LINEA");
+	tam_pagina = config_get_int_value(config, "TAM_PAGINA");
+	log_info(logger,"Se realiza la inicializacion del Storage");
+	//storage=malloc(tamanio);//???
+
 	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
 		log_error(logger,"No se pudo crear el hilo para la consola");
 				fm9_exit();

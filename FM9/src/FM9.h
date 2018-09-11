@@ -23,6 +23,13 @@
 	t_log* logger;
 	int listening_socket;
 	pthread_t thread_consola;
+	char* modo;
+	int tamanio;
+	int max_linea;
+	int tam_pagina;
+
+	char* storage;
+
 
 	void fm9_initialize();
 	void fm9_consola();
