@@ -4,6 +4,7 @@ int main(void) {
 	config = config_create("../../configs/FM9.txt");
 	mkdir("../../logs",0777);
 	logger = log_create("../../logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
+	fm9_initialize();
 
 	if((listening_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger,"No se pudo crear socket de escucha");
@@ -17,6 +18,17 @@ int main(void) {
 	fm9_exit();
 	return EXIT_SUCCESS;
 }
+
+void fm9_initialize(){
+	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
+		log_error(logger,"No se pudo crear el hilo para la consola");
+				fm9_exit();
+				exit(EXIT_FAILURE);
+	}
+	log_info(logger,"Se creo el hilo para la consola");
+
+}
+
 
 int fm9_manejador_de_eventos(int socket, t_msg* msg){
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);

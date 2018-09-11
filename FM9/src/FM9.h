@@ -10,6 +10,8 @@
 	#include <shared/util.h>
 	#include <unistd.h>
 	#include <sys/socket.h>
+	#include <pthread.h>
+	#include "FM9_consola.h"
 
 
 	/* Constantes */
@@ -20,8 +22,10 @@
 	t_config* config;
 	t_log* logger;
 	int listening_socket;
+	pthread_t thread_consola;
 
-
+	void fm9_initialize();
+	void fm9_consola();
 	int fm9_manejador_de_eventos(int socket, t_msg* msg);
 	void fm9_exit();
 
