@@ -60,24 +60,39 @@ void cpu_iniciar(){
 		cpu_ejecutar_dtb(dtb);
 	}
 	else{
-		log_error(logger, "No entendi el mensaje de SAFA");
+		log_error(logger, "No entendi el mensaje de SAFA"); // Por ahi se desconecto SAFA
 		msg_free(&msg);
 		return;
 	}
 }
 
 void cpu_ejecutar_dtb(t_dtb* dtb){
-	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
+	t_msg* mensaje_a_enviar;
+
 
 	dtb_mostraar(dtb, "EXEC"); // Sacar despues
 
 	if(dtb->gdt_id == 0){ // DUMMY
-		mensaje_a_enviar = msg_create(CPU, BLOCK, (void**) 1, sizeof(int));
+
+		// TODO: Pedir a diego que abra el escriptorio
+
+		// Le envio a SAFA el DTB, y le pido que lo bloquee
+		mensaje_a_enviar = empaquetar_dtb(dtb);
+		mensaje_a_enviar->header->emisor = CPU;
+		mensaje_a_enviar->header->tipo_mensaje = BLOCK;
 		msg_send(safa_socket, *mensaje_a_enviar);
 		msg_free(&mensaje_a_enviar);
 	}
 	else { // NO DUMMY
 
+		// TODO: Ejecutar operaciones, segun el algoritmo
+
+		// Toodo esto sacarlo despues:
+		mensaje_a_enviar = empaquetar_dtb(dtb);
+		mensaje_a_enviar->header->emisor = CPU;
+		mensaje_a_enviar->header->tipo_mensaje = BLOCK;
+		msg_send(safa_socket, *mensaje_a_enviar);
+		msg_free(&mensaje_a_enviar);
 	}
 }
 

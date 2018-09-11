@@ -29,7 +29,6 @@ void plp_iniciar(){
 			/* Espero a que el gestor me diga que CPU termino la operacion dummy, y lo bloqueo */
 
 			sleep(2); // Despues sacarlo!!!!
-			pcp_mover_dtb(0, "EXEC", "BLOCK");
 			//pcp_mover_dtb(0, "READY", "EXEC"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
 			//pcp_mover_dtb(0, "EXEC", "BLOCK"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
 
