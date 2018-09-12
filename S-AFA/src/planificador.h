@@ -9,6 +9,7 @@
 	#include "DTB.h"
 	#include "plp.h"
 	#include "pcp.h"
+	#include <shared/msg.h>
 
 	/* Variables globales */
 	pthread_t thread_pcp;

@@ -54,6 +54,7 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando status*/
 	else if(argc == 1 && !strcmp(argv[0], "status")){
+		printf("CANT_PROCESOS: %d, MULTIPROGRAMACION: %d", cant_procesos, config_get_int_value(config, "MULTIPROGRAMACION"));
 		printf("\nNEW:%d READY:%d BLOCK:%d EXEC: %d EXIT:%d \n",
 				cola_new->elements_count,
 				cola_ready->elements_count,
@@ -97,9 +98,11 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando finalizar [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "finalizar")){
-		if(atoi(argv[1]) == 0)
+		if(!strcmp(argv[1], "0"))
 			printf("No se puede finalizar el proceso dummy\n\n");
-		if(planificador_finalizar_dtb((unsigned) atoi(argv[1])))
+		else if(atoi(argv[1]) == 0)
+			printf("Se debe ingresar el numero de ID\n\n");
+		else if(planificador_finalizar_dtb((unsigned) atoi(argv[1])))
 			printf("El proceso con ID = %s ha sido finalizado satisfactoriamente\n\n", argv[1]);
 		else
 			printf("No se encontro el proceso con ID = %s\n\n", argv[1]);

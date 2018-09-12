@@ -58,14 +58,10 @@ bool planificador_finalizar_dtb(unsigned int id){
 	t_dtb* dtb = planificador_encontrar_dtb(id, &estado);
 	dtb_destroy(dtb);
 
-	if(!strcmp(estado,"NEW")){
+	if(!strcmp(estado,"NEW"))
 		plp_mover_dtb(id, "EXIT");
-		cant_procesos--;
-	}
-	else if(!strcmp(estado,"READY") || !strcmp(estado,"BLOCK") || !strcmp(estado,"EXEC")){
+	else if(!strcmp(estado,"READY") || !strcmp(estado,"BLOCK") || !strcmp(estado,"EXEC"))
 		pcp_mover_dtb(id, estado, "EXIT");
-		cant_procesos--;
-	}
 	else{ // No encontrado
 		free(estado);
 		return false;

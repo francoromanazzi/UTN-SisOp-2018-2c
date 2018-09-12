@@ -16,7 +16,6 @@ void plp_iniciar(){
 			t_dtb* dtb_que_puede_pasar_a_ready;
 			if((dtb_que_puede_pasar_a_ready = list_find(cola_new, _flag_inicializado_en_uno)) != NULL){
 				plp_mover_dtb(dtb_que_puede_pasar_a_ready->gdt_id, "READY");
-				cant_procesos++;
 				break;
 			}
 
@@ -52,6 +51,7 @@ void plp_mover_dtb(unsigned int id, char* cola_destino){
 	}
 	else if(!strcmp(cola_destino, "READY")){
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
+		cant_procesos++;
 		pthread_mutex_lock(&mutex_cola_ready);
 		list_add(cola_ready, dtb);
 		pthread_mutex_unlock(&mutex_cola_ready);

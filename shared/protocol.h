@@ -1,7 +1,7 @@
 #ifndef SHARED_PROTOCOL_H_
 #define SHARED_PROTOCOL_H_
 
-	#include "../../S-AFA/src/DTB.h"
+	#include "/home/utnso/workspace/tp-2018-2c-RegorDTs/S-AFA/src/DTB.h"
 	#include "msg.h"
 
 

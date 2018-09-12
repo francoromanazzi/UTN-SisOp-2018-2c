@@ -74,6 +74,7 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 
 	if(!strcmp(cola_destino, "EXIT")){
 		log_info(logger, "Finalizo el DTB con ID: %d", id);
+		cant_procesos--;
 		list_add(cola_exit, dtb);
 	}
 	else if((!strcmp(cola_inicio, "EXEC") || !strcmp(cola_inicio, "BLOCK")) && !strcmp(cola_destino, "READY")){ //EXEC->READY o BLOCK->READY

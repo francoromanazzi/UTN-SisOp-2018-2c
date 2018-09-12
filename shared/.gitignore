@@ -1,1 +1,6 @@
-/Debug/
+_build
+.cproject
+.project
+.settings/
+Debug/
+Release/
