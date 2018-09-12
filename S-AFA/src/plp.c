@@ -1,48 +1,34 @@
 #include "plp.h"
 
 void plp_iniciar(){
+
+	bool _flag_inicializado_en_uno(void* dtb){
+		return ((t_dtb*) dtb)->flags.inicializado == 1;
+	}
+
 	/* Tengo que comparar constantemente la cantidad de procesos y el grado de multiprogramacion */
 	while(1){
 		usleep(retardo_planificacion);
-		if(operacion_dummy_en_ejecucion)
-			break;
 		if(cant_procesos > config_get_int_value(config, "MULTIPROGRAMACION"))
 			break;
 		if(!list_is_empty(cola_new)){
+			/* Veo si alguno de esos DTB tiene el flag de inicializado en 1, a.k.a ya puede pasar a READY*/
+			t_dtb* dtb_que_puede_pasar_a_ready;
+			if((dtb_que_puede_pasar_a_ready = list_find(cola_new, _flag_inicializado_en_uno)) != NULL){
+				plp_mover_dtb(dtb_que_puede_pasar_a_ready->gdt_id, "READY");
+				cant_procesos++;
+				break;
+			}
+
+			/* Intento iniciar operacion DUMMY */
+			if(operacion_dummy_en_ejecucion)
+				break;
 			/* Inicio operacion dummy */
 			operacion_dummy_en_ejecucion = true;
 			pcp_mover_dtb(0, "BLOCK", "READY"); // Desbloqueo dummy
 
 			/* Agrego una ruta del escriptorio a cargar en memoria, para que PCP se lo mande a CPU cuando seleccione al DUMMY */
 			list_add(rutas_escriptorios_dtb_dummy, strdup( ((t_dtb*) list_get(cola_new, 0)) -> ruta_escriptorio) );
-
-
-			/* TODO: Me tienen que avisar el resultado de cargar en memoria el escriptorio (mandado por diego) */
-
-
-			//while(1){
-
-			//	usleep(retardo_planificacion);
-			//}
-
-
-
-			//sleep(2); // Despues sacarlo!!!!
-
-			/* En este momento, el DUMMY tiene, dentro del diccionario, la referencia al escriptorio abierto*/
-			/* Leo desde el DUMMY y lo copio en el DTB que estoy por mandar a READY */
-			//char* estado_actual;
-			//t_dtb* dummy_copia = planificador_encontrar_dtb(0, &estado_actual);
-			//free(estado_actual);
-
-			//t_dtb* dtb_mandar_ready = list_get(cola_new, 0);
-			//void dictionary_copy_element(char* key, void* data){
-			//	dictionary_put(dtb_mandar_ready->archivos_abiertos, key, (int*) data);
-			//}
-			//dictionary_iterator(dummy_copia->archivos_abiertos, dictionary_copy_element);
-			//plp_mover_dtb(dtb_mandar_ready->gdt_id, "READY");
-			//dtb_destroy(dummy_copia);
-
 		}
 	}
 }

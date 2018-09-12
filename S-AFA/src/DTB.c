@@ -8,10 +8,11 @@ t_dtb* dtb_create(char* path_escriptorio){
 	ret -> flags.inicializado = 0;
 	ret -> archivos_abiertos = dictionary_create();
 
-	int valor_vacio = -1;
+
 	if(ret -> gdt_id != 0){ // Si no es el DUMMY
-		dictionary_put(ret->archivos_abiertos,strdup(ret->ruta_escriptorio), (void*) &valor_vacio);
+		dictionary_put(ret->archivos_abiertos,strdup(ret->ruta_escriptorio), (void*) -1);
 	}
+
 	return ret;
 }
 

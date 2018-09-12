@@ -150,10 +150,10 @@ t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, int base)
 void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char** path, int* base){
 	int offset = 0;
 
-	memcpy((void*) &ok, msg->payload, sizeof(int));
+	memcpy((void*) ok, msg->payload, sizeof(int));
 	offset += sizeof(int);
 
-	memcpy((void*) &id, msg->payload + offset, sizeof(unsigned int));
+	memcpy((void*) id, msg->payload + offset, sizeof(unsigned int));
 	offset += sizeof(unsigned int);
 
 	int path_len;
@@ -165,7 +165,7 @@ void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char**
 	offset += path_len;
 	(*path)[path_len] = '\0';
 
-	memcpy((void*) &base,msg->payload + offset, sizeof(int));
+	memcpy((void*) base,msg->payload + offset, sizeof(int));
 	return;
 }
 
@@ -204,7 +204,7 @@ void desempaquetar_abrir(t_msg* msg, char** path, unsigned int* id){
 	offset += path_len;
 	(*path)[path_len] = '\0';
 
-	memcpy((void*) &id, msg->payload + offset, sizeof(unsigned int));
+	memcpy((void*) id, msg->payload + offset, sizeof(unsigned int));
 	return;
 }
 

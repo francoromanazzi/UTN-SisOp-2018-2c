@@ -21,7 +21,6 @@ void pcp_iniciar(){
 
 			msg_free(&dtb_empaquetado);
 		}
-
 	}
 }
 
