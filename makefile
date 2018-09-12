@@ -2,7 +2,7 @@ regordts: init_deps install_shared make_projects
 
 init_deps:
 	@echo "Fetchig dependecies from github"
-	@git submodule init && git submodule update
+	@git submodule update --init --recursive
 	@echo "Installing SO-COMMONS-LIBRARY"
 	@cd commons && sudo $(MAKE) install
 
