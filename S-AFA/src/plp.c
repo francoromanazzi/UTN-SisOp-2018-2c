@@ -4,45 +4,45 @@ void plp_iniciar(){
 	/* Tengo que comparar constantemente la cantidad de procesos y el grado de multiprogramacion */
 	while(1){
 		usleep(retardo_planificacion);
+		if(operacion_dummy_en_ejecucion)
+			break;
 		if(cant_procesos > config_get_int_value(config, "MULTIPROGRAMACION"))
 			break;
 		if(!list_is_empty(cola_new)){
 			/* Inicio operacion dummy */
+			operacion_dummy_en_ejecucion = true;
 			pcp_mover_dtb(0, "BLOCK", "READY"); // Desbloqueo dummy
 
-			/* Creo el dummy que voy a enviarle al gestor, para que se lo mande a CPU */
-			char* estado_dummy;
-			t_dtb* dummy_a_enviar = planificador_encontrar_dtb(0, &estado_dummy); // TODO: liberar esta memoria
-
-			/* Cargo en el dummy a enviar la ruta del escriptorio */
-			free(dummy_a_enviar->ruta_escriptorio);
-			dummy_a_enviar->ruta_escriptorio = strdup(((t_dtb*) list_get(cola_new, 0)) -> ruta_escriptorio);
-
-			/* Le mando el dummy a gestor */
-			gestor_iniciar_op_dummy(dummy_a_enviar);
-			if(strcmp(estado_dummy,"READY")){ // El dummy no llego a ready, por alguna razon?
-				free(estado_dummy);
-				break;
-			}
-			free(estado_dummy);
-
-			/* Espero a que el gestor me diga que CPU termino la operacion dummy, y lo bloqueo */
-
-			sleep(2); // Despues sacarlo!!!!
-			//pcp_mover_dtb(0, "READY", "EXEC"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
-			//pcp_mover_dtb(0, "EXEC", "BLOCK"); // DESPUES SACAR Y DEJAR LA DE ARRIBA
-
-			/* Se tienen que cargar en memoria los archivos necesarios */
+			/* Agrego una ruta del escriptorio a cargar en memoria, para que PCP se lo mande a CPU cuando seleccione al DUMMY */
+			list_add(rutas_escriptorios_dtb_dummy, strdup( ((t_dtb*) list_get(cola_new, 0)) -> ruta_escriptorio) );
 
 
-			/* Fin operacion dummy */
-			t_dtb* dtb = dtb_copiar(list_get(cola_new, 0));
-			void dictionary_copy_element(char* key, void* data){
-				dictionary_put(dtb->archivos_abiertos, key, (int*) data);
-			}
-			dictionary_iterator(dummy_a_enviar->archivos_abiertos, dictionary_copy_element);
-			plp_mover_dtb(dtb->gdt_id, "READY");
-			dtb_destroy(dtb);
+			/* TODO: Me tienen que avisar el resultado de cargar en memoria el escriptorio (mandado por diego) */
+
+
+			//while(1){
+
+			//	usleep(retardo_planificacion);
+			//}
+
+
+
+			//sleep(2); // Despues sacarlo!!!!
+
+			/* En este momento, el DUMMY tiene, dentro del diccionario, la referencia al escriptorio abierto*/
+			/* Leo desde el DUMMY y lo copio en el DTB que estoy por mandar a READY */
+			//char* estado_actual;
+			//t_dtb* dummy_copia = planificador_encontrar_dtb(0, &estado_actual);
+			//free(estado_actual);
+
+			//t_dtb* dtb_mandar_ready = list_get(cola_new, 0);
+			//void dictionary_copy_element(char* key, void* data){
+			//	dictionary_put(dtb_mandar_ready->archivos_abiertos, key, (int*) data);
+			//}
+			//dictionary_iterator(dummy_copia->archivos_abiertos, dictionary_copy_element);
+			//plp_mover_dtb(dtb_mandar_ready->gdt_id, "READY");
+			//dtb_destroy(dummy_copia);
+
 		}
 	}
 }

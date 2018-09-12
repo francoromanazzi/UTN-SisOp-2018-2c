@@ -56,13 +56,16 @@ void cpu_iniciar(){
 	msg_await(safa_socket, msg);
 	if(msg->header->tipo_mensaje == EXEC){
 		t_dtb* dtb = desempaquetar_dtb(msg);
+		log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
 		//dtb_mostrar(dtb, "EXEC");
 		cpu_ejecutar_dtb(dtb);
+	}
+	else if(msg->header->tipo_mensaje == DESCONEXION){
+		log_info(logger, "Se desconecto S-AFA");
 	}
 	else{
 		log_error(logger, "No entendi el mensaje de SAFA"); // Por ahi se desconecto SAFA
 		msg_free(&msg);
-		return;
 	}
 }
 
@@ -74,9 +77,17 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 
 	if(dtb->gdt_id == 0){ // DUMMY
 
-		// TODO: Pedir a diego que abra el escriptorio
+		/* Le pido a Diego que abra el escriptorio */
+		mensaje_a_enviar = empaquetar_abrir(dtb->ruta_escriptorio, dtb->gdt_id);
+		mensaje_a_enviar->header->emisor = CPU;
+		mensaje_a_enviar->header->tipo_mensaje = ABRIR;
+		msg_send(dam_socket, *mensaje_a_enviar);
+		msg_free(&mensaje_a_enviar);
 
-		// Le envio a SAFA el DTB, y le pido que lo bloquee
+
+		/* Le envio a SAFA el DTB, y le pido que lo bloquee */
+		int base_vacia = -1;
+		dictionary_put(dtb->archivos_abiertos, strdup(dtb->ruta_escriptorio), (void*) &base_vacia);
 		mensaje_a_enviar = empaquetar_dtb(dtb);
 		mensaje_a_enviar->header->emisor = CPU;
 		mensaje_a_enviar->header->tipo_mensaje = BLOCK;

@@ -11,7 +11,7 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	void incrementar_dictionary_len(char* key, void* data){
 		dictionary_len += sizeof(unsigned int);
 		dictionary_len += strlen(key);
-		dictionary_len += sizeof(data);
+		dictionary_len += sizeof(*data);
 	}
 
 	for(i=0; i<dtb->archivos_abiertos->elements_amount; i++){
@@ -51,12 +51,12 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 
 	void copiar_memoria_elemento_diccionario(char* key, void* data){
 		int key_len = strlen(key);
-		memcpy(ret->payload + offset, (void*) &key, sizeof(unsigned int));
+		memcpy(ret->payload + offset, (void*) &key_len, sizeof(unsigned int));
 		offset += sizeof(unsigned int);
-		memcpy(ret->payload + offset, (char*) key, key_len);
+		memcpy(ret->payload + offset, (void*) key, key_len);
 		offset += key_len;
-		memcpy(ret->payload + offset, data, sizeof(int));
-		offset += sizeof(int);
+		memcpy(ret->payload + offset, data, sizeof(*data));
+		offset += sizeof(*data);
 	}
 
 	for(i=0;i<dtb->archivos_abiertos->elements_amount; i++)
@@ -102,7 +102,7 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 		memcpy((void*) &key_len, msg->payload + offset, sizeof(unsigned int));
 		offset += sizeof(unsigned int);
 
-		key = malloc(key_len);
+		key = malloc(key_len + 1);
 		memcpy(key, msg->payload + offset, key_len);
 		offset += key_len;
 		key[key_len] = '\0';
@@ -116,10 +116,97 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 }
 
 
+t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, int base){
+	int offset = 0;
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size =
+			sizeof(int) + // OK
+			sizeof(unsigned int) + // id
+			sizeof(unsigned int) + // path_len
+			strlen(path) + // path
+			sizeof(int) // base
+			;
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &ok, sizeof(int));
+	offset += sizeof(int);
+
+	memcpy(ret->payload + offset, (void*) &id, sizeof(unsigned int));
+	offset += sizeof(unsigned int);
+
+	int path_len = strlen(path);
+	memcpy(ret->payload + offset, (void*) &path_len, sizeof(unsigned int));
+	offset += sizeof(unsigned int);
+
+	memcpy(ret->payload + offset, (void*) path, path_len);
+	offset += path_len;
+
+	memcpy(ret->payload + offset, (void*) &base, sizeof(int));
+
+	return ret;
+}
+
+void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char** path, int* base){
+	int offset = 0;
+
+	memcpy((void*) &ok, msg->payload, sizeof(int));
+	offset += sizeof(int);
+
+	memcpy((void*) &id, msg->payload + offset, sizeof(unsigned int));
+	offset += sizeof(unsigned int);
+
+	int path_len;
+	memcpy((void*) &path_len, msg->payload + offset, sizeof(unsigned int));
+	offset += sizeof(unsigned int);
+
+	*path = malloc(path_len + 1);
+	memcpy((void*) *path, msg->payload + offset, path_len);
+	offset += path_len;
+	(*path)[path_len] = '\0';
+
+	memcpy((void*) &base,msg->payload + offset, sizeof(int));
+	return;
+}
 
 
+t_msg* empaquetar_abrir(char* path, unsigned int id){
+	int offset = 0;
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size =
+			sizeof(unsigned int) + //path_len
+			strlen(path) + // path
+			sizeof(unsigned int) // id
+			;
+	ret->payload = malloc(ret->header->payload_size);
 
+	int path_len = strlen(path);
+	memcpy(ret->payload, (void*) &path_len , sizeof(unsigned int));
+	offset += sizeof(unsigned int);
 
+	memcpy(ret->payload + offset, (void*) path, path_len);
+	offset += path_len;
+
+	memcpy(ret->payload + offset, (void*) &id, sizeof(unsigned int));
+	return ret;
+}
+
+void desempaquetar_abrir(t_msg* msg, char** path, unsigned int* id){
+	int offset = 0;
+	int path_len;
+
+	memcpy((void*) &path_len, msg->payload, sizeof(unsigned int));
+	offset += sizeof(unsigned int);
+
+	*path = malloc(path_len + 1);
+	memcpy((void*) *path, msg->payload + offset, path_len);
+	offset += path_len;
+	(*path)[path_len] = '\0';
+
+	memcpy((void*) &id, msg->payload + offset, sizeof(unsigned int));
+	return;
+}
 
 
 

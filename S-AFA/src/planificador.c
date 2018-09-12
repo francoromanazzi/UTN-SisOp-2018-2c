@@ -10,6 +10,8 @@ void planificador_iniciar(){
 	cola_exec = list_create();
 	cola_exit = list_create();
 
+	rutas_escriptorios_dtb_dummy = list_create();
+
 	if(pthread_create( &thread_pcp, NULL, (void*) pcp_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PCP");
 		exit(EXIT_FAILURE);
@@ -68,6 +70,84 @@ bool planificador_finalizar_dtb(unsigned int id){
 	free(estado);
 	return true;
 }
+
+void planificador_cargar_nuevo_path_vacio_en_dtb(t_dtb* dtb){
+	t_dtb* dtb_a_modificar;
+
+	bool _mismo_id(void* data){
+		return  ((t_dtb*) data) -> gdt_id == dtb->gdt_id;
+	}
+
+	void _agregar_nuevo_path(char* key, void* data){
+		if(!dictionary_has_key(dtb_a_modificar->archivos_abiertos, key)){ // Si ya tenia a ese archivo en su DTB
+			dictionary_put(dtb_a_modificar->archivos_abiertos, key, data);
+		}
+	}
+
+	if(dtb->gdt_id == 0){ // DUMMY
+		return; // No tengo que hacer nada
+	}
+	else{ // No DUMMY
+		// Busco al DTB en BLOCK
+		if((dtb_a_modificar = list_find(cola_block, _mismo_id)) != NULL){
+			dictionary_iterator(dtb->archivos_abiertos, _agregar_nuevo_path);
+		}
+	}
+}
+
+void planificador_cargar_archivo_en_dtb(t_msg* msg){
+	int ok;
+	unsigned int id;
+	char* path;
+	int base;
+	t_dtb* dtb; // DTB a actualizar
+
+	bool _mismo_id(void* data){
+		return ((t_dtb*) data)->gdt_id == id;
+	}
+
+	desempaquetar_resultado_abrir(msg, &ok, &id, &path, &base);
+
+	/* Busco que DTB queria este recurso */
+	/* Busco en NEW (por si estaba esperando el resultado de la operacion dummy) y en BLOCK */
+
+	if((dtb = list_find(cola_new, _mismo_id)) == NULL)
+		if((dtb = list_find(cola_block, _mismo_id)) == NULL){
+			log_error(logger, "No pude cargar el archivo %s en el DTB %d porque no lo encontre ni en NEW ni en BLOCK", path, id);
+			return;
+		}
+
+	if(!ok){ // No se encontro el recurso, asi que lo aborto
+		planificador_finalizar_dtb(dtb->gdt_id);
+	}
+	else{
+		dictionary_remove_and_destroy(dtb->archivos_abiertos, path, free);
+		dictionary_put(dtb->archivos_abiertos, path, &base);
+	}
+	if(dtb->flags.inicializado == 0){ // Si estaba en NEW, esperando que carguen el  escriptorio
+		/* Finalizo la operacion DUMMY */
+		dtb->flags.inicializado = 1;
+		operacion_dummy_en_ejecucion = false;
+	}
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

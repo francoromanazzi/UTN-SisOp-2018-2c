@@ -78,6 +78,8 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case RESULTADO_ABRIR:
+				log_info(logger, "Recibi el resultado de cargar algo en memoria");
+				planificador_cargar_archivo_en_dtb(msg);
 			break;
 
 			default:
@@ -118,16 +120,14 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			case BLOCK:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
 				dtb_recibido = desempaquetar_dtb(msg);
-				// TODO: Actualizar los datos del DTB del sistema, con los del DTB recibido
-
+				planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
 				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
 			break;
 
 			case READY:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
 				dtb_recibido = desempaquetar_dtb(msg);
-				// TODO: Actualizar los datos del DTB del sistema, con los del DTB recibido
-
+				planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
 				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
 			break;
 

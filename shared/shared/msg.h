@@ -1,10 +1,12 @@
 #ifndef SHARED_MSG_H_
 #define SHARED_MSG_H_
-	#include "util.h"
 	#include <sys/socket.h>
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
 
+	#include <commons/log.h>
+	#include "util.h"
+	#include "../../S-AFA/src/DTB.h"
 
 	typedef enum emisor{DESCONOCIDO, SAFA, CPU, DAM, FM9, MDJ} e_emisor;
 	typedef enum {

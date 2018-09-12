@@ -72,3 +72,14 @@ void msg_mostrar(t_msg msg){
 }
 
 
+
+
+
+
+
+
+
+
+
+
+

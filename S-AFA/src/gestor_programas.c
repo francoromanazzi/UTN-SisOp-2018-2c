@@ -122,7 +122,4 @@ static void gestor_procesar_comando(char* linea){
 	}
 }
 
-void gestor_iniciar_op_dummy(t_dtb* dummy){
-
-}
 

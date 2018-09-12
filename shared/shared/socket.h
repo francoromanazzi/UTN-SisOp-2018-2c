@@ -1,14 +1,15 @@
 #ifndef SHARED_SOCKET_H_
 #define SHARED_SOCKET_H_
-
 	#include <stdio.h>
 	#include <string.h>
 	#include <stdlib.h>
 	#include <sys/socket.h>
-	#include <commons/collections/list.h>
 	#include <netdb.h>
 	#include <unistd.h>
+
+	#include <commons/collections/list.h>
 	#include "protocol.h"
+	#include "msg.h"
 
 	#define BACKLOG 100
 

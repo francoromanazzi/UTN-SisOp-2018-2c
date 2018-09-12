@@ -15,8 +15,9 @@ void pcp_iniciar(){
 			list_add(cola_exec, dtb_elegido);
 			log_info(logger, "Muevo a EXEC el DTB con ID: %d", dtb_elegido->gdt_id);
 
+			log_info(logger, "PCP le manda a ejecutar un DTB a CPU");
 			msg_send(cpu_socket, *dtb_empaquetado);
-			log_info(logger, "PCP le mando a ejecutar un DTB a CPU");
+
 
 			msg_free(&dtb_empaquetado);
 		}
@@ -25,7 +26,7 @@ void pcp_iniciar(){
 }
 
 t_dtb* pcp_aplicar_algoritmo(){
-	char* algoritmo = config_get_string_value(config, "ALGORITMO");
+	// char* algoritmo = config_get_string_value(config, "ALGORITMO");
 	// TODO: Gestionar algoritmo
 
 	// DUMMY tiene prioridad maxima
@@ -33,7 +34,10 @@ t_dtb* pcp_aplicar_algoritmo(){
 		return  ((t_dtb*) data) -> gdt_id == 0;
 	}
 	t_dtb* dtb = list_remove_by_condition(cola_ready, _es_dummy);
-	if(dtb != NULL) return dtb;
+	if(dtb != NULL) { // Si encontro el DUMMY
+		dtb->ruta_escriptorio = list_remove(rutas_escriptorios_dtb_dummy, 0);
+		return dtb;
+	}
 
 	// Aplico FIFO:
 	return (t_dtb*) list_remove(cola_ready, 0);

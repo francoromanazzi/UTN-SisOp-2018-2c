@@ -1,6 +1,6 @@
 #include "FM9_consola.h"
 
-static void gestor_procesar_comando(char*);
+static void fm9_procesar_comando(char*);
 
 void fm9_consola_init(){
 	char* linea;
@@ -15,13 +15,13 @@ void fm9_consola_init(){
 				free(linea);
 				break;
 			}
-			gestor_procesar_comando(linea);
+			fm9_procesar_comando(linea);
 			free(linea);
 	}
 	exit(EXIT_SUCCESS);
 }
 
-static void gestor_procesar_comando(char* linea){
+static void fm9_procesar_comando(char* linea){
 
 	void split_liberar(char** split){
 			unsigned int i = 0;

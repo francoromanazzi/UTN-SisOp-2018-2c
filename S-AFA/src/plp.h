@@ -5,7 +5,6 @@
 	#include <commons/collections/dictionary.h>
 	#include <commons/log.h>
 	#include <commons/config.h>
-	#include "planificador.h"
 	#include "S-AFA.h"
 	#include "DTB.h"
 

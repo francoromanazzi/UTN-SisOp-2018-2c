@@ -31,6 +31,8 @@ int main(void) {
 
 int dam_manejador_de_eventos(int socket, t_msg* msg){
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+	char* path;
+	unsigned int id;
 
 	if(msg->header->emisor == CPU){
 		switch(msg->header->tipo_mensaje){
@@ -43,7 +45,17 @@ int dam_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case ABRIR:
-				log_info(logger, "Iniciando operacion ABRIR");
+				desempaquetar_abrir(msg,&path,&id);
+				log_info(logger, "Ehhh, voy a buscar %s para %d", path, id);
+
+				// TODO: preguntar a MDJ, recibir de MDJ, escribir en FM9, recibir resultado de FM9
+				sleep(2); // Sacarlo despues
+
+				t_msg* msg_a_enviar = empaquetar_resultado_abrir(1, id, path, 21198); // HARDCODEADO A MAS NO PODER
+				msg_a_enviar->header->emisor = DAM;
+				msg_a_enviar->header->tipo_mensaje = RESULTADO_ABRIR;
+				msg_send(safa_socket, *msg_a_enviar);
+				msg_free(&msg_a_enviar);
 			break;
 
 			case FLUSH:

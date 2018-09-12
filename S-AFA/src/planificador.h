@@ -23,10 +23,14 @@
 
 	int cant_procesos;
 
+	t_list* rutas_escriptorios_dtb_dummy;
+	bool operacion_dummy_en_ejecucion;
+
 	void planificador_iniciar();
 	void planificador_crear_dtb_y_encolar(char* path);
 	bool planificador_finalizar_dtb(unsigned int id);
 	t_dtb* planificador_encontrar_dtb(unsigned int id, char** estado_actual);
-
+	void planificador_cargar_nuevo_path_vacio_en_dtb(t_dtb* dtb_a_actualizar);
+	void planificador_cargar_archivo_en_dtb(t_msg* msg);
 
 #endif /* PLANIFICADOR_H_ */
