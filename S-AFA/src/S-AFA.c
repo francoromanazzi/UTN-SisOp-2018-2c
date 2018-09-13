@@ -66,6 +66,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				log_info(logger, "Se conecto DAM");
 				dam_conectado = true;
 				dam_socket = socket;
+				msg_free(&msg);
 
 				if(!estado_operatorio && cpu_conectado){
 					safa_iniciar_estado_operatorio();
@@ -74,16 +75,19 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 
 			case DESCONEXION:
 				log_error(logger, "Se desconecto DAM");
+				msg_free(&msg);
 				return -1;
 			break;
 
 			case RESULTADO_ABRIR:
 				log_info(logger, "Recibi el resultado de cargar algo en memoria");
 				planificador_cargar_archivo_en_dtb(msg);
+				msg_free(&msg);
 			break;
 
 			default:
 				log_info(logger, "No entendi el mensaje de DAM");
+				msg_free(&msg);
 			break;
 		}
 	}
@@ -114,6 +118,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			case DESCONEXION:
 				log_info(logger, "Se desconecto un CPU");
 				list_remove_and_destroy_by_condition(cpu_conexiones, _mismo_fd_socket, free);
+				msg_free(&msg);
 				return -1;
 			break;
 
@@ -122,6 +127,8 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				dtb_recibido = desempaquetar_dtb(msg);
 				planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
 				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
+				dtb_destroy(dtb_recibido);
+				msg_free(&msg);
 			break;
 
 			case READY:
@@ -129,6 +136,8 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				dtb_recibido = desempaquetar_dtb(msg);
 				planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
 				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
+				dtb_destroy(dtb_recibido);
+				msg_free(&msg);
 			break;
 
 			case EXIT:
@@ -136,14 +145,17 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				dtb_recibido = desempaquetar_dtb(msg);
 				planificador_finalizar_dtb(dtb_recibido->gdt_id);
 				dtb_destroy(dtb_recibido);
+				msg_free(&msg);
 			break;
 
 			default:
 				log_info(logger, "No entendi el mensaje de CPU");
+				msg_free(&msg);
 		}
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
 		log_info(logger, "Me hablo alguien desconocido");
+		msg_free(&msg);
 	}
 	return 1;
 }

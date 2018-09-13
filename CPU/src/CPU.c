@@ -18,6 +18,14 @@ void dtb_mostraar(t_dtb* dtb, char* estado_actual){
 	printf("\n");
 }
 
+void dtb_destrooy(t_dtb* dtb){
+	if(dtb == NULL) return;
+
+	dictionary_destroy(dtb->archivos_abiertos);
+	free(dtb->ruta_escriptorio);
+	free(dtb);
+}
+
 int main(void) {
 	config_create_fixed("../../configs/CPU.txt");
 	mkdir("../../logs",0777);
@@ -59,9 +67,12 @@ void cpu_iniciar(){
 		log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
 		//dtb_mostrar(dtb, "EXEC");
 		cpu_ejecutar_dtb(dtb);
+		msg_free(&msg);
+		dtb_destrooy(dtb);
 	}
 	else if(msg->header->tipo_mensaje == DESCONEXION){
 		log_info(logger, "Se desconecto S-AFA");
+		msg_free(&msg);
 	}
 	else{
 		log_error(logger, "No entendi el mensaje de SAFA"); // Por ahi se desconecto SAFA
@@ -87,7 +98,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 
 		/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 		int base_vacia = -1;
-		dictionary_put(dtb->archivos_abiertos, strdup(dtb->ruta_escriptorio), (void*) &base_vacia);
+		dictionary_put(dtb->archivos_abiertos, dtb->ruta_escriptorio, (void*) &base_vacia);
 		mensaje_a_enviar = empaquetar_dtb(dtb);
 		mensaje_a_enviar->header->emisor = CPU;
 		mensaje_a_enviar->header->tipo_mensaje = BLOCK;
@@ -111,8 +122,7 @@ int cpu_connect_to_safa(){
 	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
 	log_info(logger, "Intento conectarme a SAFA");
 
-	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
-	mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
+	t_msg* mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
 	int resultado_send = msg_send(safa_socket, *mensaje_a_enviar);
 	msg_free(&mensaje_a_enviar);
 
@@ -134,8 +144,7 @@ int cpu_connect_to_safa(){
 int cpu_connect_to_dam(){
 	dam_socket = socket_connect_to_server(config_get_string_value(config, "IP_DIEGO"), config_get_string_value(config, "PUERTO_DIEGO"));
 	log_info(logger, "Intento conectarme a DAM");
-	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
-	mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
+	t_msg* mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
 	int resultado_send = msg_send(dam_socket, *mensaje_a_enviar);
 	msg_free(&mensaje_a_enviar);
 

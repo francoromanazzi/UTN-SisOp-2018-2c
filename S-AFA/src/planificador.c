@@ -119,6 +119,7 @@ void planificador_cargar_archivo_en_dtb(t_msg* msg){
 
 	if((dtb = list_find(cola_block, _mismo_id)) == NULL){
 		log_error(logger, "No pude cargar el archivo %s en el DTB %d porque no lo encontre en BLOCK", path, id);
+		free(path);
 		return;
 	}
 
@@ -132,14 +133,14 @@ void planificador_cargar_archivo_en_dtb(t_msg* msg){
 
 	if(!ok){ // No se encontro el recurso, asi que lo aborto
 		planificador_finalizar_dtb(dtb->gdt_id);
+		free(path);
 	}
 	else{
 		//dictionary_remove_and_destroy(dtb->archivos_abiertos, path, free);
 		dictionary_remove(dtb->archivos_abiertos, path);
 		dictionary_put(dtb->archivos_abiertos, path, (void*) base);
+		free(path);
 	}
-
-
 }
 
 

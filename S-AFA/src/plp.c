@@ -27,7 +27,7 @@ void plp_iniciar(){
 			pcp_mover_dtb(0, "BLOCK", "READY"); // Desbloqueo dummy
 
 			/* Agrego una ruta del escriptorio a cargar en memoria, para que PCP se lo mande a CPU cuando seleccione al DUMMY */
-			list_add(rutas_escriptorios_dtb_dummy, strdup( ((t_dtb*) list_get(cola_new, 0)) -> ruta_escriptorio) );
+			list_add(rutas_escriptorios_dtb_dummy,  ((t_dtb*) list_get(cola_new, 0)) -> ruta_escriptorio);
 		}
 	}
 }

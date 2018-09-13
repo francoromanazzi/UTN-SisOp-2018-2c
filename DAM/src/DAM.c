@@ -38,10 +38,12 @@ int dam_manejador_de_eventos(int socket, t_msg* msg){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
 				log_info(logger, "Se conecto CPU");
+				msg_free(&msg);
 			break;
 
 			case DESCONEXION:
 				log_info(logger, "Se desconecto CPU");
+				msg_free(&msg);
 			break;
 
 			case ABRIR:
@@ -56,26 +58,30 @@ int dam_manejador_de_eventos(int socket, t_msg* msg){
 				msg_a_enviar->header->tipo_mensaje = RESULTADO_ABRIR;
 				msg_send(safa_socket, *msg_a_enviar);
 				msg_free(&msg_a_enviar);
+				msg_free(&msg);
+				free(path);
 			break;
 
 			case FLUSH:
 				log_info(logger, "Iniciando operacion FLUSH");
+				msg_free(&msg);
 			break;
 
 			default:
 				log_info(logger, "No entendi el mensaje de CPU");
+				msg_free(&msg);
 		}
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
 		log_info(logger, "Me hablo alguien desconocido");
+		msg_free(&msg);
 	}
 	return 1;
 }
 
 int dam_connect_to_safa(){
 	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
-	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
-	mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
+	t_msg* mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
 	int resultado_send = msg_send(safa_socket, *mensaje_a_enviar);
 	msg_free(&mensaje_a_enviar);
 	return safa_socket > 0 && resultado_send > 0;
@@ -83,8 +89,7 @@ int dam_connect_to_safa(){
 
 int dam_connect_to_mdj(){
 	mdj_socket  = socket_connect_to_server(config_get_string_value(config, "IP_MDJ"), config_get_string_value(config, "PUERTO_MDJ"));
-	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
-	mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
+	t_msg* mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
 	int resultado_send = msg_send(mdj_socket, *mensaje_a_enviar);
 	msg_free(&mensaje_a_enviar);
 	return safa_socket > 0 && resultado_send > 0;
@@ -92,8 +97,7 @@ int dam_connect_to_mdj(){
 
 int dam_connect_to_fm9(){
 	fm9_socket  = socket_connect_to_server(config_get_string_value(config, "IP_FM9"), config_get_string_value(config, "PUERTO_FM9"));
-	t_msg* mensaje_a_enviar = malloc(sizeof(t_msg));
-	mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
+	t_msg* mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
 	int resultado_send = msg_send(fm9_socket, *mensaje_a_enviar);
 	msg_free(&mensaje_a_enviar);
 	return safa_socket > 0 && resultado_send > 0;

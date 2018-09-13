@@ -3,7 +3,7 @@
 t_dtb* dtb_create(char* path_escriptorio){
 	t_dtb* ret = malloc(sizeof(t_dtb));
 	ret -> gdt_id = dtb_get_gdt_id_count();
-	ret -> ruta_escriptorio = strdup(path_escriptorio);
+	ret -> ruta_escriptorio= strdup(path_escriptorio);
 	ret -> pc = 0;
 	ret -> flags.inicializado = 0;
 	ret -> archivos_abiertos = dictionary_create();
