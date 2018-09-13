@@ -9,7 +9,7 @@ void plp_iniciar(){
 	/* Tengo que comparar constantemente la cantidad de procesos y el grado de multiprogramacion */
 	while(1){
 		usleep(retardo_planificacion);
-		if(cant_procesos > config_get_int_value(config, "MULTIPROGRAMACION"))
+		if(cant_procesos >= config_get_int_value(config, "MULTIPROGRAMACION"))
 			continue;
 		if(!list_is_empty(cola_new)){
 			/* Veo si alguno de esos DTB tiene el flag de inicializado en 1, a.k.a ya puede pasar a READY*/
