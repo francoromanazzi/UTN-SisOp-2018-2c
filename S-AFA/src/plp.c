@@ -10,18 +10,18 @@ void plp_iniciar(){
 	while(1){
 		usleep(retardo_planificacion);
 		if(cant_procesos > config_get_int_value(config, "MULTIPROGRAMACION"))
-			break;
+			continue;
 		if(!list_is_empty(cola_new)){
 			/* Veo si alguno de esos DTB tiene el flag de inicializado en 1, a.k.a ya puede pasar a READY*/
 			t_dtb* dtb_que_puede_pasar_a_ready;
 			if((dtb_que_puede_pasar_a_ready = list_find(cola_new, _flag_inicializado_en_uno)) != NULL){
 				plp_mover_dtb(dtb_que_puede_pasar_a_ready->gdt_id, "READY");
-				break;
+				continue;
 			}
 
 			/* Intento iniciar operacion DUMMY */
 			if(operacion_dummy_en_ejecucion)
-				break;
+				continue;
 			/* Inicio operacion dummy */
 			operacion_dummy_en_ejecucion = true;
 			pcp_mover_dtb(0, "BLOCK", "READY"); // Desbloqueo dummy
@@ -52,8 +52,8 @@ void plp_mover_dtb(unsigned int id, char* cola_destino){
 	else if(!strcmp(cola_destino, "READY")){
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
 		cant_procesos++;
-		pthread_mutex_lock(&mutex_cola_ready);
+		//pthread_mutex_lock(&mutex_cola_ready);
 		list_add(cola_ready, dtb);
-		pthread_mutex_unlock(&mutex_cola_ready);
+		//pthread_mutex_unlock(&mutex_cola_ready);
 	}
 }

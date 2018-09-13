@@ -11,7 +11,7 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	void incrementar_dictionary_len(char* key, void* data){
 		dictionary_len += sizeof(unsigned int);
 		dictionary_len += strlen(key);
-		dictionary_len += sizeof(*data);
+		dictionary_len += sizeof(int);
 	}
 
 	for(i=0; i<dtb->archivos_abiertos->elements_amount; i++){
@@ -55,8 +55,8 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 		offset += sizeof(unsigned int);
 		memcpy(ret->payload + offset, (void*) key, key_len);
 		offset += key_len;
-		memcpy(ret->payload + offset, data, sizeof(*data));
-		offset += sizeof(*data);
+		memcpy(ret->payload + offset, (void*) &data, sizeof(int));
+		offset += sizeof(int);
 	}
 
 	for(i=0;i<dtb->archivos_abiertos->elements_amount; i++)
@@ -110,7 +110,7 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 		memcpy((void*) &data, msg->payload + offset, sizeof(int));
 		offset += sizeof(int);
 
-		dictionary_put(ret->archivos_abiertos, key, (void*) &data);
+		dictionary_put(ret->archivos_abiertos, key, (void*) data);
 	}
 	return ret;
 }
