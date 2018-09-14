@@ -6,7 +6,7 @@
 	#include <stdbool.h>
 	#include <string.h>
 	#include "S-AFA.h"
-	#include "DTB.h"
+	#include <shared/DTB.h>
 	#include "plp.h"
 	#include "pcp.h"
 	#include <shared/msg.h>

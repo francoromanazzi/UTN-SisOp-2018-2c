@@ -6,7 +6,7 @@
 
 	#include <commons/log.h>
 	#include "util.h"
-	#include "/home/utnso/workspace/tp-2018-2c-RegorDTs/S-AFA/src/DTB.h"
+	#include "DTB.h"
 
 	typedef enum emisor{DESCONOCIDO, SAFA, CPU, DAM, FM9, MDJ} e_emisor;
 	typedef enum {

@@ -1,5 +1,5 @@
-#ifndef DTB_H_
-#define DTB_H_
+#ifndef SHARED_DTB_H_
+#define SHARED_DTB_H_
 	#include <string.h>
 	#include <stdlib.h>
 	#include <stdio.h>
@@ -27,5 +27,4 @@
 	t_dtb* dtb_copiar(t_dtb* otro_dtb);
 	void dtb_destroy(t_dtb* dtb);
 
-
-#endif /* DTB_H_ */
+#endif /* SHARED_DTB_H_ */

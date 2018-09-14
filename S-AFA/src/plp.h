@@ -6,7 +6,7 @@
 	#include <commons/log.h>
 	#include <commons/config.h>
 	#include "S-AFA.h"
-	#include "DTB.h"
+	#include <shared/DTB.h>
 
 	void plp_iniciar();
 	void plp_crear_dtb_y_encolar(char* path);

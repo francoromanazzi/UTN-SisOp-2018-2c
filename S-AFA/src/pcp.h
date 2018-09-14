@@ -8,7 +8,7 @@
 	#include <shared/protocol.h>
 	#include "planificador.h"
 	#include "S-AFA.h"
-	#include "DTB.h"
+	#include <shared/DTB.h>
 
 	void pcp_iniciar();
 	t_dtb* pcp_aplicar_algoritmo();

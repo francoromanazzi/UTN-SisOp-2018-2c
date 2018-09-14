@@ -1,8 +1,8 @@
 CC=gcc
 
 BUILD_DIR=_build
-SOURCES=socket.c protocol.c msg.c util.c
-HEADERS=socket.h protocol.h msg.h util.h
+SOURCES=socket.c protocol.c msg.c util.c DTB.c
+HEADERS=socket.h protocol.h msg.h util.h DTB.h
 OBJS=$(SOURCES:%.c=$(BUILD_DIR)/%.o)
 
 all: $(BUILD_DIR)/libshared.so

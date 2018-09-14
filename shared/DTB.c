@@ -67,4 +67,3 @@ t_dtb* dtb_copiar(t_dtb* otro_dtb){
 	dictionary_iterator(otro_dtb->archivos_abiertos, (void*) dictionary_copy_element);
 	return ret_dtb;
 }
-

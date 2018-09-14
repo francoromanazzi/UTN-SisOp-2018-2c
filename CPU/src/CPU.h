@@ -12,7 +12,7 @@
 	#include <shared/socket.h>
 	#include <shared/msg.h>
 	#include <shared/protocol.h>
-	#include "/home/utnso/workspace/tp-2018-2c-RegorDTs/S-AFA/src/DTB.h" 
+	#include <shared/DTB.h>
 
 	t_config* config;
 	t_log* logger;

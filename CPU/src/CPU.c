@@ -1,31 +1,5 @@
 #include "CPU.h"
 
-void dtb_mostraar(t_dtb* dtb, char* estado_actual){
-	void dictionary_print_element(char* key, void* data){
-		printf("\t%s: %d\n", key, (int) data);
-	}
-
-	if(dtb->gdt_id == 0)
-		printf("ID: DUMMY (0)\n");
-	else
-		printf("ID: %d\n",dtb->gdt_id);
-	printf("Estado actual: %s\n", estado_actual);
-	printf("Escriptorio: %s\n",dtb->ruta_escriptorio);
-	printf("PC: %d\n",dtb->pc);
-	printf("Inicializado: %d\n",dtb->flags.inicializado);
-	printf("Archivos abiertos:\n");
-	dictionary_iterator(dtb->archivos_abiertos,(void*) dictionary_print_element);
-	printf("\n");
-}
-
-void dtb_destrooy(t_dtb* dtb){
-	if(dtb == NULL) return;
-
-	dictionary_destroy(dtb->archivos_abiertos);
-	free(dtb->ruta_escriptorio);
-	free(dtb);
-}
-
 int main(void) {
 	config_create_fixed("../../configs/CPU.txt");
 	mkdir("../../logs",0777);
@@ -64,10 +38,9 @@ void cpu_iniciar(){
 	if(msg->header->tipo_mensaje == EXEC){
 		t_dtb* dtb = desempaquetar_dtb(msg);
 		log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
-		//dtb_mostrar(dtb, "EXEC");
 		cpu_ejecutar_dtb(dtb);
 		msg_free(&msg);
-		dtb_destrooy(dtb);
+		dtb_destroy(dtb);
 	}
 	else if(msg->header->tipo_mensaje == DESCONEXION){
 		log_info(logger, "Se desconecto S-AFA");
@@ -82,8 +55,7 @@ void cpu_iniciar(){
 void cpu_ejecutar_dtb(t_dtb* dtb){
 	t_msg* mensaje_a_enviar;
 
-
-	dtb_mostraar(dtb, "EXEC"); // Sacar despues
+	dtb_mostrar(dtb, "EXEC"); // Sacar despues
 
 	if(dtb->gdt_id == 0){ // DUMMY
 

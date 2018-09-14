@@ -9,7 +9,7 @@
 	#include <readline/history.h>
 	#include "S-AFA.h"
 	#include "planificador.h"
-	#include "DTB.h"
+	#include <shared/DTB.h>
 
 	void gestor_consola_iniciar();
 
