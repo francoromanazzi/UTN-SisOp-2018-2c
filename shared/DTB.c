@@ -3,14 +3,15 @@
 t_dtb* dtb_create(char* path_escriptorio){
 	t_dtb* ret = malloc(sizeof(t_dtb));
 	ret -> gdt_id = dtb_get_gdt_id_count();
-	ret -> ruta_escriptorio= strdup(path_escriptorio);
+
+	ret -> ruta_escriptorio = strdup(path_escriptorio);
+
 	ret -> pc = 0;
 	ret -> flags.inicializado = 0;
 	ret -> archivos_abiertos = dictionary_create();
 
-
 	if(ret -> gdt_id != 0){ // Si no es el DUMMY
-		dictionary_put(ret->archivos_abiertos,strdup(ret->ruta_escriptorio), (void*) -1);
+		dictionary_put(ret->archivos_abiertos, ret->ruta_escriptorio, (void*) -1);
 	}
 
 	return ret;

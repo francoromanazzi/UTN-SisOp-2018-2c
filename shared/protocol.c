@@ -135,6 +135,7 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 		offset += sizeof(int);
 
 		dictionary_put(ret->archivos_abiertos, key, (void*) data);
+		free(key);
 	}
 	return ret;
 }

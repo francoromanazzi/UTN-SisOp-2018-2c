@@ -19,4 +19,15 @@ make_projects:
 	@cd S-AFA && $(MAKE)
 	@echo "Finished!"
 
+clean:
+	@cd logs && rm -rf *.log
+	@cd CPU && $(MAKE) clean
+	@cd DAM && $(MAKE) clean
+	@cd FM9 && $(MAKE) clean
+	@cd MDJ && $(MAKE) clean
+	@cd S-AFA && $(MAKE) clean
+	@cd shared && $(MAKE) uninstall
+	@cd shared && $(MAKE) clean
+
+
 .PHONY: regordts init_deps install_shared make_projects

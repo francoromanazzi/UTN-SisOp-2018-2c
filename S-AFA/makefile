@@ -23,6 +23,5 @@ debug: all
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -rf $(APPLICATION)
-	rm -rf *.log
 
 .PHONY: all create-dirs clean debug

@@ -20,7 +20,7 @@ int main(void) {
 	log_info(logger, "Me conecte a DAM");
 
 	while(1)
-		cpu_iniciar();
+		cpu_esperar_dtb();
 
 	cpu_exit();
 	return EXIT_SUCCESS;
@@ -32,7 +32,34 @@ void config_create_fixed(char* path){
 	util_config_fix_comillas(&config, "IP_DIEGO");
 }
 
-void cpu_iniciar(){
+int cpu_send(int socket, e_tipo_msg tipo_msg, void* data){
+	t_msg* mensaje_a_enviar;
+	int ret;
+
+	switch(tipo_msg){
+		case CONEXION:
+			mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
+		break;
+
+		case ABRIR:
+			mensaje_a_enviar = empaquetar_abrir( ((t_dtb*) data)->ruta_escriptorio, ((t_dtb*) data)->gdt_id);
+		break;
+
+		case BLOCK:
+		case EXIT:
+		case READY:
+			mensaje_a_enviar = empaquetar_dtb((t_dtb*) data);
+		break;
+	}
+	mensaje_a_enviar->header->emisor = CPU;
+	mensaje_a_enviar->header->tipo_mensaje = tipo_msg;
+	ret = msg_send(socket, *mensaje_a_enviar);
+	msg_free(&mensaje_a_enviar);
+	return ret;
+}
+
+
+void cpu_esperar_dtb(){
 	t_msg* msg = malloc(sizeof(t_msg));
 	msg_await(safa_socket, msg);
 	if(msg->header->tipo_mensaje == EXEC){
@@ -42,7 +69,7 @@ void cpu_iniciar(){
 		msg_free(&msg);
 		dtb_destroy(dtb);
 	}
-	else if(msg->header->tipo_mensaje == DESCONEXION){
+	else if(msg->header->tipo_mensaje == DESCONEXION){ // Nunca recibe este mensaje... y tira segfault si se desconecta S-AFA :(
 		log_info(logger, "Se desconecto S-AFA");
 		msg_free(&msg);
 	}
@@ -58,44 +85,78 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 	dtb_mostrar(dtb, "EXEC"); // Sacar despues
 
 	if(dtb->gdt_id == 0){ // DUMMY
-
 		/* Le pido a Diego que abra el escriptorio */
-		mensaje_a_enviar = empaquetar_abrir(dtb->ruta_escriptorio, dtb->gdt_id);
-		mensaje_a_enviar->header->emisor = CPU;
-		mensaje_a_enviar->header->tipo_mensaje = ABRIR;
-		msg_send(dam_socket, *mensaje_a_enviar);
-		msg_free(&mensaje_a_enviar);
-
+		cpu_send(dam_socket, ABRIR, (void*) dtb);
 
 		/* Le envio a SAFA el DTB, y le pido que lo bloquee */
-		int base_vacia = -1;
-		dictionary_put(dtb->archivos_abiertos, dtb->ruta_escriptorio, (void*) &base_vacia);
-		mensaje_a_enviar = empaquetar_dtb(dtb);
-		mensaje_a_enviar->header->emisor = CPU;
-		mensaje_a_enviar->header->tipo_mensaje = BLOCK;
-		msg_send(safa_socket, *mensaje_a_enviar);
-		msg_free(&mensaje_a_enviar);
+		cpu_send(safa_socket, BLOCK, (void*) dtb);
 	}
-	else { // NO DUMMY
+	else{ // NO DUMMY
+		bool continuar_ejecucion = true;
+		int operaciones_realizadas = 0;
+		int nro_error;
+		int base_escriptorio = (int) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
 
-		// TODO: Ejecutar operaciones, segun el algoritmo
+		while(continuar_ejecucion){
+			/* ------------------------- 1RA FASE: FETCH ------------------------- */
+			char* instruccion;
+			do
+				instruccion = cpu_fetch(dtb, base_escriptorio);
+			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
+			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
+				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
+				cpu_send(safa_socket, EXIT, (void*) dtb);
+				free(instruccion);
+				return;
+			}
 
-		// Toodo esto sacarlo despues:
-		mensaje_a_enviar = empaquetar_dtb(dtb);
-		mensaje_a_enviar->header->emisor = CPU;
-		mensaje_a_enviar->header->tipo_mensaje = BLOCK;
-		msg_send(safa_socket, *mensaje_a_enviar);
-		msg_free(&mensaje_a_enviar);
+			/* ---------------------- 2DA FASE: DECODIFICACION ---------------------- */
+			t_operacion* operacion = cpu_decodificar(instruccion);
+			free(instruccion);
+
+			/* -------------------- 3RA FASE: BUSQUEDA OPERANDOS -------------------- */
+			if ((nro_error = cpu_buscar_operandos(operacion)) != OK){
+				log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
+				cpu_send(safa_socket, EXIT, (void*) dtb);
+				return;
+			}
+
+			/* ------------------------- 4TA FASE: EJECUCION ------------------------- */
+			if ((nro_error = cpu_ejecutar_operacion(operacion)) != OK){
+				log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
+				cpu_send(safa_socket, EXIT, (void*) dtb);
+				return;
+			}
+
+			continuar_ejecucion = ++operaciones_realizadas < quantum;
+		}
+		cpu_send(safa_socket, READY, (void*) dtb);
 	}
+}
+
+char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
+	char* ret = strdup("");
+	return ret;
+}
+
+t_operacion* cpu_decodificar(char* instruccion){
+	t_operacion* ret = malloc(sizeof(t_operacion));
+	return ret;
+}
+
+int cpu_buscar_operandos(t_operacion* operacion){
+	return OK;
+}
+
+int cpu_ejecutar_operacion(t_operacion* operacion){
+	return OK;
 }
 
 int cpu_connect_to_safa(){
 	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
 	log_info(logger, "Intento conectarme a SAFA");
 
-	t_msg* mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
-	int resultado_send = msg_send(safa_socket, *mensaje_a_enviar);
-	msg_free(&mensaje_a_enviar);
+	int resultado_send = cpu_send(safa_socket, CONEXION, NULL);
 
 	t_msg* msg = malloc(sizeof(t_msg));
 	int result_recv = msg_await(safa_socket, msg);
@@ -115,9 +176,8 @@ int cpu_connect_to_safa(){
 int cpu_connect_to_dam(){
 	dam_socket = socket_connect_to_server(config_get_string_value(config, "IP_DIEGO"), config_get_string_value(config, "PUERTO_DIEGO"));
 	log_info(logger, "Intento conectarme a DAM");
-	t_msg* mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
-	int resultado_send = msg_send(dam_socket, *mensaje_a_enviar);
-	msg_free(&mensaje_a_enviar);
+
+	int resultado_send = cpu_send(dam_socket, CONEXION, NULL);
 
 	return safa_socket > 0 && resultado_send > 0;
 }
