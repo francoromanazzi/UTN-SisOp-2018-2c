@@ -1,9 +1,9 @@
 #include "MDJ.h"
 
 int main(void) {
-	config_create_fixed("../../configs/MDJ.txt");
-	mkdir("../../logs",0777);
-	logger = log_create("../../logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
+	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/MDJ.txt");
+	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
+	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");

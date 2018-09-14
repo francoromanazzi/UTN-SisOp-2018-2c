@@ -1,9 +1,9 @@
 #include "DAM.h"
 
 int main(void) {
-	config_create_fixed("../../configs/DAM.txt");
-	mkdir("../../logs",0777);
-	logger = log_create("../../logs/DAM.log", "DAM", false, LOG_LEVEL_TRACE);
+	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/DAM.txt");
+	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
+	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/DAM.log", "DAM", false, LOG_LEVEL_TRACE);
 
 	/* Me conecto a S-AFA, FM9 y MDJ */
 	if(!dam_connect_to_safa()) log_error(logger, "No pude conectarme a SAFA");
@@ -38,12 +38,10 @@ int dam_manejador_de_eventos(int socket, t_msg* msg){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
 				log_info(logger, "Se conecto CPU");
-				msg_free(&msg);
 			break;
 
 			case DESCONEXION:
 				log_info(logger, "Se desconecto CPU");
-				msg_free(&msg);
 			break;
 
 			case ABRIR:
@@ -58,23 +56,19 @@ int dam_manejador_de_eventos(int socket, t_msg* msg){
 				msg_a_enviar->header->tipo_mensaje = RESULTADO_ABRIR;
 				msg_send(safa_socket, *msg_a_enviar);
 				msg_free(&msg_a_enviar);
-				msg_free(&msg);
 				free(path);
 			break;
 
 			case FLUSH:
 				log_info(logger, "Iniciando operacion FLUSH");
-				msg_free(&msg);
 			break;
 
 			default:
 				log_info(logger, "No entendi el mensaje de CPU");
-				msg_free(&msg);
 		}
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
 		log_info(logger, "Me hablo alguien desconocido");
-		msg_free(&msg);
 	}
 	return 1;
 }

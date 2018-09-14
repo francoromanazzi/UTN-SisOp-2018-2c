@@ -167,7 +167,7 @@ void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(
 						list_remove_and_destroy_by_condition(conexiones, close_conection_condition, close_conection);
 					}
 				}
-				// msg_free(&msg);
+				msg_free(&msg);
 			}
 		}
 

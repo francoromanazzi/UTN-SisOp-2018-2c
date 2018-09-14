@@ -18,9 +18,9 @@ int main(void) {
 }
 
 void fm9_initialize(){
-	config = config_create("../../configs/FM9.txt");
-	mkdir("../../logs",0777);
-	logger = log_create("../../logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
+	config = config_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/FM9.txt");
+	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
+	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
 
 	modo=config_get_string_value(config, "MODO");
 	tamanio = config_get_int_value(config, "TAMANIO");

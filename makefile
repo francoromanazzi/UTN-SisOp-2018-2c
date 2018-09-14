@@ -12,11 +12,11 @@ install_shared:
 
 make_projects:
 	@echo "Building all projects"
-	@cd CPU/Debug && $(MAKE)
-	@cd DAM/Debug && $(MAKE)
-	@cd FM9/Debug && $(MAKE)
-	@cd MDJ/Debug && $(MAKE)
-	@cd S-AFA/Debug && $(MAKE)
+	@cd CPU && $(MAKE)
+	@cd DAM && $(MAKE)
+	@cd FM9 && $(MAKE)
+	@cd MDJ && $(MAKE)
+	@cd S-AFA && $(MAKE)
 	@echo "Finished!"
 
 .PHONY: regordts init_deps install_shared make_projects

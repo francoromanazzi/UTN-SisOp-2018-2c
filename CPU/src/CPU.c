@@ -1,9 +1,9 @@
 #include "CPU.h"
 
 int main(void) {
-	config_create_fixed("../../configs/CPU.txt");
-	mkdir("../../logs",0777);
-	logger = log_create("../../logs/CPU.log", "CPU", false, LOG_LEVEL_TRACE);
+	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/CPU.txt");
+	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
+	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/CPU.log", "CPU", false, LOG_LEVEL_TRACE);
 
 	log_info(logger, "NUEVO CPU");
 

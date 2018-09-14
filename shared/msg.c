@@ -56,11 +56,11 @@ int msg_await(int socket, t_msg* msg){
 void msg_free(t_msg** msg){
 	if(msg != NULL && (*msg) != NULL){
 		if((*msg)->header != NULL){
-			if((void** ) (*msg)->payload != NULL && (*msg)->header->payload_size > 0)
-				free_memory((void** ) &((*msg)->payload));
-			free_memory((void** )&((*msg)->header));
+			if((*msg)->payload != NULL && (*msg)->header->payload_size > 0)
+				free((*msg)->payload);
+			free((*msg)->header);
 		}
-		free_memory((void** ) msg);
+		free(*msg);
 	}
 }
 
