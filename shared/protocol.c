@@ -1,5 +1,30 @@
 #include "protocol.h"
 
+t_msg* empaquetar_string(char* str){
+	t_msg* ret = malloc(sizeof(t_msg));
+	unsigned int str_len = strlen(str);
+
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size = sizeof(unsigned int) + str_len;
+	ret->payload=malloc(ret->header->payload_size);
+
+	memcpy(ret->payload , (void*) str_len, sizeof(unsigned int));
+	memcpy(ret->payload + sizeof(unsigned int), (void*) str, str_len);
+	return ret;
+}
+
+char* desempaquetar_string(t_msg* msg){
+	char* ret;
+	int ret_len;
+
+	memcpy((void*) &ret_len, msg->payload, sizeof(unsigned int));
+
+	ret = malloc(ret_len + 1);
+	memcpy(ret, msg->payload + sizeof(unsigned int), ret_len);
+	ret[ret_len] = '\0';
+	return ret;
+}
+
 t_msg* empaquetar_dtb(t_dtb* dtb){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));
@@ -65,7 +90,6 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	return ret;
 }
 
-
 t_dtb* desempaquetar_dtb(t_msg* msg){
 	t_dtb* ret = malloc(sizeof(t_dtb));
 	ret->archivos_abiertos = dictionary_create();
@@ -114,7 +138,6 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 	}
 	return ret;
 }
-
 
 t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, int base){
 	int offset = 0;
@@ -168,7 +191,6 @@ void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char**
 	memcpy((void*) base,msg->payload + offset, sizeof(int));
 	return;
 }
-
 
 t_msg* empaquetar_abrir(char* path, unsigned int id){
 	int offset = 0;

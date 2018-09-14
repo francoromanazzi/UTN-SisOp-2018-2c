@@ -5,6 +5,8 @@
 	#include "msg.h"
 
 
+	t_msg* empaquetar_string(char* str);
+	char* desempaquetar_string(t_msg* msg);
 
 	t_msg* empaquetar_dtb(t_dtb* dtb);
 	t_dtb* desempaquetar_dtb(t_msg* msg);

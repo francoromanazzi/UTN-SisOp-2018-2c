@@ -48,7 +48,6 @@ int main(void) {
 	while(1)
 		cpu_iniciar();
 
-	for(;;) sleep(10);
 	cpu_exit();
 	return EXIT_SUCCESS;
 }
@@ -75,7 +74,7 @@ void cpu_iniciar(){
 		msg_free(&msg);
 	}
 	else{
-		log_error(logger, "No entendi el mensaje de SAFA"); // Por ahi se desconecto SAFA
+		log_error(logger, "No entendi el mensaje de SAFA");
 		msg_free(&msg);
 	}
 }

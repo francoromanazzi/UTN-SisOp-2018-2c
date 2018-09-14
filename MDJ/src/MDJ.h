@@ -18,6 +18,7 @@
 	int listenning_socket;
 	int dam_socket;
 
+	void mdj_esperar_ordenes_dam();
 	void config_create_fixed(char* path);
 	void mdj_exit();
 
