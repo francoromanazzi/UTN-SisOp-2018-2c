@@ -5,6 +5,10 @@ int main(void) {
 	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
+	//creo estructuras administrativas
+	//leer archivo de config para extraer nombre carpeta PUNTO MONTAJE
+	crearEstructuras();
+
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
 		mdj_exit();
@@ -64,6 +68,27 @@ void mdj_esperar_ordenes_dam(){
 void config_create_fixed(char* path){
 	config = config_create(path);
 	util_config_fix_comillas(&config, "PUNTO_MONTAJE");
+}
+
+void crearEstructuras(){
+	mkdir("../puntoMontaje/",0777);
+	mkdir("../puntoMontaje/Metadata",0777);
+	log_info(logger, "Creada carpeta Metadata");
+	mkdir("../puntoMontaje/Archivos",0777);
+	log_info(logger, "Creada carpeta Archivos");
+	mkdir("../puntoMontaje/Bloques",0777);
+	log_info(logger, "Creada carpeta Bloques");
+
+	//truncate("../puntoMontaje/Metadata/Bitmap.bin", 1024);
+	//truncate("../puntoMontaje/Metadata/Metadata.bin", 1024);
+
+	FILE *metadata = fopen("../puntoMontaje/Metadata/Metadata.bin","wb+");
+	fclose(metadata);
+	log_info(logger, "Creado el archivo Metadata.bin");
+	FILE *bitmap = fopen("../puntoMontaje/Metadata/Bitmap.bin","wb+");
+	fclose(bitmap);
+	log_info(logger, "Creado el archivo Bitmap.bin");
+	puts("Creadas las estructuras administrativas");
 }
 
 void mdj_exit(){
