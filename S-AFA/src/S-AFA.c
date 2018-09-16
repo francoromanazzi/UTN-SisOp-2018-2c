@@ -22,11 +22,18 @@ void safa_initialize(){
 	estado_operatorio = false;
 	cpu_conectado = false;
 	dam_conectado = false;
+
 	config = config_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/S-AFA.txt");
 	retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
 	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/S-AFA.log", "S-AFA", false, LOG_LEVEL_TRACE);
+
 	cpu_conexiones = list_create();
+	cola_mensajes = list_create();
+	sem_init(&sem_cont_cola_mensajes, 0, 0);
+	pthread_mutex_init(&sem_mutex_cola_mensajes, NULL);
+	sem_init(&sem_cont_cpu_conexiones, 0, 0);
+	pthread_mutex_init(&sem_mutex_cpu_conexiones, NULL);
 }
 
 void safa_iniciar_estado_operatorio(){
@@ -52,12 +59,6 @@ void safa_iniciar_estado_operatorio(){
 }
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
-	t_dtb* dtb_recibido;
-
-	bool _mismo_fd_socket(void* conexion_cpu_en_lista){
-		return ((t_conexion_cpu*) conexion_cpu_en_lista)->socket == socket;
-	}
-
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
 
 	if(msg->header->emisor == DAM){
@@ -79,7 +80,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 
 			case RESULTADO_ABRIR:
 				log_info(logger, "Recibi el resultado de cargar algo en memoria");
-				planificador_cargar_archivo_en_dtb(msg);
+				safa_encolar_mensaje(msg);
 			break;
 
 			default:
@@ -94,11 +95,10 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				cpu_conectado = true;
 
 				// Agrego el nuevo socket a la lista de CPUs
-				t_conexion_cpu*  nueva_conexion_cpu = malloc(sizeof(t_conexion_cpu));
-				nueva_conexion_cpu->socket = socket;
-				nueva_conexion_cpu->en_uso = 0;
-				list_add(cpu_conexiones, (void*) nueva_conexion_cpu);
+				conexion_cpu_add_new(socket);
 
+				// TODO: No enviarle el quantum al principio, sino junto al DTB cuando tenga que ejecutar algo.
+				// Otra opcion: manejar toodo desde SAFA, y CPU no se entera del quantum (hacer esto)
 				// Le mando el quantum
 				int quantum = config_get_int_value(config, "QUANTUM");
 				t_msg* mensaje_a_enviar = msg_create(SAFA, HANDSHAKE, (void*) quantum, sizeof(int));
@@ -112,31 +112,16 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 
 			case DESCONEXION:
 				log_info(logger, "Se desconecto un CPU");
-				list_remove_and_destroy_by_condition(cpu_conexiones, _mismo_fd_socket, free);
+				conexion_cpu_disconnect(socket);
+
 				return -1;
 			break;
 
 			case BLOCK:
-				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
-				dtb_recibido = desempaquetar_dtb(msg);
-				planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
-				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
-				dtb_destroy(dtb_recibido);
-			break;
-
 			case READY:
-				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
-				dtb_recibido = desempaquetar_dtb(msg);
-				planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
-				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
-				dtb_destroy(dtb_recibido);
-			break;
-
 			case EXIT:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
-				dtb_recibido = desempaquetar_dtb(msg);
-				planificador_finalizar_dtb(dtb_recibido->gdt_id);
-				dtb_destroy(dtb_recibido);
+				safa_encolar_mensaje(msg);
 			break;
 
 			default:
@@ -149,6 +134,14 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 	return 1;
 }
 
+void safa_encolar_mensaje(t_msg* msg){
+	t_msg* msg_dup = msg_duplicar(msg);
+
+	pthread_mutex_lock(&sem_mutex_cola_mensajes);
+	list_add(cola_mensajes, msg_dup);
+	pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+	sem_post(&sem_cont_cola_mensajes);
+}
 
 void safa_exit(){
 	close(listening_socket);

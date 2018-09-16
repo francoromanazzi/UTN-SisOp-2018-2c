@@ -58,7 +58,6 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, void* data){
 	return ret;
 }
 
-
 void cpu_esperar_dtb(){
 	t_msg* msg = malloc(sizeof(t_msg));
 	msg_await(safa_socket, msg);

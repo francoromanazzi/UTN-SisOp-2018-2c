@@ -64,6 +64,10 @@ void msg_free(t_msg** msg){
 	}
 }
 
+void msg_free_v2(void* msg){
+	msg_free((t_msg**) &msg);
+}
+
 void msg_mostrar(t_msg msg){
 	printf("Emisor: %d\n",msg.header->emisor);
 	printf("Tipo mensaje: %d\n",msg.header->tipo_mensaje);
@@ -71,8 +75,17 @@ void msg_mostrar(t_msg msg){
 	printf("Mensaje: %s\n",(char*) msg.payload);
 }
 
+t_msg* msg_duplicar(t_msg* msg_original){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->payload = malloc(msg_original->header->payload_size);
 
-
+	ret->header->tipo_mensaje = msg_original->header->tipo_mensaje;
+	ret->header->emisor = msg_original->header->emisor;
+	ret->header->payload_size = msg_original->header->payload_size;
+	memcpy(ret->payload, msg_original->payload, msg_original->header->payload_size);
+	return ret;
+}
 
 
 

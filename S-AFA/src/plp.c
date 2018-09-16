@@ -8,7 +8,8 @@ void plp_iniciar(){
 
 	/* Tengo que comparar constantemente la cantidad de procesos y el grado de multiprogramacion */
 	while(1){
-		usleep(retardo_planificacion);
+		usleep(retardo_planificacion); // No es necesario en PLP
+
 		if(cant_procesos >= config_get_int_value(config, "MULTIPROGRAMACION"))
 			continue;
 		if(!list_is_empty(cola_new)){
@@ -47,13 +48,15 @@ void plp_mover_dtb(unsigned int id, char* cola_destino){
 
 	if(!strcmp(cola_destino, "EXIT")){
 		log_info(logger, "Finalizo el DTB con ID: %d", id);
+		cant_procesos--;
 		list_add(cola_exit, dtb);
 	}
 	else if(!strcmp(cola_destino, "READY")){
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
 		cant_procesos++;
-		//pthread_mutex_lock(&mutex_cola_ready);
+		pthread_mutex_lock(&sem_mutex_cola_ready);
 		list_add(cola_ready, dtb);
-		//pthread_mutex_unlock(&mutex_cola_ready);
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+		sem_post(&sem_cont_cola_ready);
 	}
 }

@@ -4,7 +4,8 @@ void planificador_iniciar(){
 	cant_procesos = 0;
 	cola_new = list_create();
 	cola_ready = list_create();
-	pthread_mutex_init(&mutex_cola_ready, NULL);
+	pthread_mutex_init(&sem_mutex_cola_ready, NULL);
+	sem_init(&sem_cont_cola_ready, 0, 0);
 	cola_block = list_create();
 	list_add(cola_block, dtb_create_dummy());
 	cola_exec = list_create();
@@ -25,8 +26,54 @@ void planificador_iniciar(){
 	}
 	log_info(logger, "Creo el hilo PLP");
 
-	pthread_join(thread_pcp, NULL);
-	pthread_join(thread_plp, NULL);
+	pthread_detach(thread_pcp);
+	pthread_detach(thread_plp);
+
+	t_msg* msg;
+	while(1){ // Espero mensajes de SAFA
+		sem_wait(&sem_cont_cola_mensajes);
+		pthread_mutex_lock(&sem_mutex_cola_mensajes);
+		msg = msg_duplicar(list_get(cola_mensajes, 0)); // Veo cual es el primer mensaje, y me lo copio (lo libero al final del while)
+		if(msg->header->emisor == DAM && msg->header->tipo_mensaje == RESULTADO_ABRIR){ // Me interesa este mensaje
+			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+			planificador_cargar_archivo_en_dtb(msg);
+		}
+		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == BLOCK){ // Me interesa este mensaje
+			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+			t_dtb* dtb_recibido;
+			dtb_recibido = desempaquetar_dtb(msg);
+			planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
+			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
+			dtb_destroy(dtb_recibido);
+		}
+		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == READY){ // Me interesa este mensaje
+			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+
+			t_dtb* dtb_recibido;
+			dtb_recibido = desempaquetar_dtb(msg);
+			planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
+			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
+			sem_post(&sem_cont_cola_ready); // Aviso a PCP que hay uno nuevo en READY
+			dtb_destroy(dtb_recibido);
+		}
+		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == EXIT){ // Me interesa este mensaje
+			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+			t_dtb* dtb_recibido;
+			dtb_recibido = desempaquetar_dtb(msg);
+			planificador_finalizar_dtb(dtb_recibido->gdt_id);
+			dtb_destroy(dtb_recibido);
+		}
+		else{ // No me interesa el mensaje
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+			sem_post(&sem_cont_cola_mensajes); // Vuelvo a incrementar el contador de mensajes, porque no lo use
+		}
+		msg_free(&msg);
+
+	} // Fin while(1)
 }
 
 void planificador_crear_dtb_y_encolar(char* path){

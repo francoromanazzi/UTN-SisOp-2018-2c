@@ -57,9 +57,21 @@
 	void msg_free(t_msg** msg);
 
 	/**
+	* @NAME: msg_free_v2
+	* @DESC: Libera la memoria de un mensaje, recibe un t_msg* casteado a void* en vez de un t_msg**
+	*/
+	void msg_free_v2(void* msg);
+
+	/**
 	* @NAME: msg_mostrar
 	* @DESC: Muestra por pantalla toda la info de un mensaje
 	*/
 	void msg_mostrar(t_msg msg);
+
+	/**
+	* @NAME: msg_duplicar
+	* @DESC: Duplica un mensaje
+	*/
+	t_msg* msg_duplicar(t_msg* msg);
 
 #endif /* SHARED_MSG_H_ */

@@ -1,27 +1,36 @@
 #include "pcp.h"
 
 void pcp_iniciar(){
-	/* Tengo que revisar constantemente la cola de ready, y mandarle a las CPU los dtb */
+	/* Tengo que esperar que haya algo en la cola de ready, y esperar que haya CPU disponible */
 	while(1){
+		sem_wait(&sem_cont_cola_ready); // Espero DTBs en READY
+		printf("-----------Hay DTB en READY----------\n"); // DEBUG: Sacar despues
+		sem_wait(&sem_cont_cpu_conexiones); // Espero CPUs para poder mandarles el DTB
+		printf("-----------Hay DTB en READY y CPU disponible ----------\n"); // DEBUG: Sacar despues
 		usleep(retardo_planificacion);
-		int cpu_socket;
-		if(!list_is_empty(cola_ready) && (cpu_socket = pcp_buscar_cpu_ociosa()) != -1){ // Hay CPU ociosa y proceso esperando en ready
-			t_dtb* dtb_elegido = pcp_aplicar_algoritmo();
 
-			t_msg* dtb_empaquetado = empaquetar_dtb(dtb_elegido);
-			dtb_empaquetado->header->emisor = SAFA;
-			dtb_empaquetado->header->tipo_mensaje = EXEC;
+		pthread_mutex_lock(&sem_mutex_cpu_conexiones);
+		int cpu_socket = pcp_buscar_cpu_ociosa();
+		pthread_mutex_unlock(&sem_mutex_cpu_conexiones);
 
-			list_add(cola_exec, dtb_elegido);
-			log_info(logger, "Muevo a EXEC el DTB con ID: %d", dtb_elegido->gdt_id);
+		pthread_mutex_lock(&sem_mutex_cola_ready);
+		t_dtb* dtb_elegido = pcp_aplicar_algoritmo();
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
 
-			log_info(logger, "PCP le manda a ejecutar un DTB a CPU");
-			msg_send(cpu_socket, *dtb_empaquetado);
+		t_msg* dtb_empaquetado = empaquetar_dtb(dtb_elegido);
 
+		dtb_empaquetado->header->emisor = SAFA;
+		dtb_empaquetado->header->tipo_mensaje = EXEC;
 
-			msg_free(&dtb_empaquetado);
-		}
-	}
+		list_add(cola_exec, dtb_elegido);
+		log_info(logger, "Muevo a EXEC el DTB con ID: %d", dtb_elegido->gdt_id);
+
+		log_info(logger, "PCP le manda a ejecutar un DTB a CPU");
+		msg_send(cpu_socket, *dtb_empaquetado);
+
+		msg_free(&dtb_empaquetado);
+
+	} // Fin while(1)
 }
 
 t_dtb* pcp_aplicar_algoritmo(){
@@ -79,9 +88,10 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 	}
 	else if((!strcmp(cola_inicio, "EXEC") || !strcmp(cola_inicio, "BLOCK")) && !strcmp(cola_destino, "READY")){ //EXEC->READY o BLOCK->READY
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
-		pthread_mutex_lock(&mutex_cola_ready);
+		pthread_mutex_lock(&sem_mutex_cola_ready);
 		list_add(cola_ready, dtb);
-		pthread_mutex_unlock(&mutex_cola_ready);
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+		sem_post(&sem_cont_cola_ready);
 	}
 	else if(!strcmp(cola_inicio, "EXEC") && !strcmp(cola_destino, "BLOCK")){ // EXEC->BLOCK
 		log_info(logger, "Bloqueo el DTB con ID: %d", id);

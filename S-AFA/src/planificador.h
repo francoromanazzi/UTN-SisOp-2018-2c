@@ -16,8 +16,10 @@
 	pthread_t thread_plp;
 
 	t_list* cola_new;
+
 	t_list* cola_ready;
-	pthread_mutex_t mutex_cola_ready; // Porque tanto PCP como PLP acceden a esta lista
+	sem_t sem_cont_cola_ready;
+	pthread_mutex_t sem_mutex_cola_ready; // Porque tanto PCP como PLP acceden a esta lista
 	t_list* cola_block;
 	t_list* cola_exec;
 	t_list* cola_exit;
