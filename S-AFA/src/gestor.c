@@ -15,21 +15,28 @@ void gestor_iniciar(){
 	log_info(logger, "Creo el hilo para la consola del gestor");
 	pthread_detach(thread_gestor);
 
-	while(1){
-		/* Espero pedido de PLP para iniciar operacion DUMMY */
-		sem_wait(&sem_bin_op_dummy_0);
+	t_msg* msg;
+	while(1){ // Espero mensajes de SAFA
+		sem_wait(&sem_cont_cola_mensajes);
+		pthread_mutex_lock(&sem_mutex_cola_mensajes);
+		msg = msg_duplicar(list_get(cola_mensajes, 0)); // Veo cual es el primer mensaje, y me lo copio (lo libero al final del while)
 
-		/* Inicio op dummy */
-		// Le cargo al dummy el escriptorio
-		t_dtb* dtb_dummy = list_find(cola_block, _es_dummy);
-		dtb_dummy->ruta_escriptorio = ruta_escriptorio_dtb_dummy;
+		if(msg->header->emisor == DAM && msg->header->tipo_mensaje == RESULTADO_ABRIR){ // Me interesa este mensaje
+			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
 
-		pcp_mover_dtb(0, "BLOCK", "READY"); // Desbloqueo dummy
+			/* Me comunico con los planificadores*/
+			msg_resultado_abrir = msg;
+			sem_post(&sem_cont_cargar_recurso);
 
-		sem_wait(&sem_bin_fin_op_dummy); // Espero que PCP reciba de DAM la base del escriptorio
-		/* Aviso a PLP que ya termine la op dummy */
-		sem_post(&sem_bin_op_dummy_1);
-	}
+			//planificador_cargar_archivo_en_dtb(msg);
+		}
+		else{ // No me interesa el mensaje
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+			sem_post(&sem_cont_cola_mensajes); // Vuelvo a incrementar el contador de mensajes, porque no lo use
+		}
+		msg_free(&msg);
+	} // Fin while(1)
 }
 
 

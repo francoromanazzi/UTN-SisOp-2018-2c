@@ -3,14 +3,16 @@
 t_dtb* dtb_create(char* path_escriptorio){
 	t_dtb* ret = malloc(sizeof(t_dtb));
 	ret -> gdt_id = dtb_get_gdt_id_count();
-
-	ret -> ruta_escriptorio = strdup(path_escriptorio);
-
 	ret -> pc = 0;
-	ret -> flags.inicializado = 0;
 	ret -> archivos_abiertos = dictionary_create();
 
-	if(ret -> gdt_id != 0){ // Si no es el DUMMY
+	if(path_escriptorio == NULL){ // DUMMY
+		ret -> ruta_escriptorio = strdup("");
+		ret -> flags.inicializado = 0;
+	}
+	else{ // NO DUMMY
+		ret -> ruta_escriptorio = strdup(path_escriptorio);
+		ret -> flags.inicializado = 1;
 		dictionary_put(ret->archivos_abiertos, ret->ruta_escriptorio, (void*) -1);
 	}
 
@@ -18,7 +20,7 @@ t_dtb* dtb_create(char* path_escriptorio){
 }
 
 t_dtb* dtb_create_dummy(){
-	return dtb_create("");
+	return dtb_create((char*) NULL);
 }
 
 int dtb_get_gdt_id_count(){
@@ -39,8 +41,8 @@ void dtb_mostrar(t_dtb* dtb, char* estado_actual){
 		printf("\t%s: %d\n", key, (int) data);
 	}
 
-	if(dtb->gdt_id == 0)
-		printf("ID: DUMMY (0)\n");
+	if(dtb->flags.inicializado == 0)
+		printf("ID: DUMMY, ID_SOLICITANTE: %d \n",dtb->gdt_id);
 	else
 		printf("ID: %d\n",dtb->gdt_id);
 	printf("Estado actual: %s\n", estado_actual);

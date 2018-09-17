@@ -4,9 +4,13 @@ void planificador_iniciar(){
 	cant_procesos = 0;
 	sem_init(&sem_cont_procesos, 0, config_get_int_value(config, "MULTIPROGRAMACION"));
 
-	sem_init(&sem_bin_op_dummy_0, 0, 0);
-	sem_init(&sem_bin_op_dummy_1, 0, 1);
-	sem_init(&sem_bin_fin_op_dummy, 0, 0);
+	//sem_init(&sem_cont_inicio_op_dummy, 0, 0);
+	//sem_init(&sem_bin_fin_op_dummy, 0, 0);
+	sem_init(&sem_cont_puedo_iniciar_op_dummy, 0 ,1);
+
+	sem_init(&sem_bin_desbloquear_dummy, 0, 0);
+
+	pthread_mutex_init(&sem_mutex_ruta_escriptorio_nuevo_dtb, NULL);
 
 	cola_new = list_create();
 	pthread_mutex_init(&sem_mutex_cola_new, NULL);
@@ -49,13 +53,12 @@ void planificador_iniciar(){
 			/* Gestor de programas me pidio crear el DTB */
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
-			char* path = desempaquetar_string(msg);
-			planificador_crear_dtb_y_encolar(path);
-		}
-		else if(msg->header->emisor == DAM && msg->header->tipo_mensaje == RESULTADO_ABRIR){ // Me interesa este mensaje
-			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
-			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
-			planificador_cargar_archivo_en_dtb(msg);
+
+			pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
+			ruta_escriptorio_nuevo_dtb = desempaquetar_string(msg);
+			pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
+
+			sem_post(&sem_cont_inicio_op_dummy); // Le aviso a thread_plp_crear_dtb
 		}
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == BLOCK){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
@@ -91,16 +94,6 @@ void planificador_iniciar(){
 		msg_free(&msg);
 
 	} // Fin while(1)
-}
-
-void planificador_crear_dtb_y_encolar(char* path){
-	t_dtb* nuevo_dtb = dtb_create(path);
-	pthread_mutex_lock(&sem_mutex_cola_new);
-	list_add(cola_new, nuevo_dtb);
-	pthread_mutex_unlock(&sem_mutex_cola_new);
-	sem_post(&sem_cont_cola_new);
-
-	log_info(logger, "Creo el DTB con ID: %d del escriptorio: %s", nuevo_dtb->gdt_id, path);
 }
 
 t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado_actual){
@@ -180,12 +173,6 @@ void planificador_cargar_archivo_en_dtb(t_msg* msg){
 		return ((t_dtb*) data)->gdt_id == id;
 	}
 
-	bool _queria_ese_recurso(void* data){
-		// Un DTB solicitante del dummy queria ese recurso SII en su diccionario de archivos abiertos tenia como clave la ruta
-		// de su escriptorio, y como valor, un -1, indicando que todavia no se habia abierto ese archivo
-		//return (dictionary_has_key(((t_dtb*) data)->archivos_abiertos, path) && (*((int*) dictionary_get(((t_dtb*) data)->archivos_abiertos, path))) == -1);
-		return !strcmp(((t_dtb*)data)->ruta_escriptorio, path);
-	}
 
 	desempaquetar_resultado_abrir(msg, &ok, &id, &path, &base);
 	log_info(logger,"OK: %d, ID: %d, PATH: %s, BASE: %d",ok,id,path,base);
@@ -199,7 +186,7 @@ void planificador_cargar_archivo_en_dtb(t_msg* msg){
 	}
 
 	if(id == 0){ // El DUMMY era el solicitante, asi que busco el verdadero ID del que quiere pasar a READY
-		dtb = list_find(cola_new, _queria_ese_recurso);
+		//dtb = list_find(cola_new, _queria_ese_recurso);
 
 		/* Finalizo la operacion DUMMY */
 		dtb->flags.inicializado = 1;

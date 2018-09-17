@@ -1,11 +1,29 @@
 #include "pcp.h"
 
 void pcp_iniciar(){
+
+	/* Creo el hilo que crea los nuevos DTBs */
+	if(pthread_create( &thread_pcp_desbloquear_dummy, NULL, (void*) pcp_desbloquear_dummy_iniciar, NULL) ){
+		log_error(logger,"No pude crear el hilo PCP_desbloquear_dummy");
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger, "Creo el hilo PCP_desbloquear_dummy");
+	pthread_detach(thread_pcp_desbloquear_dummy);
+
+	/* Creo el hilo que carga la base del archivo en un DTB solicitante bloqueado */
+	if(pthread_create( &thread_pcp_cargar_recurso, NULL, (void*) pcp_cargar_recurso_iniciar, NULL) ){
+		log_error(logger,"No pude crear el hilo PCP_cargar_recurso");
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger, "Creo el hilo PCP_cargar_recurso");
+	pthread_detach(thread_pcp_cargar_recurso);
+
 	/* Tengo que esperar que haya algo en la cola de ready, y esperar que haya CPU disponible */
 	while(1){
 		sem_wait(&sem_cont_cola_ready); // Espero DTBs en READY
 		sem_wait(&sem_cont_cpu_conexiones); // Espero CPUs para poder mandarles el DTB
 
+		/* OK, ya puedo elegir otro DTB de ready para mandar a algun CPU */
 		usleep(retardo_planificacion);
 
 		pthread_mutex_lock(&sem_mutex_cpu_conexiones);
@@ -35,14 +53,6 @@ void pcp_iniciar(){
 t_dtb* pcp_aplicar_algoritmo(){
 	// char* algoritmo = config_get_string_value(config, "ALGORITMO");
 	// TODO: Gestionar algoritmo
-
-	// DUMMY tiene prioridad maxima
-	bool _es_dummy(void* data){
-		return  ((t_dtb*) data) -> gdt_id == 0;
-	}
-	t_dtb* dtb_dummy = list_remove_by_condition(cola_ready, _es_dummy);
-	if(dtb_dummy != NULL)  // Si encontro el DUMMY
-		return dtb_dummy;
 
 	// Aplico FIFO:
 	return (t_dtb*) list_remove(cola_ready, 0);

@@ -14,7 +14,7 @@
 	#include <shared/socket.h>
 	#include "planificador.h"
 	#include "conexion_cpu.h"
-#include "gestor.h"
+	#include "gestor.h"
 
 	/* Constantes */
 	#define IP "127.0.0.1"
@@ -34,6 +34,9 @@
 
 	int listening_socket;
 	int dam_socket;
+
+	sem_t sem_cont_cargar_recurso;
+	t_msg* msg_resultado_abrir;
 
 	t_list* cpu_conexiones;
 	sem_t sem_cont_cpu_conexiones;

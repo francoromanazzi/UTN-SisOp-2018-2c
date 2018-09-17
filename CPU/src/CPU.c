@@ -84,7 +84,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 
 	dtb_mostrar(dtb, "EXEC"); // Sacar despues
 
-	if(dtb->gdt_id == 0){ // DUMMY
+	if(dtb->flags.inicializado == 0){ // DUMMY
 		/* Le pido a Diego que abra el escriptorio */
 		cpu_send(dam_socket, ABRIR, (void*) dtb);
 
