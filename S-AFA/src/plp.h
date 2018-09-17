@@ -9,7 +9,6 @@
 	#include <shared/DTB.h>
 
 	void plp_iniciar();
-	void plp_crear_dtb_y_encolar(char* path);
 	void plp_mover_dtb(unsigned int id, char* cola_destino);
 
 #endif /* PLP_H_ */

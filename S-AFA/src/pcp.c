@@ -4,9 +4,8 @@ void pcp_iniciar(){
 	/* Tengo que esperar que haya algo en la cola de ready, y esperar que haya CPU disponible */
 	while(1){
 		sem_wait(&sem_cont_cola_ready); // Espero DTBs en READY
-		printf("-----------Hay DTB en READY----------\n"); // DEBUG: Sacar despues
 		sem_wait(&sem_cont_cpu_conexiones); // Espero CPUs para poder mandarles el DTB
-		printf("-----------Hay DTB en READY y CPU disponible ----------\n"); // DEBUG: Sacar despues
+
 		usleep(retardo_planificacion);
 
 		pthread_mutex_lock(&sem_mutex_cpu_conexiones);
@@ -41,11 +40,9 @@ t_dtb* pcp_aplicar_algoritmo(){
 	bool _es_dummy(void* data){
 		return  ((t_dtb*) data) -> gdt_id == 0;
 	}
-	t_dtb* dtb = list_remove_by_condition(cola_ready, _es_dummy);
-	if(dtb != NULL) { // Si encontro el DUMMY
-		dtb->ruta_escriptorio = list_remove(rutas_escriptorios_dtb_dummy, 0);
-		return dtb;
-	}
+	t_dtb* dtb_dummy = list_remove_by_condition(cola_ready, _es_dummy);
+	if(dtb_dummy != NULL)  // Si encontro el DUMMY
+		return dtb_dummy;
 
 	// Aplico FIFO:
 	return (t_dtb*) list_remove(cola_ready, 0);
@@ -71,8 +68,11 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 
 	t_dtb* dtb;
 
-	if(!strcmp(cola_inicio, "READY"))
+	if(!strcmp(cola_inicio, "READY")){
+		pthread_mutex_lock(&sem_mutex_cola_ready);
 		dtb = list_remove_by_condition(cola_ready, _tiene_mismo_id);
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+	}
 	else if(!strcmp(cola_inicio, "BLOCK"))
 		dtb = list_remove_by_condition(cola_block, _tiene_mismo_id);
 	else if(!strcmp(cola_inicio, "EXEC")){
@@ -84,6 +84,7 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 	if(!strcmp(cola_destino, "EXIT")){
 		log_info(logger, "Finalizo el DTB con ID: %d", id);
 		cant_procesos--;
+		sem_post(&sem_cont_procesos);
 		list_add(cola_exit, dtb);
 	}
 	else if((!strcmp(cola_inicio, "EXEC") || !strcmp(cola_inicio, "BLOCK")) && !strcmp(cola_destino, "READY")){ //EXEC->READY o BLOCK->READY

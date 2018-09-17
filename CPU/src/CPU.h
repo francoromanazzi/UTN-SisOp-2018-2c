@@ -20,6 +20,7 @@
 	int dam_socket;
 
 	int quantum;
+	int retardo_ejecucion;
 
 	typedef enum {OP_ABRIR, OP_CONCENTRAR, OP_ASIGNAR, OP_WAIT, OP_SIGNAL, OP_FLUSH, OP_CLOSE, OP_CREAR, OP_BORRAR} e_tipo_operacion;
 

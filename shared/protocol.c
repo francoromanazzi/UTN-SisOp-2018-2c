@@ -8,7 +8,7 @@ t_msg* empaquetar_string(char* str){
 	ret->header->payload_size = sizeof(unsigned int) + str_len;
 	ret->payload=malloc(ret->header->payload_size);
 
-	memcpy(ret->payload , (void*) str_len, sizeof(unsigned int));
+	memcpy(ret->payload , (void*) &str_len, sizeof(unsigned int));
 	memcpy(ret->payload + sizeof(unsigned int), (void*) str, str_len);
 	return ret;
 }

@@ -39,14 +39,14 @@ void safa_initialize(){
 void safa_iniciar_estado_operatorio(){
 	estado_operatorio = true;
 
-	/* Creo el hilo consola del gestor de programas */
-	if(pthread_create( &thread_consola, NULL, (void*) gestor_consola_iniciar, NULL) ){
-		log_error(logger,"No pude crear el hilo para la consola");
+	/* Creo el hilo gestor de programas */
+	if(pthread_create( &thread_gestor, NULL, (void*) gestor_iniciar, NULL) ){
+		log_error(logger,"No pude crear el hilo para el gestor");
 			safa_exit();
 		exit(EXIT_FAILURE);
 	}
-	log_info(logger, "Creo el hilo para la consola");
-	pthread_detach(thread_consola);
+	log_info(logger, "Creo el hilo para el gestor");
+	pthread_detach(thread_gestor);
 
 	/* Creo el hilo para el planificador */
 	if(pthread_create( &thread_planificador, NULL, (void*) planificador_iniciar, NULL) ){

@@ -1,6 +1,6 @@
-#include "gestor_programas.h"
+#include "gestor_consola.h"
 
-static void gestor_procesar_comando(char*);
+static void gestor_consola_procesar_comando(char*);
 
 void gestor_consola_iniciar(){
 	char * linea;
@@ -13,13 +13,13 @@ void gestor_consola_iniciar(){
 			free(linea);
 			break;
 		}
-		gestor_procesar_comando(linea);
+		gestor_consola_procesar_comando(linea);
 		free(linea);
 	}
 	exit(EXIT_SUCCESS);
 }
 
-static void gestor_procesar_comando(char* linea){
+static void gestor_consola_procesar_comando(char* linea){
 	void split_liberar(char** split){
 		unsigned int i = 0;
 		for(;split[i] != NULL;i++){
@@ -49,12 +49,18 @@ static void gestor_procesar_comando(char* linea){
 	}
 	/* Comando ejecutar [ruta]*/
 	else if(argc == 2 && !strcmp(argv[0],"ejecutar")){
-		planificador_crear_dtb_y_encolar(argv[1]);
+		t_msg* msg = empaquetar_string(argv[1]);
+		msg->header->emisor = SAFA;
+		msg->header->tipo_mensaje = CREAR;
+		safa_encolar_mensaje(msg);
+		msg_free(&msg);
 		split_liberar(argv);
 	}
 	/* Comando status*/
 	else if(argc == 1 && !strcmp(argv[0], "status")){
 		printf("CANT_PROCESOS: %d, MULTIPROGRAMACION: %d", cant_procesos, config_get_int_value(config, "MULTIPROGRAMACION"));
+		pthread_mutex_lock(&sem_mutex_cola_new);
+		pthread_mutex_lock(&sem_mutex_cola_ready);
 		printf("\nNEW:%d READY:%d BLOCK:%d EXEC: %d EXIT:%d \n",
 				cola_new->elements_count,
 				cola_ready->elements_count,
@@ -66,10 +72,12 @@ static void gestor_procesar_comando(char* linea){
 		for(i = 0; i < cola_new->elements_count; i++){
 			dtb_mostrar(list_get(cola_new, i), "NEW");
 		}
+		pthread_mutex_unlock(&sem_mutex_cola_new);
 		printf("\n-----------------Cola READY-----------------:\n");
 		for(i = 0; i < cola_ready->elements_count; i++){
 			dtb_mostrar(list_get(cola_ready, i), "READY");
 		}
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
 		printf("\n-----------------Cola BLOCK-----------------:\n");
 		for(i = 0; i < cola_block->elements_count; i++){
 			dtb_mostrar(list_get(cola_block, i), "BLOCK");
@@ -87,7 +95,7 @@ static void gestor_procesar_comando(char* linea){
 	/* Comando status [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "status")){
 		char* estado_actual;
-		t_dtb* dtb = planificador_encontrar_dtb( (unsigned) atoi(argv[1]) , &estado_actual);
+		t_dtb* dtb = planificador_encontrar_dtb_y_copiar( (unsigned) atoi(argv[1]) , &estado_actual);
 		if(dtb != NULL)
 			dtb_mostrar(dtb, estado_actual);
 		else
@@ -124,5 +132,3 @@ static void gestor_procesar_comando(char* linea){
 		split_liberar(argv);
 	}
 }
-
-

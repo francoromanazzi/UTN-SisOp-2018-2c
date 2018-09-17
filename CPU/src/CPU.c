@@ -4,6 +4,7 @@ int main(void) {
 	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/CPU.txt");
 	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/CPU.log", "CPU", false, LOG_LEVEL_TRACE);
+	retardo_ejecucion = config_get_int_value(config, "RETARDO");
 
 	log_info(logger, "NUEVO CPU");
 
@@ -97,6 +98,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 		int base_escriptorio = (int) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
 
 		while(continuar_ejecucion){
+			usleep(retardo_ejecucion);
 			/* ------------------------- 1RA FASE: FETCH ------------------------- */
 			char* instruccion;
 			do
@@ -104,7 +106,9 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
 			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
-				cpu_send(safa_socket, EXIT, (void*) dtb);
+				//cpu_send(safa_socket, EXIT, (void*) dtb);
+				// TODO: sacar lo de abajo y poner lo de arriba
+				cpu_send(safa_socket, READY, (void*) dtb);
 				free(instruccion);
 				return;
 			}

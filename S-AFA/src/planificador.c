@@ -2,16 +2,26 @@
 
 void planificador_iniciar(){
 	cant_procesos = 0;
+	sem_init(&sem_cont_procesos, 0, config_get_int_value(config, "MULTIPROGRAMACION"));
+
+	sem_init(&sem_bin_op_dummy_0, 0, 0);
+	sem_init(&sem_bin_op_dummy_1, 0, 1);
+	sem_init(&sem_bin_fin_op_dummy, 0, 0);
+
 	cola_new = list_create();
+	pthread_mutex_init(&sem_mutex_cola_new, NULL);
+	sem_init(&sem_cont_cola_new, 0, 0);
+
 	cola_ready = list_create();
 	pthread_mutex_init(&sem_mutex_cola_ready, NULL);
 	sem_init(&sem_cont_cola_ready, 0, 0);
+
 	cola_block = list_create();
 	list_add(cola_block, dtb_create_dummy());
-	cola_exec = list_create();
-	cola_exit = list_create();
 
-	rutas_escriptorios_dtb_dummy = list_create();
+	cola_exec = list_create();
+
+	cola_exit = list_create();
 
 	if(pthread_create( &thread_pcp, NULL, (void*) pcp_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PCP");
@@ -34,7 +44,15 @@ void planificador_iniciar(){
 		sem_wait(&sem_cont_cola_mensajes);
 		pthread_mutex_lock(&sem_mutex_cola_mensajes);
 		msg = msg_duplicar(list_get(cola_mensajes, 0)); // Veo cual es el primer mensaje, y me lo copio (lo libero al final del while)
-		if(msg->header->emisor == DAM && msg->header->tipo_mensaje == RESULTADO_ABRIR){ // Me interesa este mensaje
+
+		if(msg->header->emisor == SAFA && msg->header->tipo_mensaje == CREAR){ // Me interesa este mensaje
+			/* Gestor de programas me pidio crear el DTB */
+			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
+			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+			char* path = desempaquetar_string(msg);
+			planificador_crear_dtb_y_encolar(path);
+		}
+		else if(msg->header->emisor == DAM && msg->header->tipo_mensaje == RESULTADO_ABRIR){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
 			planificador_cargar_archivo_en_dtb(msg);
@@ -51,7 +69,6 @@ void planificador_iniciar(){
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == READY){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
-
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
 			planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
@@ -77,20 +94,31 @@ void planificador_iniciar(){
 }
 
 void planificador_crear_dtb_y_encolar(char* path){
-	plp_crear_dtb_y_encolar(path);
+	t_dtb* nuevo_dtb = dtb_create(path);
+	pthread_mutex_lock(&sem_mutex_cola_new);
+	list_add(cola_new, nuevo_dtb);
+	pthread_mutex_unlock(&sem_mutex_cola_new);
+	sem_post(&sem_cont_cola_new);
+
+	log_info(logger, "Creo el DTB con ID: %d del escriptorio: %s", nuevo_dtb->gdt_id, path);
 }
 
-t_dtb* planificador_encontrar_dtb(unsigned int id_target, char** estado_actual){
+t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado_actual){
 	t_dtb* dtb = NULL;
 
 	bool _tiene_mismo_id(void* data){
 		return  ((t_dtb*) data) -> gdt_id == id_target;
 	}
-
-	if( (dtb = dtb_copiar( list_find(cola_new, _tiene_mismo_id)) ) != NULL)
+	pthread_mutex_lock(&sem_mutex_cola_new);
+	pthread_mutex_lock(&sem_mutex_cola_ready);
+	if( (dtb = dtb_copiar( list_find(cola_new, _tiene_mismo_id)) ) != NULL){
 		*estado_actual = strdup("NEW");
-	else if( (dtb = dtb_copiar( list_find(cola_ready, _tiene_mismo_id)) ) != NULL)
+		pthread_mutex_unlock(&sem_mutex_cola_new);
+	}
+	else if( (dtb = dtb_copiar( list_find(cola_ready, _tiene_mismo_id)) ) != NULL){
 		*estado_actual = strdup("READY");
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+	}
 	else if( (dtb = dtb_copiar( list_find(cola_block, _tiene_mismo_id)) ) != NULL)
 		*estado_actual = strdup("BLOCK");
 	else if( (dtb = dtb_copiar( list_find(cola_exec, _tiene_mismo_id)) ) != NULL)
@@ -102,7 +130,7 @@ t_dtb* planificador_encontrar_dtb(unsigned int id_target, char** estado_actual){
 
 bool planificador_finalizar_dtb(unsigned int id){
 	char* estado;
-	t_dtb* dtb = planificador_encontrar_dtb(id, &estado);
+	t_dtb* dtb = planificador_encontrar_dtb_y_copiar(id, &estado);
 	dtb_destroy(dtb);
 
 	if(!strcmp(estado,"NEW"))
@@ -175,7 +203,7 @@ void planificador_cargar_archivo_en_dtb(t_msg* msg){
 
 		/* Finalizo la operacion DUMMY */
 		dtb->flags.inicializado = 1;
-		operacion_dummy_en_ejecucion = false;
+		sem_post(&sem_bin_fin_op_dummy);
 	}
 
 	if(!ok){ // No se encontro el recurso, asi que lo aborto

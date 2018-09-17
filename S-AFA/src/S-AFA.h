@@ -12,9 +12,9 @@
 	#include <pthread.h>
 	#include <semaphore.h>
 	#include <shared/socket.h>
-	#include "gestor_programas.h"
 	#include "planificador.h"
 	#include "conexion_cpu.h"
+#include "gestor.h"
 
 	/* Constantes */
 	#define IP "127.0.0.1"
@@ -22,7 +22,7 @@
 	/* Variables globales */
 	int retardo_planificacion;
 
-	pthread_t thread_consola;
+	pthread_t thread_gestor;
 	pthread_t thread_planificador;
 
 	t_config* config;
