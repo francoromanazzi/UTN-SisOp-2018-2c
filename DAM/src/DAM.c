@@ -49,7 +49,7 @@ int dam_manejador_de_eventos(int socket, t_msg* msg){
 				log_info(logger, "Ehhh, voy a buscar %s para %d", path, id);
 
 				// TODO: preguntar a MDJ, recibir de MDJ, escribir en FM9, recibir resultado de FM9
-				sleep(2); // Sacarlo despues
+				//sleep(2); // Sacarlo despues
 
 				t_msg* msg_a_enviar = empaquetar_resultado_abrir(1, id, path, 21198); // HARDCODEADO A MAS NO PODER
 				msg_a_enviar->header->emisor = DAM;

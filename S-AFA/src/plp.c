@@ -24,8 +24,6 @@ void plp_iniciar(){
 
 	/* Tengo que comparar constantemente la cantidad de procesos y el grado de multiprogramacion */
 	while(1){
-		//usleep(retardo_planificacion); // No es necesario en PLP
-
 		sem_wait(&sem_cont_puedo_iniciar_op_dummy); // Espero a que pueda iniciar una op dummy (no puede haber mas de 1 en simultaneo)
 		sem_wait(&sem_cont_cola_new); // Espero a que haya algun DTB en NEW
 		sem_wait(&sem_cont_procesos); // Espero a que el grado de multiprogramacion me permita iniciar una op dummy
@@ -36,29 +34,14 @@ void plp_iniciar(){
 		pthread_mutex_unlock(&sem_mutex_cola_new);
 
 		id_nuevo_dtb = dtb_a_pasar_a_ready->gdt_id;
-		ruta_escriptorio_nuevo_dtb = dtb_a_pasar_a_ready->ruta_escriptorio;
+
+		pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
+		free_memory((void**) &ruta_escriptorio_nuevo_dtb);
+		ruta_escriptorio_nuevo_dtb = strdup(dtb_a_pasar_a_ready->ruta_escriptorio);
+		pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
 
 		sem_post(&sem_bin_desbloquear_dummy); // Le aviso a thread_pcp_desbloquear_dummy
 
-		/* Veo si alguno de esos DTB tiene el flag de inicializado en 1, a.k.a ya puede pasar a READY*/
-		//t_dtb* dtb_que_puede_pasar_a_ready;
-		//pthread_mutex_lock(&sem_mutex_cola_new);
-		//if((dtb_que_puede_pasar_a_ready = list_find(cola_new, _flag_inicializado_en_uno)) != NULL){
-		//	pthread_mutex_unlock(&sem_mutex_cola_new);
-		//	plp_mover_dtb(dtb_que_puede_pasar_a_ready->gdt_id, "READY");
-		//	continue;
-		//}
-		//pthread_mutex_unlock(&sem_mutex_cola_new);
-
-		//sem_post(&sem_cont_cola_new); // Como no habia ninguno listo para pasar a READY, dejo como estaba la cola de NEW
-
-		/* Espero a que el gestor termine de ejecutar la op dummy, si es que lo estaba haciendo*/
-		//sem_wait(&sem_bin_op_dummy_1);
-
-		//ruta_escriptorio_nuevo_dtb = ((t_dtb*) list_get(cola_new, 0)) -> ruta_escriptorio;
-
-		/* Le aviso a gestor que ya puede iniciar otra operacion dummy */
-		//sem_post(&sem_bin_op_dummy_0);
 	} // Fin while(1)
 }
 
@@ -73,16 +56,28 @@ void plp_mover_dtb(unsigned int id, char* cola_destino){
 
 	if(!strcmp(cola_destino, "EXIT")){ // NEW -> EXIT
 		log_info(logger, "Finalizo el DTB con ID: %d", id);
-		cant_procesos--;
-		sem_post(&sem_cont_procesos);
+
+		pthread_mutex_lock(&sem_mutex_cola_exit);
 		list_add(cola_exit, dtb);
+		pthread_mutex_unlock(&sem_mutex_cola_exit);
+
+		pthread_mutex_lock(&sem_mutex_cant_procesos);
+		cant_procesos--;
+		pthread_mutex_unlock(&sem_mutex_cant_procesos);
+
+		sem_post(&sem_cont_procesos);
 	}
 	else if(!strcmp(cola_destino, "READY")){ // NEW -> READY
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
-		cant_procesos++;
+
 		pthread_mutex_lock(&sem_mutex_cola_ready);
 		list_add(cola_ready, dtb);
 		pthread_mutex_unlock(&sem_mutex_cola_ready);
+
+		pthread_mutex_lock(&sem_mutex_cant_procesos);
+		cant_procesos++;
+		pthread_mutex_unlock(&sem_mutex_cant_procesos);
+
 		sem_post(&sem_cont_cola_ready);
 	}
 }

@@ -4,7 +4,7 @@ void plp_crear_dtb_iniciar(){
 
 	while(1){
 		/* Espero un inicio de operacion dummy */
-		sem_wait(&sem_cont_inicio_op_dummy);
+		sem_wait(&sem_bin_crear_dtb_0);
 
 		/* Agrego a NEW un DTB nuevo */
 		pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
@@ -12,6 +12,8 @@ void plp_crear_dtb_iniciar(){
 		free(ruta_escriptorio_nuevo_dtb);
 		pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
 		plp_crear_dtb_encolar_new(ruta);
+
+		sem_post(&sem_bin_crear_dtb_1); // Aviso que ya termine de crear el DTB
 	}
 }
 

@@ -17,7 +17,9 @@
 
 	sem_t sem_cont_procesos;
 
-	sem_t sem_cont_inicio_op_dummy;
+	sem_t sem_bin_crear_dtb_0; // Para crear un DTB nuevo a la vez
+	sem_t sem_bin_crear_dtb_1; //  "     "
+
 	sem_t sem_bin_fin_op_dummy;
 	sem_t sem_cont_puedo_iniciar_op_dummy;
 
@@ -30,11 +32,18 @@
 	t_list* cola_ready;
 	sem_t sem_cont_cola_ready;
 	pthread_mutex_t sem_mutex_cola_ready; // Porque tanto PCP como PLP acceden a esta lista
+
 	t_list* cola_block;
+	pthread_mutex_t sem_mutex_cola_block;
+
 	t_list* cola_exec;
+	pthread_mutex_t sem_mutex_cola_exec;
+
 	t_list* cola_exit;
+	pthread_mutex_t sem_mutex_cola_exit;
 
 	int cant_procesos;
+	pthread_mutex_t sem_mutex_cant_procesos;
 
 	int id_nuevo_dtb;
 	char* ruta_escriptorio_nuevo_dtb;

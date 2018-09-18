@@ -58,9 +58,16 @@ static void gestor_consola_procesar_comando(char* linea){
 	}
 	/* Comando status*/
 	else if(argc == 1 && !strcmp(argv[0], "status")){
+		pthread_mutex_lock(&sem_mutex_cant_procesos);
 		printf("CANT_PROCESOS: %d, MULTIPROGRAMACION: %d", cant_procesos, config_get_int_value(config, "MULTIPROGRAMACION"));
+		pthread_mutex_unlock(&sem_mutex_cant_procesos);
+
 		pthread_mutex_lock(&sem_mutex_cola_new);
 		pthread_mutex_lock(&sem_mutex_cola_ready);
+		pthread_mutex_lock(&sem_mutex_cola_block);
+		pthread_mutex_lock(&sem_mutex_cola_exec);
+		pthread_mutex_lock(&sem_mutex_cola_exit);
+
 		printf("\nNEW:%d READY:%d BLOCK:%d EXEC: %d EXIT:%d \n",
 				cola_new->elements_count,
 				cola_ready->elements_count,
@@ -68,28 +75,37 @@ static void gestor_consola_procesar_comando(char* linea){
 				cola_exec->elements_count,
 				cola_exit->elements_count);
 		int i;
+
 		printf("\n-----------------Cola NEW-----------------:\n");
 		for(i = 0; i < cola_new->elements_count; i++){
 			dtb_mostrar(list_get(cola_new, i), "NEW");
 		}
 		pthread_mutex_unlock(&sem_mutex_cola_new);
+
 		printf("\n-----------------Cola READY-----------------:\n");
 		for(i = 0; i < cola_ready->elements_count; i++){
 			dtb_mostrar(list_get(cola_ready, i), "READY");
 		}
 		pthread_mutex_unlock(&sem_mutex_cola_ready);
+
 		printf("\n-----------------Cola BLOCK-----------------:\n");
 		for(i = 0; i < cola_block->elements_count; i++){
 			dtb_mostrar(list_get(cola_block, i), "BLOCK");
 		}
+		pthread_mutex_unlock(&sem_mutex_cola_block);
+
 		printf("\n-----------------Cola EXEC-----------------:\n");
 		for(i = 0; i < cola_exec->elements_count; i++){
 			dtb_mostrar(list_get(cola_exec, i), "EXEC");
 		}
+		pthread_mutex_unlock(&sem_mutex_cola_exec);
+
 		printf("\n-----------------Cola EXIT-----------------:\n");
 		for(i = 0; i < cola_exit->elements_count; i++){
 			dtb_mostrar(list_get(cola_exit, i), "EXIT");
 		}
+		pthread_mutex_unlock(&sem_mutex_cola_exit);
+
 		split_liberar(argv);
 	}
 	/* Comando status [pcb_id] */
