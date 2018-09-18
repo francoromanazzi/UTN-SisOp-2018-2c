@@ -27,9 +27,7 @@ void gestor_iniciar(){
 
 			/* Me comunico con los planificadores*/
 			msg_resultado_abrir = msg;
-			sem_post(&sem_cont_cargar_recurso);
-
-			//planificador_cargar_archivo_en_dtb(msg);
+			sem_post(&sem_cont_cargar_recurso); // Le aviso a PCP_cargar_recurso y PLP_cargar_recurso
 		}
 		else{ // No me interesa el mensaje
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);

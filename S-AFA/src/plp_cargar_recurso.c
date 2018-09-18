@@ -20,14 +20,14 @@ void plp_cargar_recurso_iniciar(){
 		t_dtb* dtb_a_actualizar = list_find(cola_new, _mismo_id);
 		pthread_mutex_unlock(&sem_mutex_cola_new);
 
-		if(dtb_a_actualizar == NULL){ // No encontre al DTB en NEW
+		if(dtb_a_actualizar == NULL){ // No encontre al DTB en NEW (es responsabilidad de pcp_cargar_recurso)
 			free(path);
 			sem_post(&sem_cont_cargar_recurso);
 			continue;
 		}
 
 		/* Encontre al DTB en NEW. Me fijo si DAM pudo cargar el archivo, si es asi, le cargo la base al DTB */
-		log_info(logger,"OK: %d, ID: %d, PATH: %s, BASE: %d",ok,id,path,base);
+		log_info(logger,"Soy PLP. OK: %d, ID: %d, PATH: %s, BASE: %d",ok,id,path,base);
 
 		if(!ok){ // No se encontro el recurso, asi que lo aborto
 			planificador_finalizar_dtb(dtb_a_actualizar->gdt_id);

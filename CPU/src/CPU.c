@@ -64,7 +64,10 @@ void cpu_esperar_dtb(){
 	msg_await(safa_socket, msg);
 	if(msg->header->tipo_mensaje == EXEC){
 		t_dtb* dtb = desempaquetar_dtb(msg);
-		log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
+		if(dtb->flags.inicializado == 0) // DUMMY
+			log_info(logger, "Recibi ordenes de S-AFA de ejecutar el DUMMY, el solicitante tiene ID: %d", dtb->gdt_id);
+		else
+			log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
 		cpu_ejecutar_dtb(dtb);
 		msg_free(&msg);
 		dtb_destroy(dtb);

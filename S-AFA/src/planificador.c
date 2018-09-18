@@ -2,13 +2,17 @@
 
 void planificador_iniciar(){
 	cant_procesos = 0;
+	pthread_mutex_init(&sem_mutex_cant_procesos, NULL);
 	sem_init(&sem_cont_procesos, 0, config_get_int_value(config, "MULTIPROGRAMACION"));
 
-	//sem_init(&sem_cont_inicio_op_dummy, 0, 0);
-	//sem_init(&sem_bin_fin_op_dummy, 0, 0);
+	sem_init(&sem_bin_crear_dtb_0, 0, 0);
+	sem_init(&sem_bin_crear_dtb_1, 0, 1);
+
 	sem_init(&sem_cont_puedo_iniciar_op_dummy, 0 ,1);
 
 	sem_init(&sem_bin_desbloquear_dummy, 0, 0);
+
+	ruta_escriptorio_nuevo_dtb = NULL;
 
 	pthread_mutex_init(&sem_mutex_ruta_escriptorio_nuevo_dtb, NULL);
 
@@ -21,11 +25,16 @@ void planificador_iniciar(){
 	sem_init(&sem_cont_cola_ready, 0, 0);
 
 	cola_block = list_create();
+	pthread_mutex_init(&sem_mutex_cola_block, NULL);
+	pthread_mutex_lock(&sem_mutex_cola_block);
 	list_add(cola_block, dtb_create_dummy());
+	pthread_mutex_unlock(&sem_mutex_cola_block);
 
 	cola_exec = list_create();
+	pthread_mutex_init(&sem_mutex_cola_exec, NULL);
 
 	cola_exit = list_create();
+	pthread_mutex_init(&sem_mutex_cola_exit, NULL);
 
 	if(pthread_create( &thread_pcp, NULL, (void*) pcp_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PCP");
@@ -54,11 +63,12 @@ void planificador_iniciar(){
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
 
+			sem_wait(&sem_bin_crear_dtb_1); // Espero a que termine la creacion de un DTB anterior
 			pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
+			free_memory((void**) &ruta_escriptorio_nuevo_dtb);
 			ruta_escriptorio_nuevo_dtb = desempaquetar_string(msg);
 			pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
-
-			sem_post(&sem_cont_inicio_op_dummy); // Le aviso a thread_plp_crear_dtb
+			sem_post(&sem_bin_crear_dtb_0); // Le aviso a thread_plp_crear_dtb
 		}
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == BLOCK){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
@@ -104,6 +114,8 @@ t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado
 	}
 	pthread_mutex_lock(&sem_mutex_cola_new);
 	pthread_mutex_lock(&sem_mutex_cola_ready);
+	pthread_mutex_lock(&sem_mutex_cola_block);
+	pthread_mutex_lock(&sem_mutex_cola_exec);
 	if( (dtb = dtb_copiar( list_find(cola_new, _tiene_mismo_id)) ) != NULL){
 		*estado_actual = strdup("NEW");
 		pthread_mutex_unlock(&sem_mutex_cola_new);
@@ -112,12 +124,22 @@ t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado
 		*estado_actual = strdup("READY");
 		pthread_mutex_unlock(&sem_mutex_cola_ready);
 	}
-	else if( (dtb = dtb_copiar( list_find(cola_block, _tiene_mismo_id)) ) != NULL)
+	else if( (dtb = dtb_copiar( list_find(cola_block, _tiene_mismo_id)) ) != NULL){
 		*estado_actual = strdup("BLOCK");
-	else if( (dtb = dtb_copiar( list_find(cola_exec, _tiene_mismo_id)) ) != NULL)
+		pthread_mutex_unlock(&sem_mutex_cola_block);
+	}
+	else if( (dtb = dtb_copiar( list_find(cola_exec, _tiene_mismo_id)) ) != NULL){
 		*estado_actual = strdup("EXEC");
-	else
+		pthread_mutex_unlock(&sem_mutex_cola_exec);
+	}
+	else{
 		*estado_actual= strdup("No encontrado");
+		pthread_mutex_unlock(&sem_mutex_cola_new);
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+		pthread_mutex_unlock(&sem_mutex_cola_block);
+		pthread_mutex_unlock(&sem_mutex_cola_exec);
+	}
+
 	return dtb;
 }
 
@@ -151,7 +173,7 @@ void planificador_cargar_nuevo_path_vacio_en_dtb(t_dtb* dtb){
 		}
 	}
 
-	if(dtb->gdt_id == 0){ // DUMMY
+	if(dtb->flags.inicializado == 0){ // DUMMY
 		return; // No tengo que hacer nada
 	}
 	else{ // No DUMMY
