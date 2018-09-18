@@ -20,7 +20,7 @@
 
 	void mdj_esperar_ordenes_dam();
 	void config_create_fixed(char* path);
-	void crearEstructuras();
+	void crearEstructuras(char* puntoMontaje);
 	void mdj_exit();
 
 #endif /* MDJ_H_ */

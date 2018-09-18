@@ -6,8 +6,7 @@ int main(void) {
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
 	//creo estructuras administrativas
-	//leer archivo de config para extraer nombre carpeta PUNTO MONTAJE
-	crearEstructuras();
+	crearEstructuras(config_get_string_value(config, "PUNTO_MONTAJE"));
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
@@ -70,25 +69,56 @@ void config_create_fixed(char* path){
 	util_config_fix_comillas(&config, "PUNTO_MONTAJE");
 }
 
-void crearEstructuras(){
-	mkdir("../puntoMontaje/",0777);
-	mkdir("../puntoMontaje/Metadata",0777);
+void crearEstructuras(char *puntoMontajeConfig){
+	char* puntoMontaje = string_new();
+	char* metadata = string_new();
+	char* archivos = string_new();
+	char* bloques = string_new();
+	char* metadataBin = string_new();
+	char* bitmapBin = string_new();
+
+	string_append(&puntoMontaje, "..");
+	string_append(&puntoMontaje, puntoMontajeConfig);
+	mkdir(puntoMontaje,0777);
+
+	string_append(&metadata, puntoMontaje);
+	string_append(&metadata, "Metadata");
+	mkdir(metadata,0777);
 	log_info(logger, "Creada carpeta Metadata");
-	mkdir("../puntoMontaje/Archivos",0777);
+
+	string_append(&archivos, puntoMontaje);
+	string_append(&archivos, "Archivos");
+	mkdir(archivos,0777);
 	log_info(logger, "Creada carpeta Archivos");
-	mkdir("../puntoMontaje/Bloques",0777);
+
+	string_append(&bloques, puntoMontaje);
+	string_append(&bloques, "Bloques");
+	mkdir(bloques,0777);
 	log_info(logger, "Creada carpeta Bloques");
 
-	//truncate("../puntoMontaje/Metadata/Bitmap.bin", 1024);
+	//truncate("Bitmap.bin", 1024);
 	//truncate("../puntoMontaje/Metadata/Metadata.bin", 1024);
 
-	FILE *metadata = fopen("../puntoMontaje/Metadata/Metadata.bin","wb+");
-	fclose(metadata);
+	string_append(&metadataBin, metadata);
+	string_append(&metadataBin, "/Metadata.bin");
+	FILE *archivoMetadataBin = fopen(metadataBin,"wb+");
+	fclose(archivoMetadataBin);
 	log_info(logger, "Creado el archivo Metadata.bin");
-	FILE *bitmap = fopen("../puntoMontaje/Metadata/Bitmap.bin","wb+");
+
+	string_append(&bitmapBin, metadata);
+	string_append(&bitmapBin, "/Bitmap.bin");
+	FILE *bitmap = fopen(bitmapBin,"wb+");
 	fclose(bitmap);
 	log_info(logger, "Creado el archivo Bitmap.bin");
 	puts("Creadas las estructuras administrativas");
+
+	free(bitmapBin);
+	free(metadataBin);
+	free(metadata);
+	free(bloques);
+	free(archivos);
+	free(puntoMontaje);
+
 }
 
 void mdj_exit(){
