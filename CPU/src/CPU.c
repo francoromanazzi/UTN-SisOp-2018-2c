@@ -1,24 +1,10 @@
 #include "CPU.h"
 
 int main(void) {
-	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/CPU.txt");
-	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
-	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/CPU.log", "CPU", false, LOG_LEVEL_TRACE);
-	retardo_ejecucion = config_get_int_value(config, "RETARDO");
-
-	log_info(logger, "NUEVO CPU");
-
-	if(!cpu_connect_to_safa()){
-		log_error(logger, "No pude conectarme a SAFA");
-		cpu_exit();
-		return EXIT_FAILURE;
+	if(cpu_initialize() == -1){ // Hubo algun error
+		cpu_exit(); return EXIT_FAILURE;
 	}
-	if(!cpu_connect_to_dam()){
-		log_error(logger, "No pude conectarme a DAM");
-		cpu_exit();
-		return EXIT_FAILURE;
-	}
-	log_info(logger, "Me conecte a DAM");
+
 
 	while(1)
 		cpu_esperar_dtb();
@@ -27,28 +13,74 @@ int main(void) {
 	return EXIT_SUCCESS;
 }
 
+int cpu_initialize(){
+	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/CPU.txt");
+
+	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
+	char* thread_id = string_itoa((int) process_get_thread_id());
+	char* path_log = strdup("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/CPU_");
+	string_append(&path_log, thread_id);
+	string_append(&path_log, ".log");
+	logger = log_create(path_log, "CPU", false, LOG_LEVEL_TRACE);
+	free(path_log);
+	free(thread_id);
+
+	retardo_ejecucion = config_get_int_value(config, "RETARDO");
+
+	log_info(logger, "NUEVO CPU");
+
+	if(!cpu_connect_to_safa()){
+		log_error(logger, "No pude conectarme a SAFA");
+		return -1;
+	}
+	if(!cpu_connect_to_dam()){
+		log_error(logger, "No pude conectarme a DAM");
+		return -1;
+	}
+	log_info(logger, "Me conecte a DAM");
+
+	if(!cpu_connect_to_fm9()){
+		log_error(logger, "No pude conectarme a FM9");
+		return -1;
+	}
+	log_info(logger, "Me conecte a FM9");
+	return 1;
+}
+
 void config_create_fixed(char* path){
 	config = config_create(path);
 	util_config_fix_comillas(&config, "IP_SAFA");
 	util_config_fix_comillas(&config, "IP_DIEGO");
+	util_config_fix_comillas(&config, "IP_MEM");
 }
 
-int cpu_send(int socket, e_tipo_msg tipo_msg, void* data){
+int cpu_send(int socket, e_tipo_msg tipo_msg, void* data, ...){
 	t_msg* mensaje_a_enviar;
 	int ret;
+
+	int base, offset;
+
+	va_list arguments;
+	va_start(arguments, data);
 
 	switch(tipo_msg){
 		case CONEXION:
 			mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
 		break;
 
-		case ABRIR:
+		case ABRIR: // A DAM
 			mensaje_a_enviar = empaquetar_abrir( ((t_dtb*) data)->ruta_escriptorio, ((t_dtb*) data)->gdt_id);
 		break;
 
-		case BLOCK:
-		case EXIT:
-		case READY:
+		case GET: // A FM9
+			base = (int) va_arg(arguments, void*);
+			offset = (int) va_arg(arguments, void*);
+			mensaje_a_enviar = empaquetar_get(base, offset);
+		break;
+
+		case BLOCK: // A SAFA
+		case EXIT: // A SAFA
+		case READY: // A SAFA
 			mensaje_a_enviar = empaquetar_dtb((t_dtb*) data);
 		break;
 	}
@@ -56,6 +88,8 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, void* data){
 	mensaje_a_enviar->header->tipo_mensaje = tipo_msg;
 	ret = msg_send(socket, *mensaje_a_enviar);
 	msg_free(&mensaje_a_enviar);
+
+	va_end(arguments);
 	return ret;
 }
 
@@ -69,17 +103,15 @@ void cpu_esperar_dtb(){
 		else
 			log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
 		cpu_ejecutar_dtb(dtb);
-		msg_free(&msg);
 		dtb_destroy(dtb);
 	}
 	else if(msg->header->tipo_mensaje == DESCONEXION){ // Nunca recibe este mensaje... y tira segfault si se desconecta S-AFA :(
 		log_info(logger, "Se desconecto S-AFA");
-		msg_free(&msg);
 	}
 	else{
 		log_error(logger, "No entendi el mensaje de SAFA");
-		msg_free(&msg);
 	}
+	msg_free(&msg);
 }
 
 void cpu_ejecutar_dtb(t_dtb* dtb){
@@ -109,9 +141,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
 			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
-				//cpu_send(safa_socket, EXIT, (void*) dtb);
-				// TODO: sacar lo de abajo y poner lo de arriba
-				cpu_send(safa_socket, READY, (void*) dtb);
+				cpu_send(safa_socket, EXIT, (void*) dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
 				return;
 			}
@@ -136,17 +166,29 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 
 			continuar_ejecucion = ++operaciones_realizadas < quantum;
 		}
+		log_info(logger, "Se me termino el quantum");
 		cpu_send(safa_socket, READY, (void*) dtb);
 	}
 }
 
 char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
-	char* ret = strdup("");
+	char* ret;
+
+	/* Le pido a FM9 la proxima instruccion */
+	cpu_send(fm9_socket, GET, (void*) base_escriptorio, (void*) dtb->pc);
+
+	/* Espero de FM9 la proxima instruccion */
+	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
+	msg_await(fm9_socket, msg_resultado_get);
+	ret = (char*) desempaquetar_resultado_get(msg_resultado_get);
+	log_info(logger, "La proxima instruccion es: %s", ret);
+
+	dtb->pc++;
 	return ret;
 }
 
 t_operacion* cpu_decodificar(char* instruccion){
-	t_operacion* ret = malloc(sizeof(t_operacion));
+	t_operacion* ret = parse(instruccion);
 	return ret;
 }
 
@@ -155,6 +197,11 @@ int cpu_buscar_operandos(t_operacion* operacion){
 }
 
 int cpu_ejecutar_operacion(t_operacion* operacion){
+	log_info(logger, "Ejecutando la operacion");
+	switch(operacion->tipo_operacion){
+		case OP_CONCENTRAR:
+		break;
+	}
 	return OK;
 }
 
@@ -186,6 +233,15 @@ int cpu_connect_to_dam(){
 	int resultado_send = cpu_send(dam_socket, CONEXION, NULL);
 
 	return safa_socket > 0 && resultado_send > 0;
+}
+
+int cpu_connect_to_fm9(){
+	fm9_socket = socket_connect_to_server(config_get_string_value(config, "IP_MEM"), config_get_string_value(config, "PUERTO_MEM"));
+	log_info(logger, "Intento conectarme a FM9");
+
+	int resultado_send = cpu_send(fm9_socket, CONEXION, NULL);
+
+	return fm9_socket > 0 && resultado_send > 0;
 }
 
 void cpu_exit(){

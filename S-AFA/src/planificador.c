@@ -141,36 +141,40 @@ void planificador_actualizar_archivos_dtb(t_dtb* dtb){
 t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado_actual){
 	t_dtb* dtb = NULL;
 
-	bool _tiene_mismo_id(void* data){
-		return  ((t_dtb*) data) -> gdt_id == id_target;
+	bool _tiene_mismo_id_y_no_dummy(void* data){
+		return  ((t_dtb*) data) -> gdt_id == id_target && ((t_dtb*) data) -> flags.inicializado == 1;
 	}
+	bool _es_dummy(void* data){
+		return ((t_dtb*) data) -> flags.inicializado == 0;
+	}
+
+	bool (*buscador)(void*);
+	if(id_target == 0) buscador = &_es_dummy; // Quiere buscar al dummy
+	else buscador = &_tiene_mismo_id_y_no_dummy;
+
 	pthread_mutex_lock(&sem_mutex_cola_new);
 	pthread_mutex_lock(&sem_mutex_cola_ready);
 	pthread_mutex_lock(&sem_mutex_cola_block);
 	pthread_mutex_lock(&sem_mutex_cola_exec);
-	if( (dtb = dtb_copiar( list_find(cola_new, _tiene_mismo_id)) ) != NULL){
+	if( (dtb = dtb_copiar( list_find(cola_new, buscador)) ) != NULL){
 		*estado_actual = strdup("NEW");
-		pthread_mutex_unlock(&sem_mutex_cola_new);
 	}
-	else if( (dtb = dtb_copiar( list_find(cola_ready, _tiene_mismo_id)) ) != NULL){
+	else if( (dtb = dtb_copiar( list_find(cola_ready, buscador)) ) != NULL){
 		*estado_actual = strdup("READY");
-		pthread_mutex_unlock(&sem_mutex_cola_ready);
 	}
-	else if( (dtb = dtb_copiar( list_find(cola_block, _tiene_mismo_id)) ) != NULL){
+	else if( (dtb = dtb_copiar( list_find(cola_block, buscador)) ) != NULL){
 		*estado_actual = strdup("BLOCK");
-		pthread_mutex_unlock(&sem_mutex_cola_block);
 	}
-	else if( (dtb = dtb_copiar( list_find(cola_exec, _tiene_mismo_id)) ) != NULL){
+	else if( (dtb = dtb_copiar( list_find(cola_exec, buscador)) ) != NULL){
 		*estado_actual = strdup("EXEC");
-		pthread_mutex_unlock(&sem_mutex_cola_exec);
 	}
 	else{
 		*estado_actual= strdup("No encontrado");
-		pthread_mutex_unlock(&sem_mutex_cola_new);
-		pthread_mutex_unlock(&sem_mutex_cola_ready);
-		pthread_mutex_unlock(&sem_mutex_cola_block);
-		pthread_mutex_unlock(&sem_mutex_cola_exec);
 	}
+	pthread_mutex_unlock(&sem_mutex_cola_new);
+	pthread_mutex_unlock(&sem_mutex_cola_ready);
+	pthread_mutex_unlock(&sem_mutex_cola_block);
+	pthread_mutex_unlock(&sem_mutex_cola_exec);
 
 	return dtb;
 }

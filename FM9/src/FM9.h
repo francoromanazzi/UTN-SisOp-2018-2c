@@ -32,8 +32,12 @@
 
 
 	void fm9_initialize();
-	void fm9_consola();
-	int fm9_manejador_de_eventos(int socket, t_msg* msg);
+	int fm9_send(int socket, e_tipo_msg tipo_msg, void* data);
+
+	bool fm9_crear_nuevo_hilo(int socket_nuevo_cliente);
+	void fm9_nuevo_cliente_iniciar(int socket);
+	int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg);
+
 	void fm9_exit();
 
 #endif /* FM9_H_ */

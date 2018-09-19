@@ -231,9 +231,51 @@ void desempaquetar_abrir(t_msg* msg, char** path, unsigned int* id){
 	return;
 }
 
+t_msg* empaquetar_get(int base, int offset){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size =
+		sizeof(int) + //base
+		sizeof(int) // offset
+		;
+	ret->payload = malloc(ret->header->payload_size);
 
+	memcpy(ret->payload, (void*) &base, sizeof(int));
+	memcpy(ret->payload + sizeof(int), (void*) &offset, sizeof(int));
+	return ret;
+}
 
+void desempaquetar_get(t_msg* msg, int* base, int* offset){
+	memcpy((void*) base, msg->payload, sizeof(int));
+	memcpy((void*) offset, msg->payload + sizeof(int), sizeof(int));
+}
 
+t_msg* empaquetar_resultado_get(void* datos, int datos_size){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size =
+			sizeof(int) + // data_size
+			datos_size // datos
+			;
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &datos_size, sizeof(int));
+	memcpy(ret->payload + sizeof(int), datos, datos_size);
+
+	return ret;
+}
+
+void* desempaquetar_resultado_get(t_msg* msg){
+	int datos_size;
+	void* datos;
+	memcpy((void*) &datos_size, msg->payload, sizeof(int));
+
+	datos = malloc(datos_size + 1);
+	memcpy(datos, msg->payload + sizeof(int), datos_size);
+	memset(datos + datos_size, 0, 1);
+
+	return datos;
+}
 
 
 

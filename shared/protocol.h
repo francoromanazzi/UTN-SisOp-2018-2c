@@ -26,4 +26,10 @@
 	t_msg* empaquetar_abrir(char* path, unsigned int id);
 	void desempaquetar_abrir(t_msg* msg, char** path, unsigned int* id);
 
+	t_msg* empaquetar_get(int base, int offset);
+	void desempaquetar_get(t_msg* msg, int* base, int* offset);
+
+	t_msg* empaquetar_resultado_get(void* datos, int datos_size);
+	void* desempaquetar_resultado_get(t_msg* msg);
+
 #endif /* SHARED_PROTOCOL_H_ */

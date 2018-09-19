@@ -104,9 +104,7 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 		pthread_mutex_unlock(&sem_mutex_cola_block);
 	}
 	else if(!strcmp(cola_inicio, "EXEC")){
-		/* TODO: Si cola_destino == "EXEC", esperar a que termine la instruccion */
-
-
+		/* TODO: Si cola_inicio == "EXEC", esperar a que termine la instruccion */
 
 
 		pthread_mutex_lock(&sem_mutex_cola_exec);

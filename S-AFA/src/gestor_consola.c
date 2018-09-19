@@ -27,7 +27,7 @@ static void gestor_consola_procesar_comando(char* linea){
 		}
 		free(split);
 	}
-	int split_cant_elem(char**split){
+	int split_cant_elem(char** split){
 		int i = 0;
 		for(;split[i] != NULL; i++);
 		return i;

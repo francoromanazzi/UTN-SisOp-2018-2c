@@ -2,10 +2,6 @@
 
 void gestor_iniciar(){
 
-	bool _es_dummy(void* data){
-		return  ((t_dtb*) data) -> gdt_id == 0;
-	}
-
 	/* Creo el hilo consola del gestor de programas */
 	if(pthread_create( &thread_gestor_consola, NULL, (void*) gestor_consola_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo para la consola del gestor");
