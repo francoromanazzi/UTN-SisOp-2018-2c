@@ -54,14 +54,15 @@ void config_create_fixed(char* path){
 	util_config_fix_comillas(&config, "IP_MEM");
 }
 
-int cpu_send(int socket, e_tipo_msg tipo_msg, void* data, ...){
+int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
 	int ret;
 
 	int base, offset;
+	t_dtb* dtb;
 
 	va_list arguments;
-	va_start(arguments, data);
+	va_start(arguments, tipo_msg);
 
 	switch(tipo_msg){
 		case CONEXION:
@@ -69,19 +70,21 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, void* data, ...){
 		break;
 
 		case ABRIR: // A DAM
-			mensaje_a_enviar = empaquetar_abrir( ((t_dtb*) data)->ruta_escriptorio, ((t_dtb*) data)->gdt_id);
+			dtb = va_arg(arguments, t_dtb*);
+			mensaje_a_enviar = empaquetar_abrir( dtb->ruta_escriptorio, dtb->gdt_id);
 		break;
 
 		case GET: // A FM9
-			base = (int) va_arg(arguments, void*);
-			offset = (int) va_arg(arguments, void*);
+			base = va_arg(arguments, int);
+			offset = va_arg(arguments, int);
 			mensaje_a_enviar = empaquetar_get(base, offset);
 		break;
 
 		case BLOCK: // A SAFA
 		case EXIT: // A SAFA
 		case READY: // A SAFA
-			mensaje_a_enviar = empaquetar_dtb((t_dtb*) data);
+			dtb = va_arg(arguments, t_dtb*);
+			mensaje_a_enviar = empaquetar_dtb(dtb);
 		break;
 	}
 	mensaje_a_enviar->header->emisor = CPU;
@@ -115,16 +118,14 @@ void cpu_esperar_dtb(){
 }
 
 void cpu_ejecutar_dtb(t_dtb* dtb){
-	t_msg* mensaje_a_enviar;
-
 	dtb_mostrar(dtb, "EXEC"); // Sacar despues
 
 	if(dtb->flags.inicializado == 0){ // DUMMY
 		/* Le pido a Diego que abra el escriptorio */
-		cpu_send(dam_socket, ABRIR, (void*) dtb);
+		cpu_send(dam_socket, ABRIR, dtb);
 
 		/* Le envio a SAFA el DTB, y le pido que lo bloquee */
-		cpu_send(safa_socket, BLOCK, (void*) dtb);
+		cpu_send(safa_socket, BLOCK, dtb);
 	}
 	else{ // NO DUMMY
 		bool continuar_ejecucion = true;
@@ -141,7 +142,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
 			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
-				cpu_send(safa_socket, EXIT, (void*) dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
+				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
 				return;
 			}
@@ -153,21 +154,22 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			/* -------------------- 3RA FASE: BUSQUEDA OPERANDOS -------------------- */
 			if ((nro_error = cpu_buscar_operandos(operacion)) != OK){
 				log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
-				cpu_send(safa_socket, EXIT, (void*) dtb);
+				cpu_send(safa_socket, EXIT, dtb);
 				return;
 			}
 
 			/* ------------------------- 4TA FASE: EJECUCION ------------------------- */
 			if ((nro_error = cpu_ejecutar_operacion(operacion)) != OK){
 				log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
-				cpu_send(safa_socket, EXIT, (void*) dtb);
+				cpu_send(safa_socket, EXIT, dtb);
 				return;
 			}
+			operacion_free(&operacion);
 
 			continuar_ejecucion = ++operaciones_realizadas < quantum;
 		}
 		log_info(logger, "Se me termino el quantum");
-		cpu_send(safa_socket, READY, (void*) dtb);
+		cpu_send(safa_socket, READY, dtb);
 	}
 }
 
@@ -175,13 +177,15 @@ char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 	char* ret;
 
 	/* Le pido a FM9 la proxima instruccion */
-	cpu_send(fm9_socket, GET, (void*) base_escriptorio, (void*) dtb->pc);
+	cpu_send(fm9_socket, GET, base_escriptorio, dtb->pc);
 
 	/* Espero de FM9 la proxima instruccion */
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
 	msg_await(fm9_socket, msg_resultado_get);
 	ret = (char*) desempaquetar_resultado_get(msg_resultado_get);
 	log_info(logger, "La proxima instruccion es: %s", ret);
+
+	msg_free(&msg_resultado_get);
 
 	dtb->pc++;
 	return ret;
@@ -199,7 +203,31 @@ int cpu_buscar_operandos(t_operacion* operacion){
 int cpu_ejecutar_operacion(t_operacion* operacion){
 	log_info(logger, "Ejecutando la operacion");
 	switch(operacion->tipo_operacion){
+		case OP_ABRIR:
+		break;
+
 		case OP_CONCENTRAR:
+		break;
+
+		case OP_ASIGNAR:
+		break;
+
+		case OP_WAIT:
+		break;
+
+		case OP_SIGNAL:
+		break;
+
+		case OP_FLUSH:
+		break;
+
+		case OP_CLOSE:
+		break;
+
+		case OP_CREAR:
+		break;
+
+		case OP_BORRAR:
 		break;
 	}
 	return OK;

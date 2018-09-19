@@ -17,7 +17,7 @@ t_operacion* parse(char* linea){
 	}
 
 	t_operacion* ret = malloc(sizeof(t_operacion));
-	dictionary_create(ret->operandos);
+	ret->operandos = dictionary_create();
 
 	char** argv = string_split(linea, " ");
 	int argc = split_cant_elem(argv);

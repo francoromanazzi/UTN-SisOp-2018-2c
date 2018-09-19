@@ -4,13 +4,15 @@
 	#include <stdlib.h>
 	#include <sys/stat.h>
  	#include <sys/types.h>
+	#include <unistd.h>
+	#include <sys/socket.h>
+	#include <pthread.h>
+
 	#include <commons/config.h>
 	#include <commons/log.h>
 	#include <shared/socket.h>
 	#include <shared/util.h>
-	#include <unistd.h>
-	#include <sys/socket.h>
-	#include <pthread.h>
+
 	#include "FM9_consola.h"
 
 
@@ -31,7 +33,8 @@
 	char* storage;
 
 
-	void fm9_initialize();
+	int fm9_initialize();
+
 	int fm9_send(int socket, e_tipo_msg tipo_msg, void* data);
 
 	bool fm9_crear_nuevo_hilo(int socket_nuevo_cliente);

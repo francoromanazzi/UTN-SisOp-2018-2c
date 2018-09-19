@@ -75,7 +75,7 @@ void planificador_iniciar(){
 
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
-			planificador_actualizar_archivos_dtb(dtb_recibido);
+			planificador_actualizar_archivos_y_pc_dtb(dtb_recibido);
 
 			/* Por ahi me habian pedido finalizar este DTB (por ejemplo, en pcp_mover_dtb) */
 
@@ -90,7 +90,7 @@ void planificador_iniciar(){
 
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
-			planificador_actualizar_archivos_dtb(dtb_recibido);
+			planificador_actualizar_archivos_y_pc_dtb(dtb_recibido);
 			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
 			sem_post(&sem_cont_cola_ready); // Aviso a PCP que hay uno nuevo en READY
 			dtb_destroy(dtb_recibido);
@@ -113,7 +113,7 @@ void planificador_iniciar(){
 	} // Fin while(1)
 }
 
-void planificador_actualizar_archivos_dtb(t_dtb* dtb){
+void planificador_actualizar_archivos_y_pc_dtb(t_dtb* dtb){
 	t_dtb* dtb_a_modificar;
 
 	bool _mismo_id(void* data){
@@ -131,6 +131,7 @@ void planificador_actualizar_archivos_dtb(t_dtb* dtb){
 		// Busco al DTB en EXEC
 		pthread_mutex_lock(&sem_mutex_cola_exec);
 		if((dtb_a_modificar = list_find(cola_exec, _mismo_id)) != NULL){ // Encontre al DTB en EXEC
+			dtb_a_modificar->pc = dtb->pc;
 			dictionary_clean(dtb_a_modificar->archivos_abiertos); // Borro los archivos abiertos
 			dictionary_iterator(dtb->archivos_abiertos, _actualizar_archivos_abiertos); // Los vuelvo a poner, uno por uno
 		}

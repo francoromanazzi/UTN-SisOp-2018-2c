@@ -1,32 +1,25 @@
 #include "FM9.h"
 
 int main(void) {
-
-	fm9_initialize();
-
-	if((listening_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
-		log_error(logger,"No se pudo crear socket de escucha");
-		fm9_exit();
-		exit(EXIT_FAILURE);
+	if(fm9_initialize() == -1){
+		fm9_exit(); return EXIT_FAILURE;
 	}
-	log_info(logger, "Comienzo a escuchar  por el socket %d", listening_socket);
 
 	while(1){
 		int nuevo_cliente = socket_aceptar_conexion(listening_socket);
 		if( !fm9_crear_nuevo_hilo(nuevo_cliente)){
 			log_error(logger, "No pude crear un nuevo hilo para atender una nueva conexion");
 			fm9_exit();
+			return EXIT_FAILURE;
 		}
 		log_info(logger, "Creo un nuevo hilo para atender los pedidos de un nuevo cliente");
 	}
-
-	//socket_start_listening_select(listening_socket, fm9_manejador_de_eventos);
 
 	fm9_exit();
 	return EXIT_SUCCESS;
 }
 
-void fm9_initialize(){
+int fm9_initialize(){
 	config = config_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/FM9.txt");
 	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
@@ -40,11 +33,16 @@ void fm9_initialize(){
 
 	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
 		log_error(logger,"No se pudo crear el hilo para la consola");
-		fm9_exit();
-		exit(EXIT_FAILURE);
+		return -1;
 	}
 	log_info(logger,"Se creo el hilo para la consola");
 
+	if((listening_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
+		log_error(logger,"No se pudo crear socket de escucha");
+		return -1;
+	}
+	log_info(logger, "Comienzo a escuchar  por el socket %d", listening_socket);
+	return 1;
 }
 
 int fm9_send(int socket, e_tipo_msg tipo_msg, void* data){
@@ -75,13 +73,20 @@ bool fm9_crear_nuevo_hilo(int socket_nuevo_cliente){
 void fm9_nuevo_cliente_iniciar(int socket){
 	while(1){
 		t_msg* nuevo_mensaje = malloc(sizeof(t_msg));
-		msg_await(socket, nuevo_mensaje);
+		if(msg_await(socket, nuevo_mensaje) == -1){
+			log_info(logger, "Cierro el hilo que atendia a este cliente");
+			// TODO: Cerrar el hilo?
+			msg_free(&nuevo_mensaje);
+			return;
+		}
 		if(fm9_manejar_nuevo_mensaje(socket, nuevo_mensaje) == -1){
 			log_info(logger, "Cierro el hilo que atendia a este cliente");
 			// TODO: Cerrar el hilo?
+			msg_free(&nuevo_mensaje);
 			return;
 		}
-	}
+		msg_free(&nuevo_mensaje);
+	} // Fin while(1)
 }
 
 int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
@@ -91,6 +96,11 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
 				log_info(logger,"Se me conecto DAM");
+			break;
+
+			case DESCONEXION:
+				log_info(logger,"Se me conecto DAM");
+				return -1;
 			break;
 
 			case ESCRIBIR:
@@ -114,6 +124,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case DESCONEXION:
 				log_info(logger,"Se me desconecto CPU");
+				return -1;
 			break;
 
 			case GET:
