@@ -105,6 +105,10 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 	}
 	else if(!strcmp(cola_inicio, "EXEC")){
 		/* TODO: Si cola_destino == "EXEC", esperar a que termine la instruccion */
+
+
+
+
 		pthread_mutex_lock(&sem_mutex_cola_exec);
 		dtb = list_remove_by_condition(cola_exec, _tiene_mismo_id);
 		pthread_mutex_unlock(&sem_mutex_cola_exec);

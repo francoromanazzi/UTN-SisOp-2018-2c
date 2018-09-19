@@ -1,4 +1,4 @@
-#include "pcp_cargar_recurso.h"
+#include "pcp_cargar_archivo.h"
 
 void pcp_cargar_recurso_iniciar(){
 	int ok;
@@ -12,7 +12,7 @@ void pcp_cargar_recurso_iniciar(){
 	}
 
 	while(1){
-		sem_wait(&sem_cont_cargar_recurso);
+		sem_wait(&sem_bin_pcp_cargar_archivo);
 
 		desempaquetar_resultado_abrir(msg_resultado_abrir, &ok, &id, &path, &base);
 
@@ -22,12 +22,13 @@ void pcp_cargar_recurso_iniciar(){
 
 		if(dtb_a_actualizar == NULL){ // No encontre al DTB en BLOCK (es responsabilidad de plp_cargar_recurso)
 			free(path);
-			sem_post(&sem_cont_cargar_recurso);
+			sem_post(&sem_bin_plp_cargar_archivo);
 			continue;
 		}
 
 		/* Encontre al DTB en NEW. Me fijo si DAM pudo cargar el archivo, si es asi, le cargo la base al DTB */
 		log_info(logger,"Soy PCP. OK: %d, ID: %d, PATH: %s, BASE: %d",ok,id,path,base);
+		msg_free(&msg_resultado_abrir);
 
 		if(!ok){ // No se encontro el recurso, asi que lo aborto
 			planificador_finalizar_dtb(dtb_a_actualizar->gdt_id);

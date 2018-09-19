@@ -9,7 +9,8 @@
 	#include "planificador.h"
 	#include "S-AFA.h"
 	#include <shared/DTB.h>
-	#include "pcp_cargar_recurso.h"
+
+#include "pcp_cargar_archivo.h"
 	#include "pcp_desbloquear_dummy.h"
 
 	pthread_t thread_pcp_desbloquear_dummy;

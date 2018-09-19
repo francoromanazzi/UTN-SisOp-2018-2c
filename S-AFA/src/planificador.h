@@ -52,7 +52,6 @@
 	void planificador_iniciar();
 	bool planificador_finalizar_dtb(unsigned int id);
 	t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id, char** estado_actual);
-	void planificador_cargar_nuevo_path_vacio_en_dtb(t_dtb* dtb_a_actualizar);
-	void planificador_cargar_archivo_en_dtb(t_msg* msg);
+	void planificador_actualizar_archivos_dtb(t_dtb* dtb);
 
 #endif /* PLANIFICADOR_H_ */

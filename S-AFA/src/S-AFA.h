@@ -35,7 +35,8 @@
 	int listening_socket;
 	int dam_socket;
 
-	sem_t sem_cont_cargar_recurso;
+	sem_t sem_bin_plp_cargar_archivo;
+	sem_t sem_bin_pcp_cargar_archivo;
 	t_msg* msg_resultado_abrir;
 
 	t_list* cpu_conexiones;

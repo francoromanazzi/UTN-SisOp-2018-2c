@@ -65,7 +65,6 @@ void planificador_iniciar(){
 
 			sem_wait(&sem_bin_crear_dtb_1); // Espero a que termine la creacion de un DTB anterior
 			pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
-			free_memory((void**) &ruta_escriptorio_nuevo_dtb);
 			ruta_escriptorio_nuevo_dtb = desempaquetar_string(msg);
 			pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
 			sem_post(&sem_bin_crear_dtb_0); // Le aviso a thread_plp_crear_dtb
@@ -73,18 +72,25 @@ void planificador_iniciar(){
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == BLOCK){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
-			planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
+			planificador_actualizar_archivos_dtb(dtb_recibido);
+
+			/* Por ahi me habian pedido finalizar este DTB (por ejemplo, en pcp_mover_dtb) */
+
+
+
 			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
 			dtb_destroy(dtb_recibido);
 		}
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == READY){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
-			planificador_cargar_nuevo_path_vacio_en_dtb(dtb_recibido);
+			planificador_actualizar_archivos_dtb(dtb_recibido);
 			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
 			sem_post(&sem_cont_cola_ready); // Aviso a PCP que hay uno nuevo en READY
 			dtb_destroy(dtb_recibido);
@@ -92,6 +98,7 @@ void planificador_iniciar(){
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == EXIT){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
+
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
 			planificador_finalizar_dtb(dtb_recibido->gdt_id);
@@ -104,6 +111,31 @@ void planificador_iniciar(){
 		msg_free(&msg);
 
 	} // Fin while(1)
+}
+
+void planificador_actualizar_archivos_dtb(t_dtb* dtb){
+	t_dtb* dtb_a_modificar;
+
+	bool _mismo_id(void* data){
+		return  ((t_dtb*) data) -> gdt_id == dtb->gdt_id;
+	}
+
+	void _actualizar_archivos_abiertos(char* key, void* data){
+		dictionary_put(dtb_a_modificar->archivos_abiertos, key, data);
+	}
+
+	if(dtb->flags.inicializado == 0){ // DUMMY
+		return; // No tengo que hacer nada
+	}
+	else{ // No DUMMY
+		// Busco al DTB en EXEC
+		pthread_mutex_lock(&sem_mutex_cola_exec);
+		if((dtb_a_modificar = list_find(cola_exec, _mismo_id)) != NULL){ // Encontre al DTB en EXEC
+			dictionary_clean(dtb_a_modificar->archivos_abiertos); // Borro los archivos abiertos
+			dictionary_iterator(dtb->archivos_abiertos, _actualizar_archivos_abiertos); // Los vuelvo a poner, uno por uno
+		}
+		pthread_mutex_unlock(&sem_mutex_cola_exec);
+	}
 }
 
 t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado_actual){
@@ -158,73 +190,6 @@ bool planificador_finalizar_dtb(unsigned int id){
 	}
 	free(estado);
 	return true;
-}
-
-void planificador_cargar_nuevo_path_vacio_en_dtb(t_dtb* dtb){
-	t_dtb* dtb_a_modificar;
-
-	bool _mismo_id(void* data){
-		return  ((t_dtb*) data) -> gdt_id == dtb->gdt_id;
-	}
-
-	void _agregar_nuevo_path(char* key, void* data){
-		if(!dictionary_has_key(dtb_a_modificar->archivos_abiertos, key)){ // Si ya tenia a ese archivo en su DTB
-			dictionary_put(dtb_a_modificar->archivos_abiertos, key, data);
-		}
-	}
-
-	if(dtb->flags.inicializado == 0){ // DUMMY
-		return; // No tengo que hacer nada
-	}
-	else{ // No DUMMY
-		// Busco al DTB en BLOCK
-		if((dtb_a_modificar = list_find(cola_block, _mismo_id)) != NULL){
-			dictionary_iterator(dtb->archivos_abiertos, _agregar_nuevo_path);
-		}
-	}
-}
-
-void planificador_cargar_archivo_en_dtb(t_msg* msg){
-	int ok;
-	unsigned int id;
-	char* path;
-	int base;
-	t_dtb* dtb; // DTB a actualizar
-
-	bool _mismo_id(void* data){
-		return ((t_dtb*) data)->gdt_id == id;
-	}
-
-
-	desempaquetar_resultado_abrir(msg, &ok, &id, &path, &base);
-	log_info(logger,"OK: %d, ID: %d, PATH: %s, BASE: %d",ok,id,path,base);
-
-	/* Busco en BLOCK el DTB que queria este recurso (puede ser el DUMMY, eso lo manejo despues)*/
-
-	if((dtb = list_find(cola_block, _mismo_id)) == NULL){
-		log_error(logger, "No pude cargar el archivo %s en el DTB %d porque no lo encontre en BLOCK", path, id);
-		free(path);
-		return;
-	}
-
-	if(id == 0){ // El DUMMY era el solicitante, asi que busco el verdadero ID del que quiere pasar a READY
-		//dtb = list_find(cola_new, _queria_ese_recurso);
-
-		/* Finalizo la operacion DUMMY */
-		dtb->flags.inicializado = 1;
-		sem_post(&sem_bin_fin_op_dummy);
-	}
-
-	if(!ok){ // No se encontro el recurso, asi que lo aborto
-		planificador_finalizar_dtb(dtb->gdt_id);
-		free(path);
-	}
-	else{
-		//dictionary_remove_and_destroy(dtb->archivos_abiertos, path, free);
-		dictionary_remove(dtb->archivos_abiertos, path);
-		dictionary_put(dtb->archivos_abiertos, path, (void*) base);
-		free(path);
-	}
 }
 
 

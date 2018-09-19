@@ -36,8 +36,8 @@ void plp_iniciar(){
 		id_nuevo_dtb = dtb_a_pasar_a_ready->gdt_id;
 
 		pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
-		free_memory((void**) &ruta_escriptorio_nuevo_dtb);
-		ruta_escriptorio_nuevo_dtb = strdup(dtb_a_pasar_a_ready->ruta_escriptorio);
+		//free_memory((void**) &ruta_escriptorio_nuevo_dtb);
+		ruta_escriptorio_nuevo_dtb = dtb_a_pasar_a_ready->ruta_escriptorio;
 		pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
 
 		sem_post(&sem_bin_desbloquear_dummy); // Le aviso a thread_pcp_desbloquear_dummy

@@ -38,7 +38,8 @@ void safa_initialize(){
 
 void safa_iniciar_estado_operatorio(){
 	estado_operatorio = true;
-	sem_init(&sem_cont_cargar_recurso, 0, 0);
+	sem_init(&sem_bin_plp_cargar_archivo, 0, 0);
+	sem_init(&sem_bin_pcp_cargar_archivo, 0, 0);
 
 	/* Creo el hilo gestor de programas */
 	if(pthread_create( &thread_gestor, NULL, (void*) gestor_iniciar, NULL) ){

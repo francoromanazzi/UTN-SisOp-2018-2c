@@ -7,7 +7,8 @@
 	#include <commons/config.h>
 	#include "S-AFA.h"
 	#include <shared/DTB.h>
-	#include "plp_cargar_recurso.h"
+
+#include "plp_cargar_archivo.h"
 	#include "plp_crear_dtb.h"
 
 

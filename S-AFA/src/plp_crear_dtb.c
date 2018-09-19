@@ -8,10 +8,9 @@ void plp_crear_dtb_iniciar(){
 
 		/* Agrego a NEW un DTB nuevo */
 		pthread_mutex_lock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
-		char* ruta = strdup(ruta_escriptorio_nuevo_dtb);
+		plp_crear_dtb_encolar_new(ruta_escriptorio_nuevo_dtb);
 		free(ruta_escriptorio_nuevo_dtb);
 		pthread_mutex_unlock(&sem_mutex_ruta_escriptorio_nuevo_dtb);
-		plp_crear_dtb_encolar_new(ruta);
 
 		sem_post(&sem_bin_crear_dtb_1); // Aviso que ya termine de crear el DTB
 	}

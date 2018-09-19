@@ -26,8 +26,8 @@ void gestor_iniciar(){
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
 
 			/* Me comunico con los planificadores*/
-			msg_resultado_abrir = msg;
-			sem_post(&sem_cont_cargar_recurso); // Le aviso a PCP_cargar_recurso y PLP_cargar_recurso
+			msg_resultado_abrir = msg_duplicar(msg);
+			sem_post(&sem_bin_plp_cargar_archivo); // Le aviso a PLP_cargar_recurso
 		}
 		else{ // No me interesa el mensaje
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
