@@ -6,7 +6,7 @@ int main(void) {
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
 	//creo estructuras administrativas
-	crearEstructuras(config_get_string_value(config, "PUNTO_MONTAJE"));
+	crearEstructuras(config_get_string_value(config, "PUNTO_MONTAJE"),config_get_string_value(config, "TAMANIO_BLOQUES"),config_get_string_value(config, "CANTIDAD_BLOQUES"));
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
@@ -69,7 +69,7 @@ void config_create_fixed(char* path){
 	util_config_fix_comillas(&config, "PUNTO_MONTAJE");
 }
 
-void crearEstructuras(char *puntoMontajeConfig){
+void crearEstructuras(char *puntoMontajeConfig,char *tamanioBloques,char *cantidadBloques){
 	char* puntoMontaje = string_new();
 	char* metadata = string_new();
 	char* archivos = string_new();
@@ -96,12 +96,18 @@ void crearEstructuras(char *puntoMontajeConfig){
 	mkdir(bloques,0777);
 	log_info(logger, "Creada carpeta Bloques");
 
-	//truncate("Bitmap.bin", 1024);
-	//truncate("../puntoMontaje/Metadata/Metadata.bin", 1024);
-
 	string_append(&metadataBin, metadata);
 	string_append(&metadataBin, "/Metadata.bin");
 	FILE *archivoMetadataBin = fopen(metadataBin,"wb+");
+	fwrite("TAMANIO_BLOQUES=\n",1,17,archivoMetadataBin);
+	//fwrite(tamanioBloques,1,strlen(tamanioBloques)*sizeof(char*),archivoMetadataBin);
+
+
+	//fputc('\n', archivoMetadataBin);
+	fwrite("CANTIDAD_BLOQUES=",1,17,archivoMetadataBin);
+	fwrite(cantidadBloques,1,strlen(cantidadBloques)*sizeof(char*),archivoMetadataBin);
+	//fseek(archivoMetadataBin,17,0);
+
 	fclose(archivoMetadataBin);
 	log_info(logger, "Creado el archivo Metadata.bin");
 
@@ -112,12 +118,12 @@ void crearEstructuras(char *puntoMontajeConfig){
 	log_info(logger, "Creado el archivo Bitmap.bin");
 	puts("Creadas las estructuras administrativas");
 
-	free(bitmapBin);
-	free(metadataBin);
-	free(metadata);
-	free(bloques);
-	free(archivos);
 	free(puntoMontaje);
+	free(metadata);
+	free(archivos);
+	free(bloques);
+	free(metadataBin);
+	free(bitmapBin);
 
 }
 
