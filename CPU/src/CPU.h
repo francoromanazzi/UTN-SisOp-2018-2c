@@ -29,17 +29,18 @@
 	int fm9_socket;
 
 	int quantum;
+	pthread_mutex_t sem_mutex_quantum;
+
 	int retardo_ejecucion;
 
 	int cpu_initialize();
-	void config_create_fixed(char* path);
 	int cpu_connect_to_safa();
 	int cpu_connect_to_dam();
 	int cpu_connect_to_fm9();
 
 	int cpu_send(int socket, e_tipo_msg tipo_msg, ...);
 
-	void cpu_esperar_dtb();
+	int cpu_esperar_dtb();
 	void cpu_ejecutar_dtb(t_dtb* dtb);
 
 	char* cpu_fetch(t_dtb* dtb, int base_escriptorio);

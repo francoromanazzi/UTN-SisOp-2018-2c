@@ -24,7 +24,9 @@ void pcp_iniciar(){
 		sem_wait(&sem_cont_cpu_conexiones); // Espero CPUs para poder mandarles el DTB
 
 		/* OK, ya puedo elegir otro DTB de ready para mandar a algun CPU */
+		pthread_mutex_lock(&sem_mutex_config_retardo);
 		usleep(retardo_planificacion);
+		pthread_mutex_unlock(&sem_mutex_config_retardo);
 
 		int cpu_socket = pcp_buscar_cpu_ociosa();
 		if(cpu_socket == -1){ // Error de sincro, por alguna razon
@@ -42,31 +44,27 @@ void pcp_iniciar(){
 			continue;
 		}
 
-		t_msg* dtb_empaquetado = empaquetar_dtb(dtb_elegido);
-
-		dtb_empaquetado->header->emisor = SAFA;
-		dtb_empaquetado->header->tipo_mensaje = EXEC;
+		log_info(logger, "Muevo a EXEC y mando a ejecutar el DTB con ID: %d", dtb_elegido->gdt_id);
 
 		pthread_mutex_lock(&sem_mutex_cola_exec);
 		list_add(cola_exec, dtb_elegido);
 		pthread_mutex_unlock(&sem_mutex_cola_exec);
 
-		log_info(logger, "Muevo a EXEC y mando a ejecutar el DTB con ID: %d", dtb_elegido->gdt_id);
-
-		msg_send(cpu_socket, *dtb_empaquetado);
-		msg_free(&dtb_empaquetado);
+		safa_send(cpu_socket, EXEC, dtb_elegido);
 
 	} // Fin while(1)
 }
 
 t_dtb* pcp_aplicar_algoritmo(){
-	// char* algoritmo = config_get_string_value(config, "ALGORITMO");
-	// TODO: Gestionar algoritmo
+	pthread_mutex_lock(&sem_mutex_config_algoritmo);
 
-	// Aplico FIFO:
 	pthread_mutex_lock(&sem_mutex_cola_ready);
+	// TODO: Gestionar algoritmo
+	// Aplico FIFO:
 	t_dtb* dtb_elegido = (t_dtb*) list_remove(cola_ready, 0);
 	pthread_mutex_unlock(&sem_mutex_cola_ready);
+
+	pthread_mutex_unlock(&sem_mutex_config_algoritmo);
 	return dtb_elegido;
 }
 

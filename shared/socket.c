@@ -1,5 +1,6 @@
 #include "socket.h"
 
+
 static void close_conection(void *conexion);
 static bool close_conection_condition(void *conexion);
 

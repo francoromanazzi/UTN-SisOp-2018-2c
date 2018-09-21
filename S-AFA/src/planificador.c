@@ -3,7 +3,10 @@
 void planificador_iniciar(){
 	cant_procesos = 0;
 	pthread_mutex_init(&sem_mutex_cant_procesos, NULL);
-	sem_init(&sem_cont_procesos, 0, config_get_int_value(config, "MULTIPROGRAMACION"));
+
+	pthread_mutex_lock(&sem_mutex_config_multiprogramacion);
+	sem_init(&sem_cont_procesos, 0, multiprogramacion);
+	pthread_mutex_unlock(&sem_mutex_config_multiprogramacion);
 
 	sem_init(&sem_bin_crear_dtb_0, 0, 0);
 	sem_init(&sem_bin_crear_dtb_1, 0, 1);

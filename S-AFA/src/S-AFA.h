@@ -2,8 +2,10 @@
 #define S_AFA_H_
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <stdarg.h>
 	#include <sys/stat.h>
  	#include <sys/types.h>
+	#include <sys/inotify.h>
 	#include <commons/config.h>
 	#include <commons/log.h>
 	#include <commons/collections/list.h>
@@ -18,10 +20,21 @@
 
 	/* Constantes */
 	#define IP "127.0.0.1"
+	#define CONFIG_PATH "/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/S-AFA.txt"
 
 	/* Variables globales */
+	char* puerto;
 	int retardo_planificacion;
+	pthread_mutex_t sem_mutex_config_retardo;
+	int quantum;
+	pthread_mutex_t sem_mutex_config_quantum;
+	int multiprogramacion;
+	pthread_mutex_t sem_mutex_config_multiprogramacion;
+	char* algoritmo;
+	pthread_mutex_t sem_mutex_config_algoritmo;
 
+
+	pthread_t thread_inotify_config;
 	pthread_t thread_gestor;
 	pthread_t thread_planificador;
 
@@ -48,13 +61,14 @@
 	pthread_mutex_t sem_mutex_cola_mensajes;
 
 
+	int safa_initialize();
+	void safa_iniciar_estado_operatorio();
 
-	void safa_initialize();
-	void safa_encolar_mensaje(t_msg* msg);
+	int safa_send(int socket, e_tipo_msg tipo_msg, ...);
 
 	int safa_manejador_de_eventos(int socket, t_msg* msg); 	// Devuelvo -1 si quiero cerrar esa conexion
-	void safa_iniciar_estado_operatorio();
-	void safa_exit();
+	void safa_encolar_mensaje(t_msg* msg);
 
+	void safa_exit();
 
 #endif /* S_AFA_H_ */

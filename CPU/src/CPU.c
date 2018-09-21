@@ -5,15 +5,26 @@ int main(void) {
 		cpu_exit(); return EXIT_FAILURE;
 	}
 
-
-	while(1)
-		cpu_esperar_dtb();
+	while(1){
+		if(cpu_esperar_dtb() == -1){
+			cpu_exit();
+			return EXIT_FAILURE;
+		}
+	}
 
 	cpu_exit();
 	return EXIT_SUCCESS;
 }
 
 int cpu_initialize(){
+
+	void config_create_fixed(char* path){
+		config = config_create(path);
+		util_config_fix_comillas(&config, "IP_SAFA");
+		util_config_fix_comillas(&config, "IP_DIEGO");
+		util_config_fix_comillas(&config, "IP_MEM");
+	}
+
 	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/CPU.txt");
 
 	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
@@ -27,7 +38,7 @@ int cpu_initialize(){
 
 	retardo_ejecucion = config_get_int_value(config, "RETARDO");
 
-	log_info(logger, "NUEVO CPU");
+	pthread_mutex_init(&sem_mutex_quantum, NULL);
 
 	if(!cpu_connect_to_safa()){
 		log_error(logger, "No pude conectarme a SAFA");
@@ -44,14 +55,9 @@ int cpu_initialize(){
 		return -1;
 	}
 	log_info(logger, "Me conecte a FM9");
-	return 1;
-}
 
-void config_create_fixed(char* path){
-	config = config_create(path);
-	util_config_fix_comillas(&config, "IP_SAFA");
-	util_config_fix_comillas(&config, "IP_DIEGO");
-	util_config_fix_comillas(&config, "IP_MEM");
+	log_info(logger, "NUEVO CPU");
+	return 1;
 }
 
 int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
@@ -96,25 +102,45 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	return ret;
 }
 
-void cpu_esperar_dtb(){
+int cpu_esperar_dtb(){
 	t_msg* msg = malloc(sizeof(t_msg));
-	msg_await(safa_socket, msg);
-	if(msg->header->tipo_mensaje == EXEC){
-		t_dtb* dtb = desempaquetar_dtb(msg);
-		if(dtb->flags.inicializado == 0) // DUMMY
-			log_info(logger, "Recibi ordenes de S-AFA de ejecutar el DUMMY, el solicitante tiene ID: %d", dtb->gdt_id);
-		else
-			log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
-		cpu_ejecutar_dtb(dtb);
-		dtb_destroy(dtb);
-	}
-	else if(msg->header->tipo_mensaje == DESCONEXION){ // Nunca recibe este mensaje... y tira segfault si se desconecta S-AFA :(
+	t_dtb* dtb;
+
+	if(msg_await(safa_socket, msg) == -1){
 		log_info(logger, "Se desconecto S-AFA");
+		msg_free(&msg);
+		return -1;
 	}
-	else{
-		log_error(logger, "No entendi el mensaje de SAFA");
+
+	switch(msg->header->tipo_mensaje){
+		case EXEC:
+			dtb = desempaquetar_dtb(msg);
+			if(dtb->flags.inicializado == 0) // DUMMY
+				log_info(logger, "Recibi ordenes de S-AFA de ejecutar el DUMMY, el solicitante tiene ID: %d", dtb->gdt_id);
+			else
+				log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
+			cpu_ejecutar_dtb(dtb);
+			dtb_destroy(dtb);
+		break;
+
+		case QUANTUM:
+			pthread_mutex_lock(&sem_mutex_quantum);
+			memcpy(&quantum, msg->payload, sizeof(int));
+			pthread_mutex_unlock(&sem_mutex_quantum);
+			log_info(logger, "Mi nuevo quantum es de %d", quantum);
+		break;
+
+		case DESCONEXION: // Nunca recibe este mensaje... y tira segfault si se desconecta S-AFA :(
+			log_info(logger, "Se desconecto S-AFA");
+			msg_free(&msg);
+			return -1;
+		break;
+
+		default:
+			log_error(logger, "No entendi el mensaje de SAFA");
 	}
 	msg_free(&msg);
+	return 1;
 }
 
 void cpu_ejecutar_dtb(t_dtb* dtb){
@@ -166,7 +192,9 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			}
 			operacion_free(&operacion);
 
+			pthread_mutex_lock(&sem_mutex_quantum);
 			continuar_ejecucion = ++operaciones_realizadas < quantum;
+			pthread_mutex_unlock(&sem_mutex_quantum);
 		}
 		log_info(logger, "Se me termino el quantum");
 		cpu_send(safa_socket, READY, dtb);
@@ -242,7 +270,9 @@ int cpu_connect_to_safa(){
 	t_msg* msg = malloc(sizeof(t_msg));
 	int result_recv = msg_await(safa_socket, msg);
 	if(msg->header->tipo_mensaje == HANDSHAKE){
+		pthread_mutex_lock(&sem_mutex_quantum);
 		memcpy(&quantum, msg->payload, sizeof(int));
+		pthread_mutex_unlock(&sem_mutex_quantum);
 		log_info(logger, "Recibi handshake de SAFA, y ahora mi quantum es de %d", quantum);
 		msg_free(&msg);
 	}
@@ -275,6 +305,8 @@ int cpu_connect_to_fm9(){
 void cpu_exit(){
 	close(safa_socket);
 	close(dam_socket);
+	close(fm9_socket);
+	pthread_mutex_destroy(&sem_mutex_quantum);
 	log_destroy(logger);
 	config_destroy(config);
 }
