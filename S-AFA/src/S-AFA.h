@@ -24,7 +24,7 @@
 	#define CONFIG_PATH "/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/S-AFA.txt"
 
 	/* Variables globales */
-	int retardo_planificacion;
+	long int retardo_planificacion;
 	pthread_mutex_t sem_mutex_config_retardo;
 	int quantum;
 	pthread_mutex_t sem_mutex_config_quantum;

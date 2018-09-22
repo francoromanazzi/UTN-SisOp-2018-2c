@@ -1,4 +1,4 @@
-#include "S-AFA.h"
+ #include "S-AFA.h"
 
 int main(void){
 	if(safa_initialize() == -1){
@@ -21,12 +21,16 @@ int main(void){
 }
 
 void safa_inotify_config_iniciar(){
-	int buffer_len = ((sizeof(struct inotify_event)) + 16) * 32;
-	char buffer[buffer_len];
+	int buffer_len = 4096;
+	char buffer[buffer_len] __attribute__ ((aligned(__alignof__(struct inotify_event))));;
 	int length, i;
+	struct inotify_event* event;
+	char* ptr;
+
 	 /* Inotify */
 	int inotify_fd = inotify_init();
 	int inotify_wd = inotify_add_watch(inotify_fd, CONFIG_PATH, IN_MODIFY | IN_DELETE );
+
 	/* Espero eventos del file descriptor de inotify */
 	while(1){
 		i = 0;
@@ -35,63 +39,62 @@ void safa_inotify_config_iniciar(){
 		if ( length < 0 ) {
 			log_error(logger, "[INOTIFY] Fallo el read"); continue;
 		}
-		while(i < length){
-			struct inotify_event* event = (struct inotify_event*) &buffer[i];
-			if(event->len){
-				if(event->mask & IN_DELETE){
-					log_error(logger, "[INOTIFY] El archivo %s ha sido borrado\n", event->name );
-				}
-				else if(event->mask & IN_MODIFY){
-					log_info(logger, "[INOTIFY] El archivo %s ha sido modificado\n", event->name );
-
-					pthread_mutex_lock(&sem_mutex_config_algoritmo);
-					pthread_mutex_lock(&sem_mutex_config_multiprogramacion);
-					pthread_mutex_lock(&sem_mutex_config_quantum);
-					pthread_mutex_lock(&sem_mutex_config_retardo);
-
-					config_destroy(config);
-					config = config_create(CONFIG_PATH);
-					util_config_fix_comillas(&config, "ALGORITMO");
-
-					/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO ALGORITMO ~~~~~~~~~~~~~~~~~~~ */
-					algoritmo = config_get_string_value(config, "ALGORITMO");
-					pthread_mutex_unlock(&sem_mutex_config_algoritmo);
-
-					/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO QUANTUM ~~~~~~~~~~~~~~~~~~~ */
-					quantum = config_get_int_value(config, "QUANTUM");
-					log_info(logger, "[INOTIFY] Nuevo quantum: %d\n", quantum);
-					/* Le aviso a todas las CPUs*/
-					int j = 0;
-					pthread_mutex_lock(&sem_mutex_cpu_conexiones);
-					for(; j<cpu_conexiones->elements_count; j++){
-						int socket_cpu = ((t_conexion_cpu*) list_get(cpu_conexiones, j))->socket;
-						safa_send(socket_cpu, QUANTUM);
-					}
-					pthread_mutex_unlock(&sem_mutex_cpu_conexiones);
-					pthread_mutex_unlock(&sem_mutex_config_quantum);
-
-					/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO MULTIPROGRAMACION ~~~~~~~~~~~~~~~~~~~ */
-					int nueva_multiprogramacion = config_get_int_value(config, "MULTIPROGRAMACION");
-					log_info(logger, "[INOTIFY] Nueva multiprogramacion: %d\n", nueva_multiprogramacion);
-					/* Modifico el semaforo sem_cont_procesos*/
-					while(nueva_multiprogramacion < multiprogramacion){ // Tengo que esperar la finalizacion de procesos
-						sem_wait(&sem_cont_procesos);
-						multiprogramacion--;
-					}
-					while(multiprogramacion < nueva_multiprogramacion){ // Hago signal de los nuevos procesos permitidos
-						sem_post(&sem_cont_procesos);
-						multiprogramacion++;
-					}
-					pthread_mutex_unlock(&sem_mutex_config_multiprogramacion);
-
-					/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO RETARDO ~~~~~~~~~~~~~~~~~~~ */
-					retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
-					log_info(logger, "[INOTIFY] Nuevo retardo: %d\n", retardo_planificacion);
-					pthread_mutex_unlock(&sem_mutex_config_retardo);
-				}
+		for (ptr = buffer; ptr < buffer + length; ptr += sizeof(struct inotify_event) + event->len){
+			event = (struct inotify_event*) ptr;
+			if(event->mask & IN_DELETE){
+				log_error(logger, "[INOTIFY] El archivo %s ha sido borrado", event->name );
 			}
-			i += (sizeof(struct inotify_event)) + event->len;
-		} // Fin while(i < length)
+			else if(event->mask & IN_MODIFY){
+				log_info(logger, "[INOTIFY] El archivo %s ha sido modificado", event->name );
+
+				pthread_mutex_lock(&sem_mutex_config_algoritmo);
+				pthread_mutex_lock(&sem_mutex_config_multiprogramacion);
+				pthread_mutex_lock(&sem_mutex_config_quantum);
+				pthread_mutex_lock(&sem_mutex_config_retardo);
+
+				config_destroy(config);
+				config = config_create(CONFIG_PATH);
+				util_config_fix_comillas(&config, "ALGORITMO");
+
+				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO ALGORITMO ~~~~~~~~~~~~~~~~~~~ */
+				algoritmo = config_get_string_value(config, "ALGORITMO");
+				log_info(logger, "[INOTIFY] Nuevo algoritmo: %s", algoritmo);
+				pthread_mutex_unlock(&sem_mutex_config_algoritmo);
+
+				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO QUANTUM ~~~~~~~~~~~~~~~~~~~ */
+				quantum = config_get_int_value(config, "QUANTUM");
+				log_info(logger, "[INOTIFY] Nuevo quantum: %d", quantum);
+				/* Le aviso a todas las CPUs*/
+				int j = 0;
+				pthread_mutex_lock(&sem_mutex_cpu_conexiones);
+				for(; j<cpu_conexiones->elements_count; j++){
+					int socket_cpu = ((t_conexion_cpu*) list_get(cpu_conexiones, j))->socket;
+					safa_send(socket_cpu, QUANTUM);
+				}
+				pthread_mutex_unlock(&sem_mutex_cpu_conexiones);
+				pthread_mutex_unlock(&sem_mutex_config_quantum);
+
+				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO MULTIPROGRAMACION ~~~~~~~~~~~~~~~~~~~ */
+				int nueva_multiprogramacion = config_get_int_value(config, "MULTIPROGRAMACION");
+				log_info(logger, "[INOTIFY] Nueva multiprogramacion: %d", nueva_multiprogramacion);
+				/* Modifico el semaforo sem_cont_procesos*/
+				while(nueva_multiprogramacion < multiprogramacion){ // Tengo que esperar la finalizacion de procesos
+					sem_wait(&sem_cont_procesos);
+					multiprogramacion--;
+				}
+				while(multiprogramacion < nueva_multiprogramacion){ // Hago signal de los nuevos procesos permitidos
+					sem_post(&sem_cont_procesos);
+					multiprogramacion++;
+				}
+				pthread_mutex_unlock(&sem_mutex_config_multiprogramacion);
+
+				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO RETARDO ~~~~~~~~~~~~~~~~~~~ */
+				retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
+				log_info(logger, "[INOTIFY] Nuevo retardo: %d", retardo_planificacion);
+				pthread_mutex_unlock(&sem_mutex_config_retardo);
+			}
+
+		} // Fin for
 	} // Fin while(1)
 }
 
