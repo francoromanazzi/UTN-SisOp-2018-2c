@@ -51,19 +51,18 @@ void pcp_iniciar(){
 		pthread_mutex_unlock(&sem_mutex_cola_exec);
 
 		safa_send(cpu_socket, EXEC, dtb_elegido);
-
 	} // Fin while(1)
 }
 
 t_dtb* pcp_aplicar_algoritmo(){
 	pthread_mutex_lock(&sem_mutex_config_algoritmo);
-
 	pthread_mutex_lock(&sem_mutex_cola_ready);
+
 	// TODO: Gestionar algoritmo
 	// Aplico FIFO:
 	t_dtb* dtb_elegido = (t_dtb*) list_remove(cola_ready, 0);
-	pthread_mutex_unlock(&sem_mutex_cola_ready);
 
+	pthread_mutex_unlock(&sem_mutex_cola_ready);
 	pthread_mutex_unlock(&sem_mutex_config_algoritmo);
 	return dtb_elegido;
 }

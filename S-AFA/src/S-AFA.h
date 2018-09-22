@@ -3,16 +3,17 @@
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <stdarg.h>
-	#include <sys/stat.h>
- 	#include <sys/types.h>
-	#include <sys/inotify.h>
-	#include <commons/config.h>
-	#include <commons/log.h>
-	#include <commons/collections/list.h>
 	#include <string.h>
 	#include <stdbool.h>
 	#include <pthread.h>
 	#include <semaphore.h>
+	#include <sys/stat.h>
+ 	#include <sys/types.h>
+	#include <sys/inotify.h>
+
+	#include <commons/config.h>
+	#include <commons/log.h>
+	#include <commons/collections/list.h>
 	#include <shared/socket.h>
 	#include "planificador.h"
 	#include "conexion_cpu.h"
@@ -23,7 +24,6 @@
 	#define CONFIG_PATH "/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/S-AFA.txt"
 
 	/* Variables globales */
-	char* puerto;
 	int retardo_planificacion;
 	pthread_mutex_t sem_mutex_config_retardo;
 	int quantum;
@@ -32,7 +32,6 @@
 	pthread_mutex_t sem_mutex_config_multiprogramacion;
 	char* algoritmo;
 	pthread_mutex_t sem_mutex_config_algoritmo;
-
 
 	pthread_t thread_inotify_config;
 	pthread_t thread_gestor;
@@ -61,7 +60,9 @@
 	pthread_mutex_t sem_mutex_cola_mensajes;
 
 
+
 	int safa_initialize();
+	void safa_inotify_config_iniciar();
 	void safa_iniciar_estado_operatorio();
 
 	int safa_send(int socket, e_tipo_msg tipo_msg, ...);
@@ -70,5 +71,6 @@
 	void safa_encolar_mensaje(t_msg* msg);
 
 	void safa_exit();
+
 
 #endif /* S_AFA_H_ */

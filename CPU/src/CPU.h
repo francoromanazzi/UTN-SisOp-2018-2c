@@ -21,7 +21,6 @@
 	#include "operacion.h"
 
 
-
 	t_config* config;
 	t_log* logger;
 	int safa_socket;
@@ -30,8 +29,8 @@
 
 	int quantum;
 	pthread_mutex_t sem_mutex_quantum;
-
 	int retardo_ejecucion;
+
 
 	int cpu_initialize();
 	int cpu_connect_to_safa();
