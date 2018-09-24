@@ -48,6 +48,7 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 			sizeof(unsigned int) + // RUTA_ESCRIPTORIO_LEN
 			strlen(dtb->ruta_escriptorio) + // RUTA_ESCRIPTORIO
 			sizeof(unsigned int) + // PC
+			sizeof(int) + // QUANTUM RESTANTE
 			sizeof(int) + // FLAG INICIALIZADO
 			sizeof(int) + // ELEMENTS_AMOUNT
 			dictionary_len // LONGITUD TOTAL DE LOS DATOS DEL DICCIONARIO DE ARCHIVOS ABIERTOS
@@ -67,6 +68,9 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 
 	memcpy(ret->payload + offset, (void*) &(dtb->pc), sizeof(unsigned int));
 	offset += sizeof(unsigned int);
+
+	memcpy(ret->payload + offset, (void*) &(dtb->quantum_restante), sizeof(int));
+	offset += sizeof(int);
 
 	memcpy(ret->payload + offset, (void*) &(dtb->flags.inicializado), sizeof(int));
 	offset += sizeof(int);
@@ -109,6 +113,9 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 
 	memcpy((void*) &(ret->pc), msg->payload + offset, sizeof(unsigned int));
 	offset += sizeof(unsigned int);
+
+	memcpy((void*) &(ret->quantum_restante), msg->payload + offset, sizeof(int));
+	offset += sizeof(int);
 
 	memcpy((void*) &(ret->flags.inicializado), msg->payload + offset, sizeof(int));
 	offset += sizeof(int);

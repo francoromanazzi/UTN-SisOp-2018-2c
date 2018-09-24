@@ -1,6 +1,6 @@
 #include "plp_cargar_archivo.h"
 
-void plp_cargar_recurso_iniciar(){
+void plp_cargar_archivo_iniciar(){
 	int ok;
 	unsigned int id;
 	char* path;
@@ -18,9 +18,9 @@ void plp_cargar_recurso_iniciar(){
 
 		pthread_mutex_lock(&sem_mutex_cola_new);
 		t_dtb* dtb_a_actualizar = list_find(cola_new, _mismo_id);
-		pthread_mutex_unlock(&sem_mutex_cola_new);
 
 		if(dtb_a_actualizar == NULL){ // No encontre al DTB en NEW (es responsabilidad de pcp_cargar_recurso)
+			pthread_mutex_unlock(&sem_mutex_cola_new);
 			free(path);
 			sem_post(&sem_bin_pcp_cargar_archivo);
 			continue;
@@ -31,6 +31,7 @@ void plp_cargar_recurso_iniciar(){
 		msg_free(&msg_resultado_abrir);
 
 		if(!ok){ // No se encontro el recurso, asi que lo aborto
+			pthread_mutex_unlock(&sem_mutex_cola_new);
 			planificador_finalizar_dtb(dtb_a_actualizar->gdt_id);
 			free(path);
 		}
@@ -38,11 +39,12 @@ void plp_cargar_recurso_iniciar(){
 			dictionary_remove(dtb_a_actualizar->archivos_abiertos, path);
 			dictionary_put(dtb_a_actualizar->archivos_abiertos, path, (void*) base);
 
-			// De paso, reseteo al dummy
-
-
 			free(path);
+
+			pthread_mutex_lock(&sem_mutex_cola_ready);
 			plp_mover_dtb(dtb_a_actualizar->gdt_id, "READY");
+			pthread_mutex_unlock(&sem_mutex_cola_ready);
+			pthread_mutex_unlock(&sem_mutex_cola_new);
 		}
 
 		sem_post(&sem_cont_puedo_iniciar_op_dummy); // Finalizo la op dummy

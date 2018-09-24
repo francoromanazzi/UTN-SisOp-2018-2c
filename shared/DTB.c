@@ -4,6 +4,7 @@ t_dtb* dtb_create(char* path_escriptorio){
 	t_dtb* ret = malloc(sizeof(t_dtb));
 	ret -> gdt_id = dtb_get_gdt_id_count();
 	ret -> pc = 0;
+	ret -> quantum_restante = 0;
 	ret -> archivos_abiertos = dictionary_create();
 
 	if(path_escriptorio == NULL){ // DUMMY
@@ -47,10 +48,15 @@ void dtb_mostrar(t_dtb* dtb, char* estado_actual){
 		printf("ID: %d\n",dtb->gdt_id);
 	printf("Estado actual: %s\n", estado_actual);
 	printf("Escriptorio: %s\n",dtb->ruta_escriptorio);
-	printf("PC: %d\n",dtb->pc);
 	printf("Inicializado: %d\n",dtb->flags.inicializado);
-	printf("Archivos abiertos:\n");
-	dictionary_iterator(dtb->archivos_abiertos,(void*) dictionary_print_element);
+
+	if(dtb->flags.inicializado == 1){ // No dummy
+		printf("PC: %d\n",dtb->pc);
+		printf("Quantum restante: %d\n",dtb->quantum_restante);
+		printf("Archivos abiertos:\n");
+		dictionary_iterator(dtb->archivos_abiertos,(void*) dictionary_print_element);
+	}
+
 	printf("\n");
 }
 
@@ -65,6 +71,7 @@ t_dtb* dtb_copiar(t_dtb* otro_dtb){
 	ret_dtb -> gdt_id = otro_dtb -> gdt_id;
 	ret_dtb -> ruta_escriptorio = strdup(otro_dtb->ruta_escriptorio);
 	ret_dtb -> pc = otro_dtb -> pc;
+	ret_dtb -> quantum_restante = otro_dtb -> quantum_restante;
 	ret_dtb -> flags.inicializado = otro_dtb -> flags.inicializado;
 	ret_dtb -> archivos_abiertos = dictionary_create();
 	dictionary_iterator(otro_dtb->archivos_abiertos, (void*) dictionary_copy_element);

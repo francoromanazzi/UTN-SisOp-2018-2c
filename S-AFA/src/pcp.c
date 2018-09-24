@@ -11,7 +11,7 @@ void pcp_iniciar(){
 	pthread_detach(thread_pcp_desbloquear_dummy);
 
 	/* Creo el hilo que carga la base del archivo en un DTB solicitante bloqueado */
-	if(pthread_create( &thread_pcp_cargar_recurso, NULL, (void*) pcp_cargar_recurso_iniciar, NULL) ){
+	if(pthread_create( &thread_pcp_cargar_recurso, NULL, (void*) pcp_cargar_archivo_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PCP_cargar_recurso");
 		exit(EXIT_FAILURE);
 	}
@@ -44,7 +44,7 @@ void pcp_iniciar(){
 			continue;
 		}
 
-		log_info(logger, "Muevo a EXEC y mando a ejecutar el DTB con ID: %d", dtb_elegido->gdt_id);
+		log_info(logger, "Muevo a EXEC y mando a ejecutar el DTB con ID: %d con %d unidades de quantum", dtb_elegido->gdt_id, dtb_elegido->quantum_restante);
 
 		pthread_mutex_lock(&sem_mutex_cola_exec);
 		list_add(cola_exec, dtb_elegido);
@@ -61,6 +61,16 @@ t_dtb* pcp_aplicar_algoritmo(){
 	// TODO: Gestionar algoritmo
 	// Aplico FIFO:
 	t_dtb* dtb_elegido = (t_dtb*) list_remove(cola_ready, 0);
+
+	if(dtb_elegido == NULL){ // Fallo la planificacion
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+		pthread_mutex_unlock(&sem_mutex_config_algoritmo);
+		return NULL;
+	}
+
+	pthread_mutex_lock(&sem_mutex_config_quantum);
+	dtb_elegido -> quantum_restante = quantum;
+	pthread_mutex_unlock(&sem_mutex_config_quantum);
 
 	pthread_mutex_unlock(&sem_mutex_cola_ready);
 	pthread_mutex_unlock(&sem_mutex_config_algoritmo);
@@ -88,25 +98,29 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 		return  ((t_dtb*) data) -> gdt_id == id;
 	}
 
+	bool _mismo_id_proceso_a_finalizar(void* _id){
+		return (unsigned int) _id == id;
+	}
+
 	t_dtb* dtb;
 
 	if(!strcmp(cola_inicio, "READY")){
-		pthread_mutex_lock(&sem_mutex_cola_ready);
 		dtb = list_remove_by_condition(cola_ready, _tiene_mismo_id);
-		pthread_mutex_unlock(&sem_mutex_cola_ready);
 	}
 	else if(!strcmp(cola_inicio, "BLOCK")){
-		pthread_mutex_lock(&sem_mutex_cola_block);
 		dtb = list_remove_by_condition(cola_block, _tiene_mismo_id);
-		pthread_mutex_unlock(&sem_mutex_cola_block);
 	}
 	else if(!strcmp(cola_inicio, "EXEC")){
-		/* TODO: Si cola_inicio == "EXEC", esperar a que termine la instruccion */
+		pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+		if(list_find(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar)){ // Tengo que esperar que CPU le devuelva al planificador este proceso
+			pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+			return;
+		}
+		else{ // Lo puedo sacar de EXEC sin problemas
+			pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+			dtb = list_remove_by_condition(cola_exec, _tiene_mismo_id);
+		}
 
-
-		pthread_mutex_lock(&sem_mutex_cola_exec);
-		dtb = list_remove_by_condition(cola_exec, _tiene_mismo_id);
-		pthread_mutex_unlock(&sem_mutex_cola_exec);
 	}
 	else return;
 
@@ -119,27 +133,24 @@ void pcp_mover_dtb(unsigned int id, char* cola_inicio, char* cola_destino){
 
 		sem_post(&sem_cont_procesos);
 
-		pthread_mutex_lock(&sem_mutex_cola_exit);
 		list_add(cola_exit, dtb);
-		pthread_mutex_unlock(&sem_mutex_cola_exit);
+
+		// Elimino de la lista todas las apariciones de este proceso, que ya he finalizado:
+		pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+		while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+		pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
 	}
 	else if((!strcmp(cola_inicio, "EXEC") || !strcmp(cola_inicio, "BLOCK")) && !strcmp(cola_destino, "READY")){ //EXEC->READY o BLOCK->READY
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
-		pthread_mutex_lock(&sem_mutex_cola_ready);
 		list_add(cola_ready, dtb);
-		pthread_mutex_unlock(&sem_mutex_cola_ready);
 		sem_post(&sem_cont_cola_ready);
 	}
 	else if(!strcmp(cola_inicio, "EXEC") && !strcmp(cola_destino, "BLOCK")){ // EXEC->BLOCK
 		log_info(logger, "Bloqueo el DTB con ID: %d", id);
-		pthread_mutex_lock(&sem_mutex_cola_block);
 		list_add(cola_block, dtb);
-		pthread_mutex_unlock(&sem_mutex_cola_block);
 	}
 	else if(!strcmp(cola_inicio, "READY") && !strcmp(cola_destino, "EXEC")){ // READY-> EXEC
 		log_info(logger, "Muevo a EXEC el DTB con ID: %d", id);
-		pthread_mutex_lock(&sem_mutex_cola_exec);
 		list_add(cola_exec, dtb);
-		pthread_mutex_unlock(&sem_mutex_cola_exec);
 	}
 }

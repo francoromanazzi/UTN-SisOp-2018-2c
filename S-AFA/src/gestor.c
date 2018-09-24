@@ -23,7 +23,7 @@ void gestor_iniciar(){
 
 			/* Me comunico con los planificadores*/
 			msg_resultado_abrir = msg_duplicar(msg);
-			sem_post(&sem_bin_plp_cargar_archivo); // Le aviso a PLP_cargar_recurso
+			sem_post(&sem_bin_plp_cargar_archivo); // Le aviso a PLP_cargar_archivo
 		}
 		else{ // No me interesa el mensaje
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);

@@ -13,6 +13,7 @@
 		unsigned int gdt_id;
 		char* ruta_escriptorio;
 		unsigned int pc;
+		int quantum_restante;
 		struct dtb_flags flags;
 		t_dictionary* archivos_abiertos;
 	} t_dtb ;

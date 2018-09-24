@@ -59,6 +59,8 @@
 	sem_t sem_cont_cola_mensajes;
 	pthread_mutex_t sem_mutex_cola_mensajes;
 
+	t_list* lista_procesos_a_finalizar;
+	pthread_mutex_t sem_mutex_lista_procesos_a_finalizar;
 
 
 	int safa_initialize();

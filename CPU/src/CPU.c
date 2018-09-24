@@ -38,8 +38,6 @@ int cpu_initialize(){
 
 	retardo_ejecucion = config_get_int_value(config, "RETARDO");
 
-	pthread_mutex_init(&sem_mutex_quantum, NULL);
-
 	if(!cpu_connect_to_safa()){
 		log_error(logger, "No pude conectarme a SAFA");
 		return -1;
@@ -118,16 +116,9 @@ int cpu_esperar_dtb(){
 			if(dtb->flags.inicializado == 0) // DUMMY
 				log_info(logger, "Recibi ordenes de S-AFA de ejecutar el DUMMY, el solicitante tiene ID: %d", dtb->gdt_id);
 			else
-				log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d", dtb->gdt_id);
+				log_info(logger, "Recibi ordenes de S-AFA de ejecutar el programa con ID: %d con %d unidades de quantum", dtb->gdt_id, dtb->quantum_restante);
 			cpu_ejecutar_dtb(dtb);
 			dtb_destroy(dtb);
-		break;
-
-		case QUANTUM:
-			pthread_mutex_lock(&sem_mutex_quantum);
-			memcpy(&quantum, msg->payload, sizeof(int));
-			pthread_mutex_unlock(&sem_mutex_quantum);
-			log_info(logger, "Mi nuevo quantum es de %d", quantum);
 		break;
 
 		case DESCONEXION: // Nunca recibe este mensaje... y tira segfault si se desconecta S-AFA :(
@@ -159,7 +150,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 		int nro_error;
 		int base_escriptorio = (int) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
 
-		while(continuar_ejecucion){
+		while(dtb->quantum_restante > 0){
 			usleep(retardo_ejecucion);
 			/* ------------------------- 1RA FASE: FETCH ------------------------- */
 			char* instruccion;
@@ -192,10 +183,8 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			}
 			operacion_free(&operacion);
 
-			pthread_mutex_lock(&sem_mutex_quantum);
-			continuar_ejecucion = ++operaciones_realizadas < quantum;
-			pthread_mutex_unlock(&sem_mutex_quantum);
-		}
+			dtb->quantum_restante--;
+		} // Fin while(dtb->quantum_restante > 0)
 		log_info(logger, "Se me termino el quantum");
 		cpu_send(safa_socket, READY, dtb);
 	}
@@ -270,10 +259,7 @@ int cpu_connect_to_safa(){
 	t_msg* msg = malloc(sizeof(t_msg));
 	int result_recv = msg_await(safa_socket, msg);
 	if(msg->header->tipo_mensaje == HANDSHAKE){
-		pthread_mutex_lock(&sem_mutex_quantum);
-		memcpy(&quantum, msg->payload, sizeof(int));
-		pthread_mutex_unlock(&sem_mutex_quantum);
-		log_info(logger, "Recibi handshake de SAFA, y ahora mi quantum es de %d", quantum);
+		log_info(logger, "Recibi handshake de SAFA");
 		msg_free(&msg);
 	}
 	else{
@@ -306,7 +292,6 @@ void cpu_exit(){
 	close(safa_socket);
 	close(dam_socket);
 	close(fm9_socket);
-	pthread_mutex_destroy(&sem_mutex_quantum);
 	log_destroy(logger);
 	config_destroy(config);
 }

@@ -36,6 +36,11 @@ static void gestor_consola_procesar_comando(char* linea){
 	char** argv = string_split(linea, " ");
 	int argc = split_cant_elem(argv);
 
+	bool _mismo_id_proceso_a_finalizar(void* _id){
+		return (unsigned int) _id == (unsigned) atoi(argv[1]);
+	}
+
+
 	/* Comando ayuda */
 	if(!strcmp(linea, "ayuda")){
 		printf("\nejecutar [ruta]:\tEjecuta el escriptorio ubicado en la ruta\n");
@@ -111,25 +116,52 @@ static void gestor_consola_procesar_comando(char* linea){
 	/* Comando status [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "status")){
 		char* estado_actual;
+
+		pthread_mutex_lock(&sem_mutex_cola_new);
+		pthread_mutex_lock(&sem_mutex_cola_ready);
+		pthread_mutex_lock(&sem_mutex_cola_block);
+		pthread_mutex_lock(&sem_mutex_cola_exec);
+
 		t_dtb* dtb = planificador_encontrar_dtb_y_copiar( (unsigned) atoi(argv[1]) , &estado_actual);
+
 		if(dtb != NULL)
 			dtb_mostrar(dtb, estado_actual);
 		else
 			printf("No se encontro el proceso con ID = %s\n\n", argv[1]);
+
+		pthread_mutex_unlock(&sem_mutex_cola_new);
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+		pthread_mutex_unlock(&sem_mutex_cola_block);
+		pthread_mutex_unlock(&sem_mutex_cola_exec);
+
 		dtb_destroy(dtb);
 		free(estado_actual);
 		split_liberar(argv);
 	}
 	/* Comando finalizar [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "finalizar")){
+
+
 		if(!strcmp(argv[1], "0"))
 			printf("No se puede finalizar el proceso dummy\n\n");
 		else if(atoi(argv[1]) == 0)
 			printf("Se debe ingresar el numero de ID\n\n");
-		else if(planificador_finalizar_dtb((unsigned) atoi(argv[1])))
-			printf("El proceso con ID = %s ha sido finalizado satisfactoriamente\n\n", argv[1]);
-		else
-			printf("No se encontro el proceso con ID = %s\n\n", argv[1]);
+		else {
+			pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+			list_add(lista_procesos_a_finalizar, (void*) atoi(argv[1]));
+			pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+
+			if(planificador_finalizar_dtb((unsigned) atoi(argv[1])))
+				printf("Se ha solicitado finalizar el proceso ID = %s satisfactoriamente\n\n", argv[1]);
+			else{
+				printf("No se encontro el proceso con ID = %s\n\n", argv[1]);
+
+				pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+				while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+				pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+			}
+
+		}
 		split_liberar(argv);
 	}
 	/* Comando metricas */

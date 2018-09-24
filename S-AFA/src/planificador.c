@@ -56,6 +56,13 @@ void planificador_iniciar(){
 	pthread_detach(thread_plp);
 
 	t_msg* msg;
+	t_dtb* dtb_recibido;
+
+	bool _mismo_id_proceso_a_finalizar(void* id){
+		return (unsigned int) id == dtb_recibido->gdt_id;
+	}
+
+
 	while(1){ // Espero mensajes de SAFA
 		sem_wait(&sem_cont_cola_mensajes);
 		pthread_mutex_lock(&sem_mutex_cola_mensajes);
@@ -76,15 +83,31 @@ void planificador_iniciar(){
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
 
-			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
 			planificador_actualizar_archivos_y_pc_dtb(dtb_recibido);
 
 			/* Por ahi me habian pedido finalizar este DTB (por ejemplo, en pcp_mover_dtb) */
+			if(list_find(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar)){
 
+				// Elimino de la lista todas las apariciones de este proceso, que ya lo voy a finalizar:
+				pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+				while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+				pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
 
+				pthread_mutex_lock(&sem_mutex_cola_exec);
+				pthread_mutex_lock(&sem_mutex_cola_exit);
+				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "EXIT");
+				pthread_mutex_unlock(&sem_mutex_cola_exec);
+				pthread_mutex_unlock(&sem_mutex_cola_exit);
+			}
+			else{
+				pthread_mutex_lock(&sem_mutex_cola_exec);
+				pthread_mutex_lock(&sem_mutex_cola_block);
+				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
+				pthread_mutex_unlock(&sem_mutex_cola_exec);
+				pthread_mutex_unlock(&sem_mutex_cola_block);
+			}
 
-			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "BLOCK");
 			dtb_destroy(dtb_recibido);
 		}
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == READY){ // Me interesa este mensaje
@@ -94,16 +117,33 @@ void planificador_iniciar(){
 			t_dtb* dtb_recibido;
 			dtb_recibido = desempaquetar_dtb(msg);
 			planificador_actualizar_archivos_y_pc_dtb(dtb_recibido);
-			pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
-			sem_post(&sem_cont_cola_ready); // Aviso a PCP que hay uno nuevo en READY
+
+			/* Por ahi me habian pedido finalizar este DTB (por ejemplo, en pcp_mover_dtb) */
+			if(list_find(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar)){
+				// Elimino de la lista todas las apariciones de este proceso, que ya he finalizado:
+				pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+				while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+				pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+
+				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "EXIT");
+			}
+			else{
+				pcp_mover_dtb(dtb_recibido->gdt_id, "EXEC", "READY");
+				sem_post(&sem_cont_cola_ready); // Aviso a PCP que hay uno nuevo en READY
+			}
+
 			dtb_destroy(dtb_recibido);
 		}
 		else if(msg->header->emisor == CPU && msg->header->tipo_mensaje == EXIT){ // Me interesa este mensaje
 			list_remove_and_destroy_element(cola_mensajes, 0, msg_free_v2);
 			pthread_mutex_unlock(&sem_mutex_cola_mensajes);
 
-			t_dtb* dtb_recibido;
-			dtb_recibido = desempaquetar_dtb(msg);
+			// Elimino de la lista todas las apariciones de este proceso, que ya he finalizado:
+			pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+			while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+			pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+
+			t_dtb* dtb_recibido = desempaquetar_dtb(msg);
 			planificador_finalizar_dtb(dtb_recibido->gdt_id);
 			dtb_destroy(dtb_recibido);
 		}
@@ -156,10 +196,6 @@ t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado
 	if(id_target == 0) buscador = &_es_dummy; // Quiere buscar al dummy
 	else buscador = &_tiene_mismo_id_y_no_dummy;
 
-	pthread_mutex_lock(&sem_mutex_cola_new);
-	pthread_mutex_lock(&sem_mutex_cola_ready);
-	pthread_mutex_lock(&sem_mutex_cola_block);
-	pthread_mutex_lock(&sem_mutex_cola_exec);
 	if( (dtb = dtb_copiar( list_find(cola_new, buscador)) ) != NULL){
 		*estado_actual = strdup("NEW");
 	}
@@ -175,27 +211,48 @@ t_dtb* planificador_encontrar_dtb_y_copiar(unsigned int id_target, char** estado
 	else{
 		*estado_actual= strdup("No encontrado");
 	}
-	pthread_mutex_unlock(&sem_mutex_cola_new);
-	pthread_mutex_unlock(&sem_mutex_cola_ready);
-	pthread_mutex_unlock(&sem_mutex_cola_block);
-	pthread_mutex_unlock(&sem_mutex_cola_exec);
 
 	return dtb;
 }
 
 bool planificador_finalizar_dtb(unsigned int id){
+
+	bool _mismo_id_proceso_a_finalizar(void* _id){
+		return (unsigned int) _id == id;
+	}
+
 	char* estado;
+
+	pthread_mutex_lock(&sem_mutex_cola_new);
+	pthread_mutex_lock(&sem_mutex_cola_ready);
+	pthread_mutex_lock(&sem_mutex_cola_block);
+	pthread_mutex_lock(&sem_mutex_cola_exec);
+
 	t_dtb* dtb = planificador_encontrar_dtb_y_copiar(id, &estado);
 	dtb_destroy(dtb);
 
-	if(!strcmp(estado,"NEW"))
+	if(!strcmp(estado,"NEW")){
 		plp_mover_dtb(id, "EXIT");
+
+		// Elimino de la lista todas las apariciones de este proceso, que ya he finalizado:
+		pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+		while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+		pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
+	}
 	else if(!strcmp(estado,"READY") || !strcmp(estado,"BLOCK") || !strcmp(estado,"EXEC"))
 		pcp_mover_dtb(id, estado, "EXIT");
 	else{ // No encontrado
 		free(estado);
+		pthread_mutex_unlock(&sem_mutex_cola_new);
+		pthread_mutex_unlock(&sem_mutex_cola_ready);
+		pthread_mutex_unlock(&sem_mutex_cola_block);
+		pthread_mutex_unlock(&sem_mutex_cola_exec);
 		return false;
 	}
+	pthread_mutex_unlock(&sem_mutex_cola_new);
+	pthread_mutex_unlock(&sem_mutex_cola_ready);
+	pthread_mutex_unlock(&sem_mutex_cola_block);
+	pthread_mutex_unlock(&sem_mutex_cola_exec);
 	free(estado);
 	return true;
 }

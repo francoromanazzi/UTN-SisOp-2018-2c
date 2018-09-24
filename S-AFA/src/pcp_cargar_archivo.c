@@ -1,6 +1,6 @@
 #include "pcp_cargar_archivo.h"
 
-void pcp_cargar_recurso_iniciar(){
+void pcp_cargar_archivo_iniciar(){
 	int ok;
 	unsigned int id;
 	char* path;

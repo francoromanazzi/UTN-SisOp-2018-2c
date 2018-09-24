@@ -15,7 +15,7 @@ void plp_iniciar(){
 	pthread_detach(thread_plp_crear_dtb);
 
 	/* Creo el hilo que carga la base del escriptorio y mueve a READY */
-	if(pthread_create( &thread_plp_cargar_recurso, NULL, (void*) plp_cargar_recurso_iniciar, NULL) ){
+	if(pthread_create( &thread_plp_cargar_recurso, NULL, (void*) plp_cargar_archivo_iniciar, NULL) ){
 		log_error(logger,"No pude crear el hilo PLP_cargar_recurso");
 		exit(EXIT_FAILURE);
 	}
@@ -50,29 +50,33 @@ void plp_mover_dtb(unsigned int id, char* cola_destino){
 		return  ((t_dtb*) data) -> gdt_id == id;
 	}
 
-	pthread_mutex_lock(&sem_mutex_cola_new);
+	bool _mismo_id_proceso_a_finalizar(void* _id){
+		return (unsigned int) _id == id;
+	}
+
 	t_dtb* dtb = list_remove_by_condition(cola_new, _tiene_mismo_id);
-	pthread_mutex_unlock(&sem_mutex_cola_new);
+
 
 	if(!strcmp(cola_destino, "EXIT")){ // NEW -> EXIT
 		log_info(logger, "Finalizo el DTB con ID: %d", id);
 
-		pthread_mutex_lock(&sem_mutex_cola_exit);
 		list_add(cola_exit, dtb);
-		pthread_mutex_unlock(&sem_mutex_cola_exit);
 
 		pthread_mutex_lock(&sem_mutex_cant_procesos);
 		cant_procesos--;
 		pthread_mutex_unlock(&sem_mutex_cant_procesos);
 
 		sem_post(&sem_cont_procesos);
+
+		// Elimino de la lista todas las apariciones de este proceso, que ya he finalizado:
+		pthread_mutex_lock(&sem_mutex_lista_procesos_a_finalizar);
+		while(list_remove_by_condition(lista_procesos_a_finalizar, _mismo_id_proceso_a_finalizar));
+		pthread_mutex_unlock(&sem_mutex_lista_procesos_a_finalizar);
 	}
 	else if(!strcmp(cola_destino, "READY")){ // NEW -> READY
 		log_info(logger, "Muevo a READY el DTB con ID: %d", id);
 
-		pthread_mutex_lock(&sem_mutex_cola_ready);
 		list_add(cola_ready, dtb);
-		pthread_mutex_unlock(&sem_mutex_cola_ready);
 
 		pthread_mutex_lock(&sem_mutex_cant_procesos);
 		cant_procesos++;

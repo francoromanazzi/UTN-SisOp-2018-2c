@@ -64,14 +64,6 @@ void safa_inotify_config_iniciar(){
 				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO QUANTUM ~~~~~~~~~~~~~~~~~~~ */
 				quantum = config_get_int_value(config, "QUANTUM");
 				log_info(logger, "[INOTIFY] Nuevo quantum: %d", quantum);
-				/* Le aviso a todas las CPUs*/
-				int j = 0;
-				pthread_mutex_lock(&sem_mutex_cpu_conexiones);
-				for(; j<cpu_conexiones->elements_count; j++){
-					int socket_cpu = ((t_conexion_cpu*) list_get(cpu_conexiones, j))->socket;
-					safa_send(socket_cpu, QUANTUM);
-				}
-				pthread_mutex_unlock(&sem_mutex_cpu_conexiones);
 				pthread_mutex_unlock(&sem_mutex_config_quantum);
 
 				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO MULTIPROGRAMACION ~~~~~~~~~~~~~~~~~~~ */
@@ -116,6 +108,9 @@ int safa_initialize(){
 	pthread_mutex_init(&sem_mutex_cola_mensajes, NULL);
 	sem_init(&sem_cont_cpu_conexiones, 0, 0);
 	pthread_mutex_init(&sem_mutex_cpu_conexiones, NULL);
+
+	lista_procesos_a_finalizar = list_create();
+	pthread_mutex_init(&sem_mutex_lista_procesos_a_finalizar, NULL);
 
 	pthread_mutex_init(&sem_mutex_config_algoritmo, NULL);
 	pthread_mutex_init(&sem_mutex_config_quantum, NULL);
@@ -180,11 +175,10 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
  	va_list arguments;
 	va_start(arguments, tipo_msg);
  	switch(tipo_msg){
-		case QUANTUM: // A CPU
 		case HANDSHAKE: // A CPU
-			mensaje_a_enviar = msg_create(SAFA, QUANTUM, (void**) quantum, sizeof(int));
+			mensaje_a_enviar = msg_create(SAFA, HANDSHAKE, (void**) 1, sizeof(int)); // Una formalidad, no tiene info relevante
 		break;
- 		case EXEC:
+ 		case EXEC: // A CPU
 			dtb = va_arg(arguments, t_dtb*);
 			mensaje_a_enviar = empaquetar_dtb(dtb);
 		break;
@@ -196,7 +190,6 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
  	va_end(arguments);
 	return ret;
 }
-
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
@@ -237,10 +230,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				// Agrego el nuevo socket a la lista de CPUs
 				conexion_cpu_add_new(socket);
 
-				// Le mando el quantum inicial
-				pthread_mutex_lock(&sem_mutex_config_quantum);
 				safa_send(socket, HANDSHAKE);
-				pthread_mutex_unlock(&sem_mutex_config_quantum);
 
 				if(!estado_operatorio && dam_conectado){
 					safa_iniciar_estado_operatorio();

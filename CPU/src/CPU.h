@@ -27,8 +27,6 @@
 	int dam_socket;
 	int fm9_socket;
 
-	int quantum;
-	pthread_mutex_t sem_mutex_quantum;
 	int retardo_ejecucion;
 
 
