@@ -5,6 +5,7 @@ int main(void) {
 		fm9_exit(); return EXIT_FAILURE;
 	}
 
+
 	while(1){
 		int nuevo_cliente = socket_aceptar_conexion(listening_socket);
 		if( !fm9_crear_nuevo_hilo(nuevo_cliente)){
@@ -29,7 +30,8 @@ int fm9_initialize(){
 	max_linea = config_get_int_value(config, "MAX_LINEA");
 	tam_pagina = config_get_int_value(config, "TAM_PAGINA");
 	log_info(logger,"Se realiza la inicializacion del Storage");
-	//storage=malloc(tamanio);//???
+	marca=0;
+	storage=malloc(tamanio);
 
 	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
 		log_error(logger,"No se pudo crear el hilo para la consola");
@@ -105,10 +107,17 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case ESCRIBIR:
 				log_info(logger,"DAM me pidio la operacion ESCRIBIR");
+				char* datos=desempaquetar_string(msg);
+				int largo=msg->header->payload_size;
+				escribirEnMemoria(largo,datos);
 			break;
 
 			case GET:
 				log_info(logger,"DAM me pidio la operacion GET");
+				/*
+				buscar en la memoria y armarlo para en enviar al DAM
+				*/
+				fm9_send(socket, RESULTADO_GET, (void*)"datosApasaralDAM");
 			break;
 
 			default:
@@ -148,8 +157,17 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 	return 1;
 }
 
+int escribirEnMemoria(int tam,char* contenido){
+
+	memcpy(storage+marca,contenido,tam);
+
+	marca=marca+tam;
+	return tam;
+}
+
 
 void fm9_exit(){
+	free(storage);
 	close(listening_socket);
 	log_destroy(logger);
 	config_destroy(config);

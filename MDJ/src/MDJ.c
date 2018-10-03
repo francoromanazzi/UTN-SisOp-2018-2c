@@ -6,7 +6,10 @@ int main(void) {
 	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
 
 	//creo estructuras administrativas
-	crearEstructuras(config_get_string_value(config, "PUNTO_MONTAJE"),config_get_string_value(config, "TAMANIO_BLOQUES"),config_get_string_value(config, "CANTIDAD_BLOQUES"));
+	datosConfigMDJ[PUNTO_MONTAJE] = config_get_string_value(config, "PUNTO_MONTAJE");
+	datosConfigMDJ[TAMANIO_BLOQUES] = config_get_string_value(config, "TAMANIO_BLOQUES");
+	datosConfigMDJ[CANTIDAD_BLOQUES] = config_get_string_value(config, "CANTIDAD_BLOQUES");
+	crearEstructuras();
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
@@ -69,7 +72,7 @@ void config_create_fixed(char* path){
 	util_config_fix_comillas(&config, "PUNTO_MONTAJE");
 }
 
-void crearEstructuras(char *puntoMontajeConfig,char *tamanioBloques,char *cantidadBloques){
+void crearEstructuras(){
 	char* puntoMontaje = string_new();
 	char* metadata = string_new();
 	char* archivos = string_new();
@@ -78,7 +81,7 @@ void crearEstructuras(char *puntoMontajeConfig,char *tamanioBloques,char *cantid
 	char* bitmapBin = string_new();
 
 	string_append(&puntoMontaje, "..");
-	string_append(&puntoMontaje, puntoMontajeConfig);
+	string_append(&puntoMontaje, datosConfigMDJ[PUNTO_MONTAJE]);
 	mkdir(puntoMontaje,0777);
 
 	string_append(&metadata, puntoMontaje);
@@ -100,12 +103,12 @@ void crearEstructuras(char *puntoMontajeConfig,char *tamanioBloques,char *cantid
 	string_append(&metadataBin, "/Metadata.bin");
 	FILE *archivoMetadataBin = fopen(metadataBin,"wb+");
 	fwrite("TAMANIO_BLOQUES=\n",1,17,archivoMetadataBin);
-	//fwrite(tamanioBloques,1,strlen(tamanioBloques)*sizeof(char*),archivoMetadataBin);
+	//fwrite(datosConfigMDJ[TAMANIO_BLOQUES],1,strlen(datosConfigMDJ[TAMANIO_BLOQUES])*sizeof(char*),archivoMetadataBin);
 
 
 	//fputc('\n', archivoMetadataBin);
 	fwrite("CANTIDAD_BLOQUES=",1,17,archivoMetadataBin);
-	fwrite(cantidadBloques,1,strlen(cantidadBloques)*sizeof(char*),archivoMetadataBin);
+	fwrite(datosConfigMDJ[CANTIDAD_BLOQUES],1,strlen(datosConfigMDJ[CANTIDAD_BLOQUES])*sizeof(char*),archivoMetadataBin);
 	//fseek(archivoMetadataBin,17,0);
 
 	fclose(archivoMetadataBin);
@@ -125,6 +128,53 @@ void crearEstructuras(char *puntoMontajeConfig,char *tamanioBloques,char *cantid
 	free(metadataBin);
 	free(bitmapBin);
 
+}
+
+bool validarArchivo(char* path){
+	return !(fopen(path,"r") == NULL);
+}
+
+void crearArchivo(char* path,int cantidadLineas){
+	char* rutaFinal = string_new();
+	string_append(&rutaFinal, "../");
+	string_append(&rutaFinal, path);
+
+	if(validarArchivo(rutaFinal)){
+		puts("Fallo al intentar crear un archivo existente");
+		log_error(logger, "Fallo al intentar crear un archivo existente");
+	}else{
+		FILE *archivo = fopen(rutaFinal,"a");
+		int n;
+		for(n = 0; n < cantidadLineas -1; n++){
+			fwrite("\n",1,1,archivo);
+		}
+		fclose(archivo);
+
+		//PENDIENTE actualizar bitmap
+
+		puts("Archivo creado correctamente");
+		log_info(logger, "Archivo creado correctamente");
+	}
+	free(rutaFinal);
+}
+
+void borrarArchivo(char* path){
+	char* rutaFinal = string_new();
+	string_append(&rutaFinal, "../");
+	string_append(&rutaFinal, path);
+
+	if(validarArchivo(rutaFinal)){
+		remove(rutaFinal);
+
+		//PENDIENTE actualizar bitmap
+
+		puts("Archivo borrado correctamente");
+		log_info(logger, "Archivo borrado correctamente");
+	}else{
+		puts("El archivo no puede ser borrado ya que no existe");
+		log_error(logger,"El archivo no puede ser borrado ya que no existe");
+	}
+	free(rutaFinal);
 }
 
 void mdj_exit(){
