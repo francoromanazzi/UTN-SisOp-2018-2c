@@ -1,5 +1,21 @@
 #include "protocol.h"
 
+t_msg* empaquetar_int(int i){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size = sizeof(int);
+	ret->payload=malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &i, sizeof(int));
+	return ret;
+}
+
+int desempaquetar_int(t_msg* msg){
+	int ret;
+	memcpy((void*) &ret, msg->payload, sizeof(int));
+	return ret;
+}
+
 t_msg* empaquetar_string(char* str){
 	t_msg* ret = malloc(sizeof(t_msg));
 	unsigned int str_len = strlen(str);
@@ -49,7 +65,9 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 			strlen(dtb->ruta_escriptorio) + // RUTA_ESCRIPTORIO
 			sizeof(unsigned int) + // PC
 			sizeof(int) + // QUANTUM RESTANTE
+			sizeof(e_estado) + // ESTADO ACTUAL
 			sizeof(int) + // FLAG INICIALIZADO
+			sizeof(int) + // ERRNO
 			sizeof(int) + // ELEMENTS_AMOUNT
 			dictionary_len // LONGITUD TOTAL DE LOS DATOS DEL DICCIONARIO DE ARCHIVOS ABIERTOS
 			;
@@ -72,7 +90,13 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	memcpy(ret->payload + offset, (void*) &(dtb->quantum_restante), sizeof(int));
 	offset += sizeof(int);
 
+	memcpy(ret->payload + offset, (void*) &(dtb->estado_actual), sizeof(e_estado));
+	offset += sizeof(e_estado);
+
 	memcpy(ret->payload + offset, (void*) &(dtb->flags.inicializado), sizeof(int));
+	offset += sizeof(int);
+
+	memcpy(ret->payload + offset, (void*) &(dtb->flags.error_nro), sizeof(int));
 	offset += sizeof(int);
 
 	memcpy(ret->payload + offset, (void*) &(dtb->archivos_abiertos->elements_amount), sizeof(int));
@@ -117,7 +141,13 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 	memcpy((void*) &(ret->quantum_restante), msg->payload + offset, sizeof(int));
 	offset += sizeof(int);
 
+	memcpy((void*) &(ret->estado_actual), msg->payload + offset, sizeof(e_estado));
+	offset += sizeof(e_estado);
+
 	memcpy((void*) &(ret->flags.inicializado), msg->payload + offset, sizeof(int));
+	offset += sizeof(int);
+
+	memcpy((void*) &(ret->flags.error_nro), msg->payload + offset, sizeof(int));
 	offset += sizeof(int);
 
 	int elementos_diccionario;
@@ -283,6 +313,102 @@ void* desempaquetar_resultado_get(t_msg* msg){
 
 	return datos;
 }
+
+t_msg* empaquetar_tiempo_respuesta(unsigned int id, struct timespec time){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size = sizeof(unsigned int) + sizeof(time.tv_sec) + sizeof(time.tv_nsec);
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &id, sizeof(unsigned int));
+	memcpy(ret->payload + sizeof(unsigned int), (void*) &(time.tv_sec), sizeof(time.tv_sec));
+	memcpy(ret->payload + sizeof(unsigned int) + sizeof(time.tv_sec), (void*) &(time.tv_nsec), sizeof(time.tv_nsec));
+	return ret;
+}
+
+void desempaquetar_tiempo_respuesta(t_msg* msg, unsigned int* id, struct timespec* time){
+	memcpy((void*) id, msg->payload, sizeof(unsigned int));
+	memcpy((void*) &(time->tv_sec), msg->payload + sizeof(unsigned int), sizeof(time->tv_sec));
+	memcpy((void*) &(time->tv_nsec), msg->payload + sizeof(unsigned int) + sizeof(time->tv_sec), sizeof(time->tv_nsec));
+}
+
+t_msg* empaquetar_escribir(int base, int offset, char* datos){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+
+	int datos_len = strlen(datos);
+	int payload_offset = 0;
+
+	ret->header->payload_size = sizeof(int) + sizeof(int) + datos_len;
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &base, sizeof(int));
+	payload_offset += sizeof(int);
+
+	memcpy(ret->payload + payload_offset, (void*) &offset, sizeof(int));
+	payload_offset += sizeof(int);
+
+	memcpy(ret->payload + payload_offset, (void*) &datos_len, sizeof(int));
+	payload_offset += sizeof(int);
+
+	memcpy(ret->payload + payload_offset, (void*) datos, datos_len);
+
+	return ret;
+}
+
+void desempaquetar_escribir(t_msg* msg, int* base, int* offset, char** datos){
+	int payload_offset = 0;
+	int datos_len;
+
+	memcpy((void*) base, msg->payload, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy((void*) offset, msg->payload + payload_offset, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy((void*) &datos_len, msg->payload + payload_offset, sizeof(int));
+	payload_offset += sizeof(int);
+
+	*datos = malloc(datos_len + 1);
+	memcpy((void*) *datos, msg->payload + payload_offset, datos_len);
+	payload_offset += datos_len;
+	(*datos)[datos_len] = '\0';
+}
+
+t_msg* empaquetar_flush(char* path, int base){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+
+	int datos_len = strlen(path);
+	ret->header->payload_size = sizeof(int) + datos_len + sizeof(int);
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &datos_len, sizeof(int));
+	memcpy(ret->payload + sizeof(int), (void*) path, datos_len);
+	memcpy(ret->payload + sizeof(int) + datos_len, (void*) &base, sizeof(int));
+	return ret;
+}
+
+void desempaquetar_flush(t_msg* msg, char** path, int* base){
+	int path_len;
+	memcpy((void*) &path_len, msg->payload, sizeof(int));
+
+	*path = malloc(path_len + 1);
+	memcpy((void*) *path, msg->payload + sizeof(int), path_len);
+	(*path)[path_len] = '\0';
+
+	memcpy((void*) base, msg->payload + sizeof(int) + path_len, sizeof(int));
+}
+
+t_msg* empaquetar_crear(char* path, int cant_lineas){
+	return empaquetar_flush(path, cant_lineas);
+}
+
+void desempaquetar_crear(t_msg* msg, char** path, int* cant_lineas){
+	desempaquetar_flush(msg, path, cant_lineas);
+}
+
+
+
+
 
 
 

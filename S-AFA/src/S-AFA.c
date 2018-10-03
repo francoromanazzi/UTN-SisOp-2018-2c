@@ -5,14 +5,13 @@ int main(void){
 		exit(EXIT_FAILURE);
 	}
 
-	/* Empiezo en estado corrupto */
-	/* Como salgo? Conexion con DAM y por lo menos un CPU */
-	if((listening_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
-		log_error(logger, "No pude crear el socket de escucha");
+	/* Creo el socket de escucha y comienzo el select */
+	if((listening_socket = socket_create_listener(IP, safa_config_get_string_value("PUERTO"))) == -1){
+		log_error(logger, "[S-AFA] No pude crear el socket de escucha");
 		safa_exit();
 		exit(EXIT_FAILURE);
 	}
-	log_info(logger, "Escucho en el socket %d",listening_socket);
+	log_info(logger, "[S-AFA] Escucho en el socket %d",listening_socket);
 
 	socket_start_listening_select(listening_socket, safa_manejador_de_eventos);
 
@@ -20,152 +19,68 @@ int main(void){
 	return EXIT_SUCCESS;
 }
 
-void safa_inotify_config_iniciar(){
-	int buffer_len = 4096;
-	char buffer[buffer_len] __attribute__ ((aligned(__alignof__(struct inotify_event))));;
-	int length, i;
-	struct inotify_event* event;
-	char* ptr;
-
-	 /* Inotify */
-	int inotify_fd = inotify_init();
-	int inotify_wd = inotify_add_watch(inotify_fd, CONFIG_PATH, IN_MODIFY | IN_DELETE );
-
-	/* Espero eventos del file descriptor de inotify */
-	while(1){
-		i = 0;
-		length = read(inotify_fd, buffer, buffer_len);
-		log_info(logger, "[INOTIFY] Lei %d", length);
-		if ( length < 0 ) {
-			log_error(logger, "[INOTIFY] Fallo el read"); continue;
-		}
-		for (ptr = buffer; ptr < buffer + length; ptr += sizeof(struct inotify_event) + event->len){
-			event = (struct inotify_event*) ptr;
-			if(event->mask & IN_DELETE){
-				log_error(logger, "[INOTIFY] El archivo %s ha sido borrado", event->name );
-			}
-			else if(event->mask & IN_MODIFY){
-				log_info(logger, "[INOTIFY] El archivo %s ha sido modificado", event->name );
-
-				pthread_mutex_lock(&sem_mutex_config_algoritmo);
-				pthread_mutex_lock(&sem_mutex_config_multiprogramacion);
-				pthread_mutex_lock(&sem_mutex_config_quantum);
-				pthread_mutex_lock(&sem_mutex_config_retardo);
-
-				config_destroy(config);
-				config = config_create(CONFIG_PATH);
-				util_config_fix_comillas(&config, "ALGORITMO");
-
-				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO ALGORITMO ~~~~~~~~~~~~~~~~~~~ */
-				algoritmo = config_get_string_value(config, "ALGORITMO");
-				log_info(logger, "[INOTIFY] Nuevo algoritmo: %s", algoritmo);
-				pthread_mutex_unlock(&sem_mutex_config_algoritmo);
-
-				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO QUANTUM ~~~~~~~~~~~~~~~~~~~ */
-				quantum = config_get_int_value(config, "QUANTUM");
-				log_info(logger, "[INOTIFY] Nuevo quantum: %d", quantum);
-				pthread_mutex_unlock(&sem_mutex_config_quantum);
-
-				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO MULTIPROGRAMACION ~~~~~~~~~~~~~~~~~~~ */
-				int nueva_multiprogramacion = config_get_int_value(config, "MULTIPROGRAMACION");
-				log_info(logger, "[INOTIFY] Nueva multiprogramacion: %d", nueva_multiprogramacion);
-				/* Modifico el semaforo sem_cont_procesos*/
-				while(nueva_multiprogramacion < multiprogramacion){ // Tengo que esperar la finalizacion de procesos
-					sem_wait(&sem_cont_procesos);
-					multiprogramacion--;
-				}
-				while(multiprogramacion < nueva_multiprogramacion){ // Hago signal de los nuevos procesos permitidos
-					sem_post(&sem_cont_procesos);
-					multiprogramacion++;
-				}
-				pthread_mutex_unlock(&sem_mutex_config_multiprogramacion);
-
-				/* ~~~~~~~~~~~~~~~~~~~ACTUALIZO RETARDO ~~~~~~~~~~~~~~~~~~~ */
-				retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
-				log_info(logger, "[INOTIFY] Nuevo retardo: %d", retardo_planificacion);
-				pthread_mutex_unlock(&sem_mutex_config_retardo);
-			}
-
-		} // Fin for
-	} // Fin while(1)
-}
-
 int safa_initialize(){
+
+	safa_protocol_initialize();
+	safa_util_initialize();
+	metricas_initialize();
 
 	estado_operatorio = false;
 	cpu_conectado = false;
 	dam_conectado = false;
-
-	config = config_create(CONFIG_PATH);
-	util_config_fix_comillas(&config, "ALGORITMO");
-
-	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
-	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/S-AFA.log", "S-AFA", false, LOG_LEVEL_TRACE);
+	op_dummy_en_progreso = false;
 
 	cpu_conexiones = list_create();
-	cola_mensajes = list_create();
-	sem_init(&sem_cont_cola_mensajes, 0, 0);
-	pthread_mutex_init(&sem_mutex_cola_mensajes, NULL);
-	sem_init(&sem_cont_cpu_conexiones, 0, 0);
 	pthread_mutex_init(&sem_mutex_cpu_conexiones, NULL);
 
-	lista_procesos_a_finalizar = list_create();
-	pthread_mutex_init(&sem_mutex_lista_procesos_a_finalizar, NULL);
-
-	pthread_mutex_init(&sem_mutex_config_algoritmo, NULL);
-	pthread_mutex_init(&sem_mutex_config_quantum, NULL);
-	pthread_mutex_init(&sem_mutex_config_multiprogramacion, NULL);
-	pthread_mutex_init(&sem_mutex_config_retardo, NULL);
-
-	pthread_mutex_lock(&sem_mutex_config_algoritmo);
-	algoritmo = config_get_string_value(config, "ALGORITMO");
-	pthread_mutex_unlock(&sem_mutex_config_algoritmo);
-
-	pthread_mutex_lock(&sem_mutex_config_quantum);
-	quantum = config_get_int_value(config, "QUANTUM");
-	pthread_mutex_unlock(&sem_mutex_config_quantum);
-
-	pthread_mutex_lock(&sem_mutex_config_multiprogramacion);
-	multiprogramacion = config_get_int_value(config, "MULTIPROGRAMACION");
-	pthread_mutex_unlock(&sem_mutex_config_multiprogramacion);
-
-	pthread_mutex_lock(&sem_mutex_config_retardo);
-	retardo_planificacion = config_get_int_value(config, "RETARDO_PLANIF");
-	pthread_mutex_unlock(&sem_mutex_config_retardo);
-
 	/* Creo el hilo inotify, que se encarga de toodo lo relacionado al archivo de config */
-	if(pthread_create( &thread_inotify_config, NULL, (void*) safa_inotify_config_iniciar, NULL) ){
-		log_error(logger,"No pude crear el hilo inotify");
+	pthread_t thread_safa_config_inotify;
+	if(pthread_create( &thread_safa_config_inotify, NULL, (void*) safa_config_inotify_iniciar, NULL) ){
+		log_error(logger,"[S-AFA] No pude crear el hilo inotify");
 		return -1;
 	}
-	log_info(logger, "Creo el hilo inotify");
-	pthread_detach(thread_inotify_config);
+	log_info(logger, "[S-AFA] Creo el hilo inotify");
+	pthread_detach(thread_safa_config_inotify);
 
 	return 1;
 }
 
 void safa_iniciar_estado_operatorio(){
 	estado_operatorio = true;
-	sem_init(&sem_bin_plp_cargar_archivo, 0, 0);
-	sem_init(&sem_bin_pcp_cargar_archivo, 0, 0);
 
-	/* Creo el hilo gestor de programas */
-	if(pthread_create( &thread_gestor, NULL, (void*) gestor_iniciar, NULL) ){
-		log_error(logger,"No pude crear el hilo para el gestor");
-			safa_exit();
-		exit(EXIT_FAILURE);
-	}
-	log_info(logger, "Creo el hilo para el gestor");
-	pthread_detach(thread_gestor);
+	cola_new = list_create();
+	cola_ready = list_create(); pthread_mutex_init(&sem_mutex_cola_ready, NULL);
+	cola_exec = list_create();
+	cola_block = list_create(); list_add(cola_block, dtb_create_dummy());
+	cola_exit = list_create(); pthread_mutex_init(&sem_mutex_cola_exit, NULL);
 
-	/* Creo el hilo para el planificador */
-	if(pthread_create( &thread_planificador, NULL, (void*) planificador_iniciar, NULL) ){
-		log_error(logger,"No pude crear el hilo para el planificador");
+	/* Creo el hilo consola */
+	pthread_t thread_consola;
+	if(pthread_create( &thread_consola, NULL, (void*) consola_iniciar, NULL) ){
+		log_error(logger,"[S-AFA] No pude crear el hilo para la consola");
 		safa_exit();
 		exit(EXIT_FAILURE);
 	}
-	log_info(logger, "Creo el hilo para el planificador");
-	pthread_detach(thread_planificador);
+	log_info(logger, "[S-AFA] Creo el hilo para la consola");
+	pthread_detach(thread_consola);
+
+	/* Creo el hilo PLP */
+	pthread_t thread_plp;
+	if(pthread_create( &thread_plp, NULL, (void*) plp_iniciar, NULL) ){
+		log_error(logger,"[S-AFA] No pude crear el hilo PLP");
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger, "[S-AFA] Creo el hilo PLP");
+	pthread_detach(thread_plp);
+
+	/* Creo el hilo PCP */
+	pthread_t thread_pcp;
+	if(pthread_create( &thread_pcp, NULL, (void*) pcp_iniciar, NULL) ){
+		log_error(logger,"[S-AFA] No pude crear el hilo PCP");
+		exit(EXIT_FAILURE);
+	}
+	log_info(logger, "[S-AFA] Creo el hilo PCP");
+	pthread_detach(thread_pcp);
 }
 
 int safa_send(int socket, e_tipo_msg tipo_msg, ...){
@@ -174,15 +89,18 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
  	t_dtb* dtb;
  	va_list arguments;
 	va_start(arguments, tipo_msg);
+
  	switch(tipo_msg){
 		case HANDSHAKE: // A CPU
 			mensaje_a_enviar = msg_create(SAFA, HANDSHAKE, (void**) 1, sizeof(int)); // Una formalidad, no tiene info relevante
 		break;
+
  		case EXEC: // A CPU
 			dtb = va_arg(arguments, t_dtb*);
 			mensaje_a_enviar = empaquetar_dtb(dtb);
 		break;
 	}
+
 	mensaje_a_enviar->header->emisor = SAFA;
 	mensaje_a_enviar->header->tipo_mensaje = tipo_msg;
 	ret = msg_send(socket, *mensaje_a_enviar);
@@ -192,12 +110,16 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
 }
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
-	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+	log_info(logger, "[S-AFA] EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+
+	void* data;
+	struct timespec time;
+	unsigned int id;
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
-				log_info(logger, "Se conecto DAM");
+				log_info(logger, "[S-AFA] Se conecto DAM");
 				dam_conectado = true;
 				dam_socket = socket;
 
@@ -207,30 +129,33 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case DESCONEXION:
-				log_error(logger, "Se desconecto DAM");
+				log_error(logger, "[S-AFA] Se desconecto DAM");
 				return -1;
 			break;
 
 			case RESULTADO_ABRIR:
-				log_info(logger, "Recibi el resultado de cargar algo en memoria");
-				safa_encolar_mensaje(msg);
+				log_info(logger, "[S-AFA] Recibi el resultado de cargar algo en memoria");
+				data = malloc(msg->header->payload_size);
+				memcpy(data, msg->payload, msg->header->payload_size);
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PLP, RESULTADO_ABRIR_DAM, data);
 			break;
 
 			default:
-				log_info(logger, "No entendi el mensaje de DAM");
+				log_info(logger, "[S-AFA] No entendi el mensaje de DAM");
 			break;
 		}
 	}
 	else if(msg->header->emisor == CPU){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
-				log_info(logger, "Se conecto un CPU");
+				log_info(logger, "[S-AFA] Se conecto un CPU");
 				cpu_conectado = true;
 
-				// Agrego el nuevo socket a la lista de CPUs
-				conexion_cpu_add_new(socket);
+				conexion_cpu_add_new(socket); // Agrego el nuevo socket a la lista de CPUs
 
 				safa_send(socket, HANDSHAKE);
+
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, NUEVO_CPU_DISPONIBLE);
 
 				if(!estado_operatorio && dam_conectado){
 					safa_iniciar_estado_operatorio();
@@ -238,36 +163,40 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case DESCONEXION:
-				log_info(logger, "Se desconecto un CPU");
+				log_info(logger, "[S-AFA] Se desconecto un CPU");
 				conexion_cpu_disconnect(socket);
 
 				return -1;
 			break;
 
+			case TIEMPO_RESPUESTA:
+				desempaquetar_tiempo_respuesta(msg, &id, &time);
+				metricas_tiempo_add_finish(id, time);
+			break;
+
 			case BLOCK:
+				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, BLOCK_DTB, desempaquetar_dtb(msg));
+			break;
+
 			case READY:
+				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, READY_DTB, desempaquetar_dtb(msg));
+			break;
+
 			case EXIT:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
-				safa_encolar_mensaje(msg);
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, EXIT_DTB, desempaquetar_dtb(msg));
 			break;
 
 			default:
-				log_info(logger, "No entendi el mensaje de CPU");
+				log_info(logger, "[S-AFA] No entendi el mensaje de CPU");
 		}
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
-		log_info(logger, "Me hablo alguien desconocido");
+		log_info(logger, "[S-AFA] Me hablo alguien desconocido");
 	}
 	return 1;
-}
-
-void safa_encolar_mensaje(t_msg* msg){
-	t_msg* msg_dup = msg_duplicar(msg);
-
-	pthread_mutex_lock(&sem_mutex_cola_mensajes);
-	list_add(cola_mensajes, msg_dup);
-	pthread_mutex_unlock(&sem_mutex_cola_mensajes);
-	sem_post(&sem_cont_cola_mensajes);
 }
 
 void safa_exit(){

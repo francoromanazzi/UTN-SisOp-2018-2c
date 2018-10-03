@@ -8,9 +8,10 @@
 	#include <unistd.h>
 
 	#include <commons/collections/list.h>
-	#include "protocol.h"
-	#include "msg.h"
 
+#include "_common_includes.h"
+	#include "protocol.h"
+	
 	#define BACKLOG 100
 
 	typedef struct {

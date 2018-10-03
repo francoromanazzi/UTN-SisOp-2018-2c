@@ -20,7 +20,7 @@ make_projects:
 	@echo "Finished!"
 
 clean:
-	@cd logs && rm -rf *.log
+	@rm -rf logs
 	@cd CPU && $(MAKE) clean
 	@cd DAM && $(MAKE) clean
 	@cd FM9 && $(MAKE) clean

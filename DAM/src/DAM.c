@@ -137,7 +137,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				// TODO: preguntar a MDJ, recibir de MDJ, escribir en FM9, recibir resultado de FM9
 
 				/* Le mando a SAFA el resultado de abrir el archivo */
-				/* HARDCODEO*/ ok = 1; base = 21198;
+				/* HARDCODEO*/ ok = OK; base = 21198;
 				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 				free(path);
 			break;

@@ -18,23 +18,32 @@ int main(void) {
 
 int cpu_initialize(){
 
-	void config_create_fixed(char* path){
-		config = config_create(path);
+	void _cpu_config_create_fixed(){
+		config = config_create(CONFIG_PATH);
 		util_config_fix_comillas(&config, "IP_SAFA");
 		util_config_fix_comillas(&config, "IP_DIEGO");
 		util_config_fix_comillas(&config, "IP_MEM");
+
+		char* retardo_microsegundos_str = string_itoa(1000 * config_get_int_value(config, "RETARDO"));
+		config_set_value(config, "RETARDO", retardo_microsegundos_str); // Milisegundos a microsegundos
+		free(retardo_microsegundos_str);
 	}
 
-	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/CPU.txt");
+	void _cpu_log_create(){
+		mkdir(LOG_DIRECTORY_PATH, 0777);
+		char* thread_id = string_itoa((int) process_get_thread_id());
+		char* path_log = strdup(LOG_DIRECTORY_PATH);
+		string_append(&path_log, "CPU_");
+		string_append(&path_log, thread_id);
+		string_append(&path_log, ".log");
+		logger = log_create(path_log, "CPU", false, LOG_LEVEL_TRACE);
+		free(path_log);
+		free(thread_id);
+	}
 
-	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
-	char* thread_id = string_itoa((int) process_get_thread_id());
-	char* path_log = strdup("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/CPU_");
-	string_append(&path_log, thread_id);
-	string_append(&path_log, ".log");
-	logger = log_create(path_log, "CPU", false, LOG_LEVEL_TRACE);
-	free(path_log);
-	free(thread_id);
+
+	_cpu_config_create_fixed();
+	_cpu_log_create();
 
 	retardo_ejecucion = config_get_int_value(config, "RETARDO");
 
@@ -54,7 +63,6 @@ int cpu_initialize(){
 	}
 	log_info(logger, "Me conecte a FM9");
 
-	log_info(logger, "NUEVO CPU");
 	return 1;
 }
 
@@ -62,20 +70,26 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
 	int ret;
 
-	int base, offset;
+	char* path;
+	char* datos;
+	char* recurso;
+	unsigned int id;
+	int base, offset, cant_lineas;
 	t_dtb* dtb;
+	struct timespec time;
 
 	va_list arguments;
 	va_start(arguments, tipo_msg);
 
 	switch(tipo_msg){
-		case CONEXION:
-			mensaje_a_enviar = msg_create(CPU, CONEXION, (void**) 1, sizeof(int));
+		case CONEXION: // A SAFA, DAM y FM9
+			mensaje_a_enviar = empaquetar_int(OK);
 		break;
 
 		case ABRIR: // A DAM
-			dtb = va_arg(arguments, t_dtb*);
-			mensaje_a_enviar = empaquetar_abrir( dtb->ruta_escriptorio, dtb->gdt_id);
+			path = va_arg(arguments, char*);
+			id = va_arg(arguments, unsigned int);
+			mensaje_a_enviar = empaquetar_abrir(path, id);
 		break;
 
 		case GET: // A FM9
@@ -84,11 +98,56 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_get(base, offset);
 		break;
 
+		case ESCRIBIR: // A FM9 (asignar)
+			base = va_arg(arguments, int);
+			offset = va_arg(arguments, int);
+			datos = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_escribir(base, offset, datos);
+		break;
+
+		case FLUSH: // A DAM
+			path = va_arg(arguments, char*);
+			base = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_flush(path, base);
+		break;
+
+		case CLOSE: // A FM9
+			base = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(base);
+		break;
+
+		case WAIT: // A SAFA
+			recurso = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_string(recurso);
+		break;
+
+		case SIGNAL: // A SAFA
+			recurso = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_string(recurso);
+		break;
+
+		case CREAR: // A DAM
+			path = va_arg(arguments, char*);
+			cant_lineas = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_crear(path, cant_lineas);
+		break;
+
+		case BORRAR: // A DAM
+			path = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_string(path);
+		break;
+
 		case BLOCK: // A SAFA
 		case EXIT: // A SAFA
 		case READY: // A SAFA
 			dtb = va_arg(arguments, t_dtb*);
 			mensaje_a_enviar = empaquetar_dtb(dtb);
+		break;
+
+		case TIEMPO_RESPUESTA: // A SAFA
+			id = va_arg(arguments, unsigned int);
+			clock_gettime(CLOCK_MONOTONIC, &time);
+			mensaje_a_enviar = empaquetar_tiempo_respuesta(id, time);
 		break;
 	}
 	mensaje_a_enviar->header->emisor = CPU;
@@ -135,23 +194,25 @@ int cpu_esperar_dtb(){
 }
 
 void cpu_ejecutar_dtb(t_dtb* dtb){
-	dtb_mostrar(dtb, "EXEC"); // Sacar despues
+	dtb_mostrar(dtb);
 
 	if(dtb->flags.inicializado == 0){ // DUMMY
 		/* Le pido a Diego que abra el escriptorio */
-		cpu_send(dam_socket, ABRIR, dtb);
+		cpu_send(dam_socket, ABRIR, dtb->ruta_escriptorio, dtb->gdt_id);
 
 		/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 		cpu_send(safa_socket, BLOCK, dtb);
 	}
 	else{ // NO DUMMY
 		bool continuar_ejecucion = true;
+		bool primera_vez_en_ejecutarse = dtb->pc == 0;
 		int operaciones_realizadas = 0;
 		int nro_error;
 		int base_escriptorio = (int) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
 
 		while(dtb->quantum_restante > 0){
 			usleep(retardo_ejecucion);
+
 			/* ------------------------- 1RA FASE: FETCH ------------------------- */
 			char* instruccion;
 			do
@@ -168,22 +229,25 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			t_operacion* operacion = cpu_decodificar(instruccion);
 			free(instruccion);
 
-			/* -------------------- 3RA FASE: BUSQUEDA OPERANDOS -------------------- */
-			if ((nro_error = cpu_buscar_operandos(operacion)) != OK){
-				log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
-				cpu_send(safa_socket, EXIT, dtb);
-				return;
-			}
+			/* ------------------------- 3RA FASE: EJECUCION ------------------------- */
+			if(primera_vez_en_ejecutarse && operaciones_realizadas == 0) cpu_send(safa_socket, TIEMPO_RESPUESTA, dtb->gdt_id);
 
-			/* ------------------------- 4TA FASE: EJECUCION ------------------------- */
-			if ((nro_error = cpu_ejecutar_operacion(operacion)) != OK){
-				log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
-				cpu_send(safa_socket, EXIT, dtb);
-				return;
+			operaciones_realizadas++;
+			dtb->quantum_restante--;
+
+			if ((nro_error = cpu_ejecutar_operacion(dtb, operacion)) != OK){
+				if(nro_error == BLOCK){ // Tengo que pedir a SAFA que bloquee
+					cpu_send(safa_socket, BLOCK, dtb);
+				}
+				else{
+					log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
+					dtb->flags.error_nro = nro_error;
+					cpu_send(safa_socket, EXIT, dtb);
+				}
+				operacion_free(&operacion);
+				return; // Desalojo el CPU
 			}
 			operacion_free(&operacion);
-
-			dtb->quantum_restante--;
 		} // Fin while(dtb->quantum_restante > 0)
 		log_info(logger, "Se me termino el quantum");
 		cpu_send(safa_socket, READY, dtb);
@@ -209,42 +273,137 @@ char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 }
 
 t_operacion* cpu_decodificar(char* instruccion){
-	t_operacion* ret = parse(instruccion);
-	return ret;
+	return parse(instruccion);
 }
 
-int cpu_buscar_operandos(t_operacion* operacion){
-	return OK;
-}
-
-int cpu_ejecutar_operacion(t_operacion* operacion){
+int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 	log_info(logger, "Ejecutando la operacion");
+
+	t_msg* msg_recibido;
+	char* path;
+	char* datos;
+	int linea, base, ok, cant_lineas;
+
 	switch(operacion->tipo_operacion){
 		case OP_ABRIR:
+			path = (char*) dictionary_get(operacion->operandos, "path");
+
+			/* 1. Verificar que el archivo no se encuentre abierto */
+			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+				return OK;
+
+			/* 2. Pedir a DAM que abra el archivo */
+			cpu_send(dam_socket, ABRIR, path, dtb->gdt_id);
+
+			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
+			cpu_send(safa_socket, BLOCK, dtb);
+			return BLOCK;
 		break;
 
 		case OP_CONCENTRAR:
 		break;
 
 		case OP_ASIGNAR:
+			path = (char*) dictionary_get(operacion->operandos, "path");
+			linea = atoi((char*) dictionary_get(operacion->operandos, "linea"));
+			datos = (char*) dictionary_get(operacion->operandos, "datos");
+
+			/* 1. Verificar que el archivo se encuentre abierto */
+			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+				return ERROR_ASIGNAR_ARCHIVO_NO_ABIERTO;
+
+			/* 2. Le pido a FM9 que actualize los datos */
+			cpu_send(fm9_socket, ESCRIBIR, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
+
+			/* Recibo de FM9 el resultado de escribir */
+			msg_recibido = malloc(sizeof(t_msg));
+			if(msg_await(fm9_socket, msg_recibido) == -1){
+				log_error(logger, "Se desconecto FM9");
+				cpu_exit();
+				exit(EXIT_FAILURE);
+			}
+			ok = (int) msg_recibido->payload;
+			msg_free(&msg_recibido);
+			return ok;
 		break;
 
 		case OP_WAIT:
+			cpu_send(safa_socket, WAIT, (char*) dictionary_get(operacion->operandos, "recurso"));
+
+			/* Recibo de SAFA el resultado del wait */
+			msg_recibido = malloc(sizeof(t_msg));
+			if(msg_await(safa_socket, msg_recibido) == -1){
+				log_error(logger, "Se desconecto SAFA");
+				cpu_exit();
+				exit(EXIT_FAILURE);
+			}
+			ok = (int) msg_recibido->payload;
+			if(ok == NO_OK){
+				msg_free(&msg_recibido);
+				return BLOCK;
+			}
 		break;
 
 		case OP_SIGNAL:
+			cpu_send(safa_socket, SIGNAL, (char*) dictionary_get(operacion->operandos, "recurso"));
+
+			/* Espero a que SAFA me deje seguir ejecutando */
+			msg_recibido = malloc(sizeof(t_msg));
+			if(msg_await(safa_socket, msg_recibido) == -1){
+				log_error(logger, "Se desconecto SAFA");
+				cpu_exit();
+				exit(EXIT_FAILURE);
+			}
+			msg_free(&msg_recibido);
 		break;
 
 		case OP_FLUSH:
+			path = (char*) dictionary_get(operacion->operandos, "path");
+
+			/* 1. Verificar que el archivo se encuentre abierto */
+			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+				return ERROR_FLUSH_ARCHIVO_NO_ABIERTO;
+
+			/* 2. Pedir a DAM que haga flush */
+			cpu_send(dam_socket, FLUSH, path, (int) dictionary_get(dtb->archivos_abiertos, path));
+
+			/* 3. Le envio a SAFA el DTB, y le pido que lo bloquee */
+			cpu_send(safa_socket, BLOCK, dtb);
 		break;
 
 		case OP_CLOSE:
+			path = (char*) dictionary_get(operacion->operandos, "path");
+
+			/* 1. Verificar que el archivo se encuentre abierto */
+			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+				return ERROR_CLOSE_ARCHIVO_NO_ABIERTO;
+
+			/* 2. Pedir a FM9 que libere el archivo */
+			cpu_send(fm9_socket, CLOSE, (int) dictionary_get(dtb->archivos_abiertos, path));
+
+			/* 3. Saco el archivo del DTB */
+			dictionary_remove(dtb->archivos_abiertos, path);
 		break;
 
 		case OP_CREAR:
+			path = (char*) dictionary_get(operacion->operandos, "path");
+			cant_lineas = atoi((char*) dictionary_get(operacion->operandos, "cant_lineas"));
+
+			/* 1. Le envio a DAM el archivo a crear */
+			cpu_send(dam_socket, CREAR, path, cant_lineas);
+
+			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
+			cpu_send(safa_socket, BLOCK, dtb);
 		break;
 
 		case OP_BORRAR:
+			path = (char*) dictionary_get(operacion->operandos, "path");
+
+			/* 1. Le envio a DAM el archivo a borrar */
+			cpu_send(dam_socket, BORRAR, path);
+
+			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
+			cpu_send(safa_socket, BLOCK, dtb);
 		break;
 	}
 	return OK;
@@ -254,7 +413,7 @@ int cpu_connect_to_safa(){
 	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
 	log_info(logger, "Intento conectarme a SAFA");
 
-	int resultado_send = cpu_send(safa_socket, CONEXION, NULL);
+	int resultado_send = cpu_send(safa_socket, CONEXION);
 
 	t_msg* msg = malloc(sizeof(t_msg));
 	int result_recv = msg_await(safa_socket, msg);
@@ -274,7 +433,7 @@ int cpu_connect_to_dam(){
 	dam_socket = socket_connect_to_server(config_get_string_value(config, "IP_DIEGO"), config_get_string_value(config, "PUERTO_DIEGO"));
 	log_info(logger, "Intento conectarme a DAM");
 
-	int resultado_send = cpu_send(dam_socket, CONEXION, NULL);
+	int resultado_send = cpu_send(dam_socket, CONEXION);
 
 	return safa_socket > 0 && resultado_send > 0;
 }
@@ -283,7 +442,7 @@ int cpu_connect_to_fm9(){
 	fm9_socket = socket_connect_to_server(config_get_string_value(config, "IP_MEM"), config_get_string_value(config, "PUERTO_MEM"));
 	log_info(logger, "Intento conectarme a FM9");
 
-	int resultado_send = cpu_send(fm9_socket, CONEXION, NULL);
+	int resultado_send = cpu_send(fm9_socket, CONEXION);
 
 	return fm9_socket > 0 && resultado_send > 0;
 }

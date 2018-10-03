@@ -1,35 +1,39 @@
 #ifndef SHARED_PROTOCOL_H_
 #define SHARED_PROTOCOL_H_
-	#include "DTB.h"
-	#include "msg.h"
+	#include "_common_includes.h"
+#include "msg.h"
+	
+	t_msg* empaquetar_int(int);
+	int desempaquetar_int(t_msg*);
 
-	#define OK 10
-	#define ERROR_PATH_INEXISTENTE 10001
-	#define ERROR_ESPACIO_INSUFICIENTE_FM9 10002
+	t_msg* empaquetar_string(char*);
+	char* desempaquetar_string(t_msg*);
 
-	#define ERROR_ARCHIVO_NO_ABIERTO = 20001
-	#define ERROR_FALLO_SEGMENTO = 20002
-
-	#define ERROR_ESPACIO_INSUFICIENTE_MDJ = 30003
-	#define ERROR_ARCHIVO_NO_EXISTE_MDJ = 30003
-
-
-	t_msg* empaquetar_string(char* str);
-	char* desempaquetar_string(t_msg* msg);
-
-	t_msg* empaquetar_dtb(t_dtb* dtb);
-	t_dtb* desempaquetar_dtb(t_msg* msg);
+	t_msg* empaquetar_dtb(t_dtb*);
+	t_dtb* desempaquetar_dtb(t_msg*);
 
 	t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, int base);
-	void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char** path, int* base);
+	void desempaquetar_resultado_abrir(t_msg*, int* ok, unsigned int* id, char** path, int* base);
 
 	t_msg* empaquetar_abrir(char* path, unsigned int id);
-	void desempaquetar_abrir(t_msg* msg, char** path, unsigned int* id);
+	void desempaquetar_abrir(t_msg*, char** path, unsigned int* id);
 
 	t_msg* empaquetar_get(int base, int offset);
-	void desempaquetar_get(t_msg* msg, int* base, int* offset);
+	void desempaquetar_get(t_msg*, int* base, int* offset);
 
 	t_msg* empaquetar_resultado_get(void* datos, int datos_size);
-	void* desempaquetar_resultado_get(t_msg* msg);
+	void* desempaquetar_resultado_get(t_msg*);
+
+	t_msg* empaquetar_tiempo_respuesta(unsigned int id, struct timespec ms);
+	void desempaquetar_tiempo_respuesta(t_msg*, unsigned int* id, struct timespec* ms);
+
+	t_msg* empaquetar_escribir(int base, int offset, char* datos);
+	void desempaquetar_escribir(t_msg*, int* base, int* offset, char** datos);
+
+	t_msg* empaquetar_flush(char* path, int base);
+	void desempaquetar_flush(t_msg*, char** path, int* base);
+
+	t_msg* empaquetar_crear(char* path, int cant_lineas);
+	void desempaquetar_crear(t_msg*, char** path, int* cant_lineas);
 
 #endif /* SHARED_PROTOCOL_H_ */

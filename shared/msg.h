@@ -5,19 +5,25 @@
 	#include <arpa/inet.h>
 
 	#include <commons/log.h>
+
+	#include "_common_includes.h"
 	#include "util.h"
 	#include "DTB.h"
-
+	
 	typedef enum emisor{DESCONOCIDO, SAFA, CPU, DAM, FM9, MDJ} e_emisor;
 	typedef enum {
 		CONEXION, DESCONEXION, HANDSHAKE,
 		EXEC, READY, BLOCK, EXIT,
 		GET, RESULTADO_GET,
 		ABRIR, RESULTADO_ABRIR,
-		FLUSH,
+		FLUSH, RESULTADO_FLUSH,
 		ESCRIBIR, RESULTADO_ESCRIBIR,
 		VALIDAR, RESULTADO_VALIDAR,
-		CREAR, RESULTADO_CREAR
+		CREAR, RESULTADO_CREAR,
+		CLOSE, RESULTADO_CLOSE,
+		BORRAR, RESULTADO_BORRAR,
+		TIEMPO_RESPUESTA,
+		WAIT, SIGNAL
 	} e_tipo_msg;
 
 	typedef struct {

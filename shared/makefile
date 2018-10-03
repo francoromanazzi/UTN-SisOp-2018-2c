@@ -1,17 +1,17 @@
 CC=gcc
 
 BUILD_DIR=_build
-SOURCES=socket.c protocol.c msg.c util.c DTB.c
-HEADERS=socket.h protocol.h msg.h util.h DTB.h
+SOURCES=socket.c protocol.c msg.c util.c DTB.c 
+HEADERS=socket.h protocol.h msg.h util.h DTB.h _common_includes.h
 OBJS=$(SOURCES:%.c=$(BUILD_DIR)/%.o)
 
 all: $(BUILD_DIR)/libshared.so
 
 $(BUILD_DIR)/libshared.so: create-dirs $(OBJS)
-	$(CC) -shared -o $(BUILD_DIR)/libshared.so $(OBJS)
+	$(CC) -g -shared -o $(BUILD_DIR)/libshared.so $(OBJS)
 
 $(BUILD_DIR)/%.o: %.c
-	$(CC) -c -fPIC -o "$@" "$<"
+	$(CC) -g -c -fPIC -o "$@" "$<"
 
 create-dirs:
 	mkdir --parents $(BUILD_DIR)

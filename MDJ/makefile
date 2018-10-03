@@ -9,10 +9,10 @@ OBJS=$(SOURCES:./src/%.c=$(BUILD_DIR)/%.o)
 all: $(APPLICATION)
 
 $(APPLICATION): create-dirs $(OBJS)
-	$(CC)  -o $(APPLICATION) $(OBJS) -lshared -lcommons
+	$(CC) -g -o $(APPLICATION) $(OBJS) -lshared -lcommons
 
 $(BUILD_DIR)/%.o: src/%.c
-	$(CC) -c -o "$@" "$<"
+	$(CC) -g -c -o "$@" "$<"
 
 create-dirs:
 	mkdir --parents $(BUILD_DIR)

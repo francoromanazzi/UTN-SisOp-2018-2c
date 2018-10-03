@@ -16,4 +16,6 @@
 
 	void conexion_cpu_disconnect(int socket);
 
+	int conexion_cpu_get_available();
+
 #endif /* CONEXION_CPU_H_ */

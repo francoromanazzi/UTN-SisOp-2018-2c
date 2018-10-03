@@ -16,19 +16,22 @@
 	#include <shared/msg.h>
 	#include <shared/protocol.h>
 	#include <shared/DTB.h>
+	#include <shared/util.h>
 
 	#include "parser.h"
 	#include "operacion.h"
 
+	#define CONFIG_PATH "../configs/CPU.txt"
+	#define LOG_DIRECTORY_PATH "../logs/"
 
 	t_config* config;
 	t_log* logger;
-	int safa_socket;
-	int dam_socket;
-	int fm9_socket;
 
 	int retardo_ejecucion;
 
+	int safa_socket;
+	int dam_socket;
+	int fm9_socket;
 
 	int cpu_initialize();
 	int cpu_connect_to_safa();
@@ -42,8 +45,7 @@
 
 	char* cpu_fetch(t_dtb* dtb, int base_escriptorio);
 	t_operacion* cpu_decodificar(char* instruccion);
-	int cpu_buscar_operandos(t_operacion* operacion);
-	int cpu_ejecutar_operacion(t_operacion* operacion);
+	int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion);
 
 	void cpu_exit();
 
