@@ -97,6 +97,7 @@ void plp_gestionar_msg(t_safa_msg* msg){
 						safa_protocol_encolar_msg_y_avisar(PLP, CONSOLA, EXIT_DTB_CONSOLA, id, 1);
 						plp_mover_dtb(id, ESTADO_EXIT);
 					}
+					msg->data = NULL;
 				break;
 
 				case STATUS:

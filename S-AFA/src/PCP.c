@@ -162,6 +162,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							list_add(lista_procesos_a_finalizar_en_exec, (void*) id);
 						}
 					}
+					msg->data = NULL;
 				break;
 
 				case STATUS:

@@ -150,7 +150,7 @@ void consola_procesar_comando(char* linea){
 					printf("El proceso con ID: %d ya se encontraba finalizado\n\n", id);
 				break;
 			}
-			free(msg_recibido);
+			safa_protocol_msg_free(msg_recibido);
 		}
 	}
 	/* Comando metricas */
