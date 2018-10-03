@@ -1,4 +1,4 @@
-1#include "DAM.h"
+#include "DAM.h"
 
 int main(void) {
 	if(dam_initialize() == -1){
