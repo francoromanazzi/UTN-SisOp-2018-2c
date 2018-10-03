@@ -2,6 +2,7 @@
 #define MDJ_H_
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <stdarg.h>
 	#include <sys/stat.h>
 	#include <sys/types.h>
 	#include <commons/config.h>
@@ -12,18 +13,28 @@
 	/* Constantes */
 	#define IP "127.0.0.1"
 
+	#define CONFIG_PATH "../configs/MDJ.txt"
+	#define LOG_DIRECTORY_PATH "../logs/"
+	#define LOG_PATH "../logs/MDJ.log"
+
+
+	/* Escructuras de datos */
+	enum keys{
+		PUERTO, PUNTO_MONTAJE, RETARDO, TAMANIO_BLOQUES, CANTIDAD_BLOQUES
+	};
+
+
 	/* Variables globales */
 	t_config* config;
 	t_log* logger;
 	int listenning_socket;
-	int dam_socket;
-	enum keys{
-		PUERTO, PUNTO_MONTAJE, RETARDO, TAMANIO_BLOQUES, CANTIDAD_BLOQUES
-	};
-	char* datosConfigMDJ[5];
 
-	void mdj_esperar_ordenes_dam();
-	void config_create_fixed(char* path);
+	char* datosConfigMDJ[5];
+	int transfer_size;
+
+	int mdj_send(int socket, e_tipo_msg tipo_msg, ...);
+	int mdj_manejador_de_eventos(int socket, t_msg* msg);
+
 	void crearEstructuras();
 	//crearArchivo
 	//agrega al principio del path "../"
@@ -31,7 +42,7 @@
 	//borrarArchivo
 	//agrega al principio del path "../"
 		void borrarArchivo(char* path);
-	bool validarArchivo(char* path);
+	int validarArchivo(char* path);
 	void mdj_exit();
 
 #endif /* MDJ_H_ */

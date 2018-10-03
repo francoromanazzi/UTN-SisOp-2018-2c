@@ -165,6 +165,7 @@ void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(
 					((t_conexion*) list_get(conexiones, i))->conectado = msg->header->emisor;
 					if( manejadorDeEvento(((t_conexion*) list_get(conexiones, i))->socket, msg) == -1){
 						//Si es -1 significa que por alguna razon quiere que cierre la conexion
+						socket_a_destruir = ((t_conexion*) list_get(conexiones, i))->socket;
 						list_remove_and_destroy_by_condition(conexiones, close_conection_condition, close_conection);
 					}
 				}

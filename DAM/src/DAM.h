@@ -18,26 +18,26 @@
 	/* Constantes */
 	#define IP "127.0.0.1"
 
+	#define CONFIG_PATH "../configs/DAM.txt"
+	#define LOG_DIRECTORY_PATH "../logs/"
+	#define LOG_PATH "../logs/DAM.log"
+
 	/* Variables globales */
 	t_config* config;
 	t_log* logger;
+
+	int temp_socket;
 	int safa_socket;
-	int fm9_socket;
-	int mdj_socket;
 	int listenning_socket;
 
 
 	int dam_initialize();
-	void config_create_fixed(char* path);
-	int dam_connect_to_safa();
-	int dam_connect_to_mdj();
-	int dam_connect_to_fm9();
 
 	int dam_send(int socket, e_tipo_msg tipo_msg, ...);
 
 	bool dam_crear_nuevo_hilo(int socket_nuevo_cliente);
 	void dam_nuevo_cliente_iniciar(int socket);
-	int dam_manejar_nuevo_mensaje(int socket, t_msg* msg);
+	int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_socket);
 
 	void dam_exit();
 

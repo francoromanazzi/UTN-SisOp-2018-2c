@@ -19,6 +19,9 @@
 	/* Constantes */
 	#define IP "127.0.0.1"
 
+	#define CONFIG_PATH "../configs/FM9.txt"
+	#define LOG_DIRECTORY_PATH "../logs/"
+	#define LOG_PATH "../logs/FM9.log"
 
 	/* Variables globales */
 	t_config* config;
@@ -29,6 +32,7 @@
 	int tamanio;
 	int max_linea;
 	int tam_pagina;
+	int transfer_size;
 
 	char* storage;
 

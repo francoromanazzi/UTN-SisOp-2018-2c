@@ -110,7 +110,7 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
 }
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
-	log_info(logger, "[S-AFA] EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+	log_info(logger, "[S-AFA] EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	void* data;
 	struct timespec time;

@@ -1,9 +1,15 @@
 #include "MDJ.h"
 
 int main(void) {
-	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/MDJ.txt");
-	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
-	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/MDJ.log", "MDJ", false, LOG_LEVEL_TRACE);
+
+	void config_create_fixed(){
+		config = config_create(CONFIG_PATH);
+		util_config_fix_comillas(&config, "PUNTO_MONTAJE");
+	}
+
+	config_create_fixed();
+	mkdir(LOG_DIRECTORY_PATH,0777);
+	logger = log_create(LOG_PATH, "MDJ", false, LOG_LEVEL_TRACE);
 
 	//creo estructuras administrativas
 	datosConfigMDJ[PUNTO_MONTAJE] = config_get_string_value(config, "PUNTO_MONTAJE");
@@ -17,59 +23,96 @@ int main(void) {
 		exit(EXIT_FAILURE);
 	}
 	log_info(logger,"Escucho en el socket %d", listenning_socket);
-	dam_socket = socket_aceptar_conexion(listenning_socket);
-	log_info(logger,"Se me conecto DAM, en el socket %d", dam_socket);
 
-	while(1)
-		mdj_esperar_ordenes_dam();
+	socket_start_listening_select(listenning_socket, mdj_manejador_de_eventos);
 
 	mdj_exit();
 	return EXIT_SUCCESS;
 }
 
-void mdj_esperar_ordenes_dam(){
-	t_msg* msg = malloc(sizeof(t_msg));
-	msg_await(dam_socket, msg);
-	if(msg->header->tipo_mensaje == VALIDAR){
-		log_info(logger, "Recibi ordenes de DAM de validar un archivo");
-		char* path_a_validar = desempaquetar_string(msg);
-		int archivo_existe = 1;
+int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
+	t_msg* mensaje_a_enviar;
+	int ret;
+	int ok;
 
-		// TODO: Validar que el archivo exista
+ 	va_list arguments;
+	va_start(arguments, tipo_msg);
 
-		/* Le comunico a Diego el resultado (1->OK, 0->NO_OK) */
-		t_msg* mensaje_a_enviar = msg_create(MDJ, RESULTADO_VALIDAR, (void**) archivo_existe, sizeof(int));
-		int resultado_send = msg_send(dam_socket, *mensaje_a_enviar);
-		msg_free(&mensaje_a_enviar);
+	switch(tipo_msg){
+		case VALIDAR:
+			ok = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(ok);
+		break;
 
-		free(path_a_validar);
-		msg_free(&msg);
+		case RESULTADO_VALIDAR:
+			ok = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(ok);
+		break;
 	}
-	else if(msg->header->tipo_mensaje == CREAR){
-		log_info(logger, "Recibi ordenes de DAM de crear un archivo");
-		msg_free(&msg);
-	}
-	else if(msg->header->tipo_mensaje == GET){
-		log_info(logger, "Recibi ordenes de DAM de obtener datos");
-		msg_free(&msg);
-	}
-	else if(msg->header->tipo_mensaje == ESCRIBIR){
-		log_info(logger, "Recibi ordenes de DAM de guardar datos");
-		msg_free(&msg);
-	}
-	else if(msg->header->tipo_mensaje == DESCONEXION){
-		log_info(logger, "Se desconecto DAM");
-		msg_free(&msg);
-	}
-	else{
-		log_error(logger, "No entendi el mensaje de DAM");
-		msg_free(&msg);
-	}
+
+	mensaje_a_enviar->header->emisor = MDJ;
+	mensaje_a_enviar->header->tipo_mensaje = tipo_msg;
+	ret = msg_send(socket, *mensaje_a_enviar);
+	msg_free(&mensaje_a_enviar);
+	va_end(arguments);
+	return ret;
 }
 
-void config_create_fixed(char* path){
-	config = config_create(path);
-	util_config_fix_comillas(&config, "PUNTO_MONTAJE");
+int mdj_manejador_de_eventos(int socket, t_msg* msg){
+	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
+
+	char* path;
+
+	if(msg->header->emisor == DAM){
+		switch(msg->header->tipo_mensaje){
+			case CONEXION:
+				log_info(logger, "Se conecto un nuevo hilo de DAM");
+			break;
+
+			case DESCONEXION:
+				log_info(logger, "Se desconecto un hilo de DAM");
+				return -1;
+			break;
+
+			case HANDSHAKE:
+				transfer_size = desempaquetar_int(msg);
+				log_info(logger, "Recibi de DAM el transfer size: %d", transfer_size);
+				return -1;
+			break;
+
+			case VALIDAR:
+				log_info(logger, "Recibi ordenes de DAM de validar un archivo");
+				path = desempaquetar_string(msg);
+
+				/* Valido que el archivo exista y se lo comunico a diego */
+				mdj_send(socket, RESULTADO_VALIDAR, validarArchivo(path));
+
+				free(path);
+			break;
+
+			case CREAR:
+				log_info(logger, "Recibi ordenes de DAM de crear un archivo");
+			break;
+
+			case GET:
+				log_info(logger, "Recibi ordenes de DAM de obtener datos");
+				path = desempaquetar_string(msg);
+
+				free(path);
+			break;
+
+			case ESCRIBIR:
+				log_info(logger, "Recibi ordenes de DAM de escribir en un archivo");
+			break;
+
+			default:
+				log_error(logger, "No entendi el mensaje de DAM");
+		}
+	}
+	else if(msg->header->emisor == DESCONOCIDO){
+		log_info(logger, "Me hablo alguien desconocido");
+	}
+	return 1;
 }
 
 void crearEstructuras(){
@@ -130,8 +173,9 @@ void crearEstructuras(){
 
 }
 
-bool validarArchivo(char* path){
-	return !(fopen(path,"r") == NULL);
+int validarArchivo(char* path){
+	return OK;
+	//return !(fopen(path,"r") == NULL) ? OK : NO_OK; // En vez de NO_OK poner el numero de error
 }
 
 void crearArchivo(char* path,int cantidadLineas){

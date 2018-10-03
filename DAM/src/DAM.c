@@ -2,7 +2,8 @@
 
 int main(void) {
 	if(dam_initialize() == -1){
-		dam_exit(); return EXIT_FAILURE;
+		dam_exit();
+		return EXIT_FAILURE;
 	}
 
 	/* Me quedo esperando conexiones de CPU */
@@ -21,25 +22,32 @@ int main(void) {
 }
 
 int dam_initialize(){
-	config_create_fixed("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/DAM.txt");
-	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
-	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/DAM.log", "DAM", false, LOG_LEVEL_TRACE);
 
-	/* Me conecto a S-AFA, FM9 y MDJ */
-	if(!dam_connect_to_safa()){
-		log_error(logger, "No pude conectarme a SAFA"); return -1;
+	void config_create_fixed(){
+		config = config_create(CONFIG_PATH);
+		util_config_fix_comillas(&config, "IP_SAFA");
+		util_config_fix_comillas(&config, "IP_FM9");
+		util_config_fix_comillas(&config, "IP_MDJ");
 	}
-	else log_info(logger, "Me conecte a SAFA");
 
-	if(!dam_connect_to_mdj()){
-		log_error(logger, "No pude conectarme a MDJ"); return -1;
-	}
-	else log_info(logger, "Me conecte a MDJ");
+	config_create_fixed();
+	mkdir(LOG_DIRECTORY_PATH,0777);
+	logger = log_create(LOG_PATH, "DAM", false, LOG_LEVEL_TRACE);
 
-	if(!dam_connect_to_fm9()){
-		log_error(logger, "No pude conectarme a FM9"); return -1;
-	}
-	else log_info(logger, "Me conecte a FM9");
+	/* Le mando el transfer size a MDJ y FM9, y cierro esas conexiones. Me conecto a SAFA (todos los hilos usan este socket) */
+
+	temp_socket  = socket_connect_to_server(config_get_string_value(config, "IP_MDJ"), config_get_string_value(config, "PUERTO_MDJ"));
+	dam_send(temp_socket, HANDSHAKE);
+	close(temp_socket);
+
+	temp_socket = socket_connect_to_server(config_get_string_value(config, "IP_FM9"), config_get_string_value(config, "PUERTO_FM9"));
+	dam_send(temp_socket, HANDSHAKE);
+	close(temp_socket);
+
+	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
+	dam_send(safa_socket, CONEXION);
+
+	log_info(logger, "Hice handshake con MDJ y FM9, y me conecte a SAFA");
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
@@ -62,8 +70,12 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 	va_start(arguments, tipo_msg);
 
 	switch(tipo_msg){
-		case CONEXION:
-			mensaje_a_enviar = msg_create(DAM, CONEXION, (void**) 1, sizeof(int));
+		case CONEXION: // A SAFA al inicio. Cada hilo se lo manda a MDJ y FM9
+			mensaje_a_enviar = empaquetar_int(OK);
+		break;
+
+		case HANDSHAKE: // A MDJ y FM9 al inicio
+			mensaje_a_enviar = empaquetar_int(config_get_int_value(config, "TRANSFER_SIZE"));
 		break;
 
 		case RESULTADO_ABRIR:
@@ -72,6 +84,16 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			path = va_arg(arguments, char*);
 			base = va_arg(arguments, int);
 			mensaje_a_enviar = empaquetar_resultado_abrir(ok, id, path, base);
+		break;
+
+		case VALIDAR:// A MDJ
+			path = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_string(path);
+		break;
+
+		case GET: // A MDJ
+			path = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_string(path);
 		break;
 	}
 	mensaje_a_enviar->header->emisor = DAM;
@@ -93,28 +115,35 @@ bool dam_crear_nuevo_hilo(int socket_nuevo_cliente){
 }
 
 void dam_nuevo_cliente_iniciar(int socket){
+
+	/* Me conecto a MDJ y FM9 */
+	int mdj_socket  = socket_connect_to_server(config_get_string_value(config, "IP_MDJ"), config_get_string_value(config, "PUERTO_MDJ"));
+	dam_send(mdj_socket, CONEXION, NULL);
+
+	int fm9_socket  = socket_connect_to_server(config_get_string_value(config, "IP_FM9"), config_get_string_value(config, "PUERTO_FM9"));
+	dam_send(fm9_socket, CONEXION, NULL);
+
 	while(1){
 		t_msg* nuevo_mensaje = malloc(sizeof(t_msg));
-		if(msg_await(socket, nuevo_mensaje) == -1){
+		if(msg_await(socket, nuevo_mensaje) == -1 || dam_manejar_nuevo_mensaje(socket, nuevo_mensaje, mdj_socket, fm9_socket) == -1){
 			log_info(logger, "Cierro el hilo que atendia a este cliente");
 			msg_free(&nuevo_mensaje);
-			pthread_exit();
-			return;
-		}
-		if(dam_manejar_nuevo_mensaje(socket, nuevo_mensaje) == -1){
-			log_info(logger, "Cierro el hilo que atendia a este cliente");
-			msg_free(&nuevo_mensaje);
-			pthread_exit();
+			close(mdj_socket);
+			close(fm9_socket);
+			close(socket);
+			pthread_exit(NULL);
 			return;
 		}
 		msg_free(&nuevo_mensaje);
 	} // Fin while(1)
 }
 
-int dam_manejar_nuevo_mensaje(int socket, t_msg* msg){
-	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_socket){
+	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
-	int ok,resultadoManejar;
+	t_msg* msg_recibido;
+	int ok;
+	int resultadoManejar = 1; // Valor de retorno. -1 si quiero cerrar el hilo que atendia a esa CPU
 	unsigned int id;
 	char* path;
 	int base;
@@ -134,24 +163,23 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_abrir(msg,&path,&id);
 				log_info(logger, "Ehhh, voy a busar %s para %d", path, id);
 
-				// TODO: solicitud de archivo desde MDJ
-				//que pasa si no lo tiene?
-				t_msg* mensajeAbrir = msg_create(DAM,ABRIR,(void**) path, strlen(path));
-				if((msg_send(mdj_socket, mensajeAbrir)) == -1){
-					log_info(logger, "Problema con solicitud de archivo");
-					msg_free(&mensajeAbrir);
-					resultadoManejar = -1;
+				/* Le pregunto a MDJ si el archivo existe */
+				dam_send(mdj_socket, VALIDAR, path);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(mdj_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
+					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
+					msg_free(&msg_recibido);
 					break;
 				}
-
-				resultadoManejar = 1;
-				break;
-
-
+				msg_free(&msg_recibido);
+				/* Ok, el archivo existe. Comienzo la transferencia del archivo de MDJ a FM9*/
 				//TODO: recibir datos de FM9 para G.DT
 
+
 				/* Le mando a SAFA el resultado de abrir el archivo */
-				/* HARDCODEO*/ ok = OK; base = 21198;
+				/* HARDCODEO*/ base = 21198;
 				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 				free(path);
 				resultadoManejar = 1;
@@ -172,6 +200,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg){
 		}
 	}
 	else if(msg->header->emisor == MDJ){
+		/*
 				//TODO: recibir archivo de MDJ
 				//TODO: cargar en FM9 el archivo
 				//hace la recepción del resto del archivo desde MDJ y envia To.do el archivo a FM9
@@ -181,17 +210,16 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg){
 		}else{
 			resultadoManejar = -1;
 		}
-
+		 */
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
 		log_info(logger, "Me hablo alguien desconocido");
-		//si esto es OK
 		resultadoManejar = 1;
 	}
 
 	return resultadoManejar;
 }
-
+/*
 int enviarArchivo(void** payload, int tamPayload){
 	int resultadoTransferencia = 1;
 
@@ -216,45 +244,10 @@ int enviarArchivo(void** payload, int tamPayload){
 	}
 	return resultadoTransferencia;
 }
-
-int dam_connect_to_safa(){
-	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
-	int resultado_send = dam_send(safa_socket, CONEXION, NULL);
-
-	dam_crear_nuevo_hilo(safa_socket);
-
-	return safa_socket > 0 && resultado_send > 0;
-}
-
-int dam_connect_to_mdj(){
-	mdj_socket  = socket_connect_to_server(config_get_string_value(config, "IP_MDJ"), config_get_string_value(config, "PUERTO_MDJ"));
-	int resultado_send = dam_send(mdj_socket, CONEXION, NULL);
-
-	dam_crear_nuevo_hilo(mdj_socket);
-
-	return mdj_socket > 0 && resultado_send > 0;
-}
-
-int dam_connect_to_fm9(){
-	fm9_socket  = socket_connect_to_server(config_get_string_value(config, "IP_FM9"), config_get_string_value(config, "PUERTO_FM9"));
-	int resultado_send = dam_send(fm9_socket, CONEXION, NULL);
-
-	dam_crear_nuevo_hilo(fm9_socket);
-
-	return fm9_socket > 0 && resultado_send > 0;
-}
-
-void config_create_fixed(char* path){
-	config = config_create(path);
-	util_config_fix_comillas(&config, "IP_SAFA");
-	util_config_fix_comillas(&config, "IP_FM9");
-	util_config_fix_comillas(&config, "IP_MDJ");
-}
+*/
 
 void dam_exit(){
 	close(safa_socket);
-	close(fm9_socket);
-	close(mdj_socket);
 	close(listenning_socket);
 	log_destroy(logger);
 	config_destroy(config);

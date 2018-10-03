@@ -5,7 +5,6 @@ int main(void) {
 		fm9_exit(); return EXIT_FAILURE;
 	}
 
-
 	while(1){
 		int nuevo_cliente = socket_aceptar_conexion(listening_socket);
 		if( !fm9_crear_nuevo_hilo(nuevo_cliente)){
@@ -21,9 +20,9 @@ int main(void) {
 }
 
 int fm9_initialize(){
-	config = config_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/FM9.txt");
-	mkdir("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs",0777);
-	logger = log_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/logs/FM9.log", "FM9", false, LOG_LEVEL_TRACE);
+	config = config_create(CONFIG_PATH);
+	mkdir(LOG_DIRECTORY_PATH,0777);
+	logger = log_create(LOG_PATH, "FM9", false, LOG_LEVEL_TRACE);
 
 	modo=config_get_string_value(config, "MODO");
 	tamanio = config_get_int_value(config, "TAMANIO");
@@ -75,16 +74,11 @@ bool fm9_crear_nuevo_hilo(int socket_nuevo_cliente){
 void fm9_nuevo_cliente_iniciar(int socket){
 	while(1){
 		t_msg* nuevo_mensaje = malloc(sizeof(t_msg));
-		if(msg_await(socket, nuevo_mensaje) == -1){
+		if(msg_await(socket, nuevo_mensaje) == -1 || fm9_manejar_nuevo_mensaje(socket, nuevo_mensaje) == -1){
 			log_info(logger, "Cierro el hilo que atendia a este cliente");
-			// TODO: Cerrar el hilo?
 			msg_free(&nuevo_mensaje);
-			return;
-		}
-		if(fm9_manejar_nuevo_mensaje(socket, nuevo_mensaje) == -1){
-			log_info(logger, "Cierro el hilo que atendia a este cliente");
-			// TODO: Cerrar el hilo?
-			msg_free(&nuevo_mensaje);
+			close(socket);
+			pthread_exit(NULL);
 			return;
 		}
 		msg_free(&nuevo_mensaje);
@@ -92,12 +86,18 @@ void fm9_nuevo_cliente_iniciar(int socket){
 }
 
 int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
-	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d, Mensaje: %s",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size,(char*) msg->payload);
+	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
 				log_info(logger,"Se me conecto DAM");
+			break;
+
+			case HANDSHAKE:
+				transfer_size = desempaquetar_int(msg);
+				log_info(logger, "Recibi de DAM el transfer size: %d", transfer_size);
+				return -1;
 			break;
 
 			case DESCONEXION:
