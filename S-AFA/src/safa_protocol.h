@@ -67,8 +67,10 @@
 	t_safa_msg* safa_protocol_desencolar_msg(e_safa_modulo receptor);
 	void safa_protocol_msg_free(t_safa_msg* msg);
 
+	void* safa_protocol_empaquetar_desbloquear_dummy(unsigned int id, char* path);
 	void safa_protocol_desempaquetar_desbloquear_dummy(void* data, unsigned int* id, char** path);
 
+	void* safa_protocol_empaquetar_resultado_abrir(void* data);
 	void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, int* base);
 
 #endif /* SAFA_PROTOCOL_H_ */

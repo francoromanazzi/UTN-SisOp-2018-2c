@@ -1,8 +1,5 @@
 #include "safa_protocol.h"
 
-static void* safa_protocol_empaquetar_desbloquear_dummy(unsigned int id, char* path);
-static void* safa_protocol_empaquetar_resultado_abrir(void* data);
-
 void safa_protocol_initialize(){
 	cola_msg_plp = list_create();
 	pthread_mutex_init(&sem_mutex_cola_msg_plp, NULL);
@@ -182,7 +179,7 @@ void safa_protocol_msg_free(t_safa_msg* msg){
 	free(msg);
 }
 
-static void* safa_protocol_empaquetar_desbloquear_dummy(unsigned int id, char* path){
+void* safa_protocol_empaquetar_desbloquear_dummy(unsigned int id, char* path){
 	int path_len = strlen(path);
 	void* ret = malloc(sizeof(unsigned int) + sizeof(int) + path_len);
 	memcpy(ret, (void*) &id, sizeof(unsigned int));
@@ -200,7 +197,7 @@ void safa_protocol_desempaquetar_desbloquear_dummy(void* data, unsigned int* id,
 	(*path)[path_len] = '\0';
 }
 
-static void* safa_protocol_empaquetar_resultado_abrir(void* data){
+void* safa_protocol_empaquetar_resultado_abrir(void* data){
 	int ok, base;
 	unsigned int id;
 	char* path;
@@ -211,7 +208,8 @@ static void* safa_protocol_empaquetar_resultado_abrir(void* data){
 	ret = malloc(msg->header->payload_size);
 	memcpy(ret, msg->payload, msg->header->payload_size);
 	msg_free(&msg);
-	return msg->payload;
+	free(path);
+	return ret;
 }
 
 void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, int* base){

@@ -2,6 +2,7 @@
 
 void pcp_iniciar(){
 	lista_procesos_a_finalizar_en_exec = list_create();
+	lista_procesos_a_actualizar_en_exec = list_create();
 
 	/* Espero mensajes */
 	while(1){
@@ -13,10 +14,10 @@ void pcp_iniciar(){
 }
 
 void pcp_gestionar_msg(t_safa_msg* msg){
-	int ok, base;
+	int ok, base, i;
 	unsigned int id;
 	char* path;
-	t_dtb* dtb;
+	t_dtb* dtb, *dtb_aux;
 	void* data;
 	t_status* status;
 
@@ -58,9 +59,9 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
 					}
-					else{
+					else {
 						if(dtb_es_dummy((void*) dtb)){
-							log_info(logger, "[PCP] Muevo a BLOCK el DUMMY. El solicitante tiene ID: %d", ((t_dtb*) (msg->data))->gdt_id);
+							log_info(logger, "[PCP] Muevo a BLOCK el DUMMY y lo reseteo. El solicitante tiene ID: %d", ((t_dtb*) (msg->data))->gdt_id);
 							pcp_actualizar_dtb(dtb);
 							pcp_mover_dtb(0, ESTADO_EXEC, ESTADO_BLOCK);
 							safa_protocol_encolar_msg_y_avisar(PCP, PLP, DUMMY_DISPONIBLE);
@@ -70,6 +71,13 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							log_info(logger, "[PCP] Muevo a BLOCK el DTB con ID: %d", ((t_dtb*) (msg->data))->gdt_id);
 							pcp_actualizar_dtb(dtb);
 							pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_BLOCK);
+
+							/* Me fijo si llego un resultado de abrir archivo de DAM antes de que este proceso llegue a bloquearse */
+							for(i = 0; i<lista_procesos_a_actualizar_en_exec->elements_count; i++){
+								data = list_remove(lista_procesos_a_actualizar_en_exec, i);
+								safa_protocol_encolar_msg_y_avisar(PLP /* Trampa */, PCP, RESULTADO_ABRIR_DAM, data);
+								free(data);
+							}
 						}
 					}
 					dtb_destroy(dtb);
@@ -129,11 +137,13 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &base);
 
 					if((dtb = list_find(cola_block, _mismo_id)) == NULL){
-						log_error(logger, "[PCP] No pude cargar el archivo %s en el DTB con ID: %d porque no lo encontre en BLOCK y PLP no lo habia encontrado en NEW", path, id);
+						/* Todavia no llego a BLOCK (sigue en EXEC) */
+						log_info(logger, "[PCP] No pude cargar el archivo %s en el DTB con ID: %d porque todavia no llego a BLOCK. Cuando llegue, sera actualizado", path, id);
+						list_add(lista_procesos_a_actualizar_en_exec, safa_protocol_empaquetar_resultado_abrir(msg->data));
 					}
 					else{
 						if(ok == OK){
-							log_info(logger, "[PCP] Cargo el archivo %s en el DTB con ID: %d", path, id);
+							log_info(logger, "[PCP] Cargo el archivo %s en el DTB con ID: %d y lo muevo a ready", path, id);
 							pcp_cargar_archivo(dtb, path, base);
 							pcp_mover_dtb(id, ESTADO_BLOCK, ESTADO_READY);
 						}
@@ -142,6 +152,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							pcp_mover_dtb(id, ESTADO_BLOCK, ESTADO_EXIT);
 						}
 					}
+					free(path);
 				break;
 
 				case EXIT_DTB_CONSOLA:

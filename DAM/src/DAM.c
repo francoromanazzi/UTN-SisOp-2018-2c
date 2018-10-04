@@ -179,7 +179,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 
 
 				/* Le mando a SAFA el resultado de abrir el archivo */
-				/* HARDCODEO*/ base = 21198;
+				/* HARDCODEO*/ base = 0;
 				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 				free(path);
 				resultadoManejar = 1;

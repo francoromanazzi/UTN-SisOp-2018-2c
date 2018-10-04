@@ -1,4 +1,6 @@
 #include "FM9.h"
+void fm9_storage_escribir(int base, char* str);
+char* fm9_storage_leer(int base);
 
 int main(void) {
 	if(fm9_initialize() == -1){
@@ -31,6 +33,11 @@ int fm9_initialize(){
 	log_info(logger,"Se realiza la inicializacion del Storage");
 	marca=0;
 	storage=malloc(tamanio);
+	// HARDCODEO STORAGE:
+	fm9_storage_escribir(0, "abrir HolaSoyFM9.txt");
+	fm9_storage_escribir(1, "concentrar");
+	fm9_storage_escribir(2, "concentrar");
+	fm9_storage_escribir(3, "\n");
 
 	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
 		log_error(logger,"No se pudo crear el hilo para la consola");
@@ -144,7 +151,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 				// Aca deberia buscar en su memoria
 
-				fm9_send(socket, RESULTADO_GET, (void*) "concentrar"); // Hardcodeado
+				fm9_send(socket, RESULTADO_GET, (void*) fm9_storage_leer(offset)); // Hardcodeado
 			break;
 
 			default:
@@ -165,6 +172,15 @@ int escribirEnMemoria(int tam,char* contenido){
 	return tam;
 }
 
+void fm9_storage_escribir(int base, char* str){
+	memcpy((void*) (storage + (base*max_linea)), (void*) str, strlen(str) + 1);
+}
+
+char* fm9_storage_leer(int base){
+	char* ret = malloc(max_linea);
+	memcpy((void*) ret, (void*) (storage + (base*max_linea)), max_linea);
+	return ret;
+}
 
 void fm9_exit(){
 	free(storage);

@@ -165,7 +165,7 @@ int cpu_esperar_dtb(){
 
 	if(msg_await(safa_socket, msg) == -1){
 		log_info(logger, "Se desconecto S-AFA");
-		msg_free(&msg);
+		free(msg);
 		return -1;
 	}
 
@@ -218,12 +218,13 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			do
 				instruccion = cpu_fetch(dtb, base_escriptorio);
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
-			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
+			if(!strcmp(instruccion, "\n")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
 				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
 				return;
 			}
+			log_info(logger, "La proxima instruccion es: %s", instruccion);
 
 			/* ---------------------- 2DA FASE: DECODIFICACION ---------------------- */
 			t_operacion* operacion = cpu_decodificar(instruccion);
@@ -237,6 +238,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 
 			if ((nro_error = cpu_ejecutar_operacion(dtb, operacion)) != OK){
 				if(nro_error == BLOCK){ // Tengo que pedir a SAFA que bloquee
+					log_info(logger, "Le pido a SAFA que bloquee el DTB con ID:%d", dtb->gdt_id);
 					cpu_send(safa_socket, BLOCK, dtb);
 				}
 				else{
@@ -245,7 +247,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 					cpu_send(safa_socket, EXIT, dtb);
 				}
 				operacion_free(&operacion);
-				return; // Desalojo el CPU
+				return; // Desalojo el DTB
 			}
 			operacion_free(&operacion);
 		} // Fin while(dtb->quantum_restante > 0)
@@ -264,7 +266,6 @@ char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
 	msg_await(fm9_socket, msg_resultado_get);
 	ret = (char*) desempaquetar_resultado_get(msg_resultado_get);
-	log_info(logger, "La proxima instruccion es: %s", ret);
 
 	msg_free(&msg_resultado_get);
 
@@ -296,7 +297,6 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			cpu_send(dam_socket, ABRIR, path, dtb->gdt_id);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
-			cpu_send(safa_socket, BLOCK, dtb);
 			return BLOCK;
 		break;
 
@@ -340,6 +340,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			ok = (int) msg_recibido->payload;
 			if(ok == NO_OK){
 				msg_free(&msg_recibido);
+				/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 				return BLOCK;
 			}
 		break;
@@ -367,8 +368,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			/* 2. Pedir a DAM que haga flush */
 			cpu_send(dam_socket, FLUSH, path, (int) dictionary_get(dtb->archivos_abiertos, path));
 
-			/* 3. Le envio a SAFA el DTB, y le pido que lo bloquee */
-			cpu_send(safa_socket, BLOCK, dtb);
+			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
+			return BLOCK;
 		break;
 
 		case OP_CLOSE:
@@ -393,7 +394,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			cpu_send(dam_socket, CREAR, path, cant_lineas);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
-			cpu_send(safa_socket, BLOCK, dtb);
+			return BLOCK;
 		break;
 
 		case OP_BORRAR:
@@ -403,7 +404,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			cpu_send(dam_socket, BORRAR, path);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
-			cpu_send(safa_socket, BLOCK, dtb);
+			return BLOCK;
 		break;
 	}
 	return OK;
