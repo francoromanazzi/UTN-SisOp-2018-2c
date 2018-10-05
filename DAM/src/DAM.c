@@ -34,20 +34,11 @@ int dam_initialize(){
 	mkdir(LOG_DIRECTORY_PATH,0777);
 	logger = log_create(LOG_PATH, "DAM", false, LOG_LEVEL_TRACE);
 
-	/* Le mando el transfer size a MDJ y FM9, y cierro esas conexiones. Me conecto a SAFA (todos los hilos usan este socket) */
-
-	temp_socket  = socket_connect_to_server(config_get_string_value(config, "IP_MDJ"), config_get_string_value(config, "PUERTO_MDJ"));
-	dam_send(temp_socket, HANDSHAKE);
-	close(temp_socket);
-
-	temp_socket = socket_connect_to_server(config_get_string_value(config, "IP_FM9"), config_get_string_value(config, "PUERTO_FM9"));
-	dam_send(temp_socket, HANDSHAKE);
-	close(temp_socket);
-
+	/* Me conecto a SAFA (todos los hilos usan este socket) */
 	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
 	dam_send(safa_socket, CONEXION);
 
-	log_info(logger, "Hice handshake con MDJ y FM9, y me conecte a SAFA");
+	log_info(logger, "Me conecte a SAFA");
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
@@ -61,10 +52,9 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
 	int ret;
 
-	int ok;
+	int ok, offset, size, base, cant_lineas;
 	unsigned int id;
-	char* path;
-	int base;
+	char* path, *datos;
 
 	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -74,11 +64,7 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_int(OK);
 		break;
 
-		case HANDSHAKE: // A MDJ y FM9 al inicio
-			mensaje_a_enviar = empaquetar_int(config_get_int_value(config, "TRANSFER_SIZE"));
-		break;
-
-		case RESULTADO_ABRIR:
+		case RESULTADO_ABRIR: // A SAFA
 			ok = va_arg(arguments, int);
 			id = va_arg(arguments, unsigned int);
 			path = va_arg(arguments, char*);
@@ -91,9 +77,41 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_string(path);
 		break;
 
-		case GET: // A MDJ
+		case CREAR_MDJ: // A MDJ
+			path = va_arg(arguments, char*);
+			cant_lineas = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(OK); //TODO: Empaquetar
+		break;
+
+		case GET_MDJ: // A MDJ
+			path = va_arg(arguments, char*);
+			offset = va_arg(arguments, int);
+			size = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_get_mdj(path, offset, size);
+		break;
+
+		case ESCRIBIR_MDJ: // A MDJ
+			path = va_arg(arguments, char*);
+			offset = va_arg(arguments, int);
+			size = va_arg(arguments, int);
+			datos = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_int(OK); //TODO: Empaquetar
+		break;
+
+		case BORRAR: // A MDJ
 			path = va_arg(arguments, char*);
 			mensaje_a_enviar = empaquetar_string(path);
+		break;
+
+		case CREAR_FM9: // A FM9
+			mensaje_a_enviar = empaquetar_int(OK);
+		break;
+
+		case ESCRIBIR_FM9: // A FM9
+			base = va_arg(arguments, int);
+			offset = va_arg(arguments, int);
+			datos = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_escribir_fm9(base, offset, datos);
 		break;
 	}
 	mensaje_a_enviar->header->emisor = DAM;
@@ -127,7 +145,7 @@ void dam_nuevo_cliente_iniciar(int socket){
 		t_msg* nuevo_mensaje = malloc(sizeof(t_msg));
 		if(msg_await(socket, nuevo_mensaje) == -1 || dam_manejar_nuevo_mensaje(socket, nuevo_mensaje, mdj_socket, fm9_socket) == -1){
 			log_info(logger, "Cierro el hilo que atendia a este cliente");
-			msg_free(&nuevo_mensaje);
+			free(nuevo_mensaje);
 			close(mdj_socket);
 			close(fm9_socket);
 			close(socket);
@@ -142,11 +160,25 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	t_msg* msg_recibido;
-	int ok;
+	int ok, i = 0, offset = 0;
 	int resultadoManejar = 1; // Valor de retorno. -1 si quiero cerrar el hilo que atendia a esa CPU
 	unsigned int id;
-	char* path;
-	int base;
+	char* path, *stream, **strings_a_enviar_a_fm9, **split_temp, *temp, *temp2, *linea_incompleta = NULL;
+	int base = 0;
+	bool str_anterior_terminaba_en_salto_linea = false;
+	int offset_fm9 = 0; // Despues sacar
+	int ok_escribir_fm9 = OK; // TODO: Usarlo despues de cada invocacion a _enviar_string_a_fm9
+
+	void _enviar_string_a_fm9(char* str){
+		log_info(logger, "Le envio %s a FM9. Base: %d, offset: %d", str, base, offset_fm9);
+		dam_send(fm9_socket, ESCRIBIR_FM9, base, offset_fm9, str);
+		offset_fm9++;
+
+		msg_recibido = malloc(sizeof(t_msg));
+		msg_await(fm9_socket, msg_recibido);
+		ok_escribir_fm9 = desempaquetar_int(msg_recibido);
+		msg_free(&msg_recibido);
+	}
 
 	if(msg->header->emisor == CPU){
 		switch(msg->header->tipo_mensaje){
@@ -171,50 +203,114 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
 					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 					msg_free(&msg_recibido);
+					free(path);
 					break;
 				}
 				msg_free(&msg_recibido);
-				/* Ok, el archivo existe. Comienzo la transferencia del archivo de MDJ a FM9*/
-				//TODO: recibir datos de FM9 para G.DT
 
+				/* Ok, el archivo existe. Comienzo la transferencia del archivo de MDJ a FM9*/
+				//Primero le pido a FM9 que reserve el espacio suficiente para el archivo, y que me de la base
+				dam_send(fm9_socket, CREAR_FM9);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(fm9_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+				if(ok == ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9){ // Fallo FM9, le aviso a SAFA
+					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
+					msg_free(&msg_recibido);
+					free(path);
+					break;
+				}
+				msg_free(&msg_recibido);
+				base = ok;
+				ok = OK;
+
+				offset = 0;
+				while(1){
+					dam_send(mdj_socket, GET_MDJ, path, offset, config_get_int_value(config, "TRANSFER_SIZE"));
+					offset += config_get_int_value(config, "TRANSFER_SIZE");
+					msg_recibido = malloc(sizeof(t_msg));
+					msg_await(mdj_socket, msg_recibido);
+					stream = desempaquetar_string(msg_recibido);
+					msg_free(&msg_recibido);
+
+					log_info(logger, "Recibi de MDJ: %s.", stream);
+
+					/* Me fijo si habia quedado incompleta una linea, del pedido anterior */
+					if(linea_incompleta != NULL){
+						if(!string_starts_with(stream, "\n")){ // Habia que agregarle cosas a la linea anterior
+							split_temp = string_split(stream, "\n");
+							temp = strdup(split_temp[0]);
+							string_append(&linea_incompleta, temp);
+							temp2 = string_substring_from(stream, strlen(temp)); // Saco del stream al faltante de la linea
+							free(stream);
+							stream = temp2;
+
+							free(temp);
+							split_liberar(split_temp);
+						}
+						if(string_contains(stream, "\n")){ // No hace falta otro pedido mas
+							_enviar_string_a_fm9(linea_incompleta);
+							if(ok_escribir_fm9 != OK){ // Fallo FM9, le aviso a SAFA
+								dam_send(safa_socket, RESULTADO_ABRIR, ok_escribir_fm9, id, path, base);
+								free(linea_incompleta);
+								return resultadoManejar;
+							}
+							free(linea_incompleta);
+							linea_incompleta = NULL;
+						}
+					}
+
+					strings_a_enviar_a_fm9 = string_split(stream, "\n");
+
+					if(split_cant_elem(strings_a_enviar_a_fm9) > 0 && !string_ends_with(stream, "\n")){ // No esta completa la ultima linea, me la guardo para el siguiente pedido
+						linea_incompleta = strdup(strings_a_enviar_a_fm9[split_cant_elem(strings_a_enviar_a_fm9) - 1]);
+						free(strings_a_enviar_a_fm9[split_cant_elem(strings_a_enviar_a_fm9) - 1]);
+						strings_a_enviar_a_fm9[split_cant_elem(strings_a_enviar_a_fm9) - 1] = NULL;
+					}
+
+					string_iterate_lines(strings_a_enviar_a_fm9, _enviar_string_a_fm9);
+					split_liberar(strings_a_enviar_a_fm9);
+
+					if(ok_escribir_fm9 != OK){ // Fallo FM9, le aviso a SAFA
+						dam_send(safa_socket, RESULTADO_ABRIR, ok_escribir_fm9, id, path, base);
+						return resultadoManejar;
+					}
+
+					if(string_contains(stream, "\n\n") || (string_starts_with(stream, "\n") && str_anterior_terminaba_en_salto_linea)){
+						free(stream);
+						_enviar_string_a_fm9(" ");
+						if(ok_escribir_fm9 != OK){ // Fallo FM9, le aviso a SAFA
+							dam_send(safa_socket, RESULTADO_ABRIR, ok_escribir_fm9, id, path, base);
+							return resultadoManejar;
+						}
+						break; // Termine de trasferir toodo el archivo
+					}
+
+					if(string_ends_with(stream, "\n")){
+						str_anterior_terminaba_en_salto_linea = true;
+					}
+					else{
+						str_anterior_terminaba_en_salto_linea = false;
+					}
+
+					free(stream);
+				}
 
 				/* Le mando a SAFA el resultado de abrir el archivo */
-				/* HARDCODEO*/ base = 0;
 				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 				free(path);
-				resultadoManejar = 1;
 			break;
 
 			case FLUSH:
 				log_info(logger, "Iniciando operacion FLUSH");
-
-				//si es OK
-				resultadoManejar = 1;
 			break;
 
 			default:
 				log_info(logger, "No entendi el mensaje de CPU");
-				//no deberia ser 1, sino otro numero, para identificar el "ERROR"
-				resultadoManejar = 1;
-
 		}
-	}
-	else if(msg->header->emisor == MDJ){
-		/*
-				//TODO: recibir archivo de MDJ
-				//TODO: cargar en FM9 el archivo
-				//hace la recepción del resto del archivo desde MDJ y envia To.do el archivo a FM9
-		t_msg* avisoApertura = msg_create(DAM,ABRIR,path, strlen(path));
-		if (msg_send(SAFA, avisoApertura) != -1){
-			resultadoManejar = enviarArchivo((void**) msg->payload, msg->header->payload_size);
-		}else{
-			resultadoManejar = -1;
-		}
-		 */
 	}
 	else if(msg->header->emisor == DESCONOCIDO){
 		log_info(logger, "Me hablo alguien desconocido");
-		resultadoManejar = 1;
 	}
 
 	return resultadoManejar;

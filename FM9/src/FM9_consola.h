@@ -7,6 +7,7 @@
 	#include <commons/string.h>
 	#include <readline/readline.h>
 	#include <readline/history.h>
+	#include <shared/util.h>
 	#include "FM9.h"
 
 void fm9_consola_init();

@@ -14,6 +14,7 @@
 	#include <shared/DTB.h>
 	#include <shared/msg.h>
 	#include <shared/protocol.h>
+	#include <shared/util.h>
 
 	#include "safa_protocol.h"
 	#include "safa_util.h"

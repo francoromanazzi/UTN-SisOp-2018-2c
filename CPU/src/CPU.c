@@ -92,17 +92,17 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_abrir(path, id);
 		break;
 
-		case GET: // A FM9
+		case GET_FM9: // A FM9
 			base = va_arg(arguments, int);
 			offset = va_arg(arguments, int);
 			mensaje_a_enviar = empaquetar_get(base, offset);
 		break;
 
-		case ESCRIBIR: // A FM9 (asignar)
+		case ESCRIBIR_FM9: // A FM9 (asignar)
 			base = va_arg(arguments, int);
 			offset = va_arg(arguments, int);
 			datos = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_escribir(base, offset, datos);
+			mensaje_a_enviar = empaquetar_escribir_fm9(base, offset, datos);
 		break;
 
 		case FLUSH: // A DAM
@@ -126,7 +126,7 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_string(recurso);
 		break;
 
-		case CREAR: // A DAM
+		case CREAR_MDJ: // A DAM
 			path = va_arg(arguments, char*);
 			cant_lineas = va_arg(arguments, int);
 			mensaje_a_enviar = empaquetar_crear(path, cant_lineas);
@@ -165,7 +165,8 @@ int cpu_esperar_dtb(){
 
 	if(msg_await(safa_socket, msg) == -1){
 		log_info(logger, "Se desconecto S-AFA");
-		free(msg);
+		msg->payload = NULL;
+		msg_free(&msg);
 		return -1;
 	}
 
@@ -218,7 +219,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			do
 				instruccion = cpu_fetch(dtb, base_escriptorio);
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
-			if(!strcmp(instruccion, "\n")){ // No hay mas instrucciones para leer
+			if(!strcmp(instruccion, " ")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
 				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
@@ -260,7 +261,7 @@ char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 	char* ret;
 
 	/* Le pido a FM9 la proxima instruccion */
-	cpu_send(fm9_socket, GET, base_escriptorio, dtb->pc);
+	cpu_send(fm9_socket, GET_FM9, base_escriptorio, dtb->pc);
 
 	/* Espero de FM9 la proxima instruccion */
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
@@ -309,20 +310,21 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			datos = (char*) dictionary_get(operacion->operandos, "datos");
 
 			/* 1. Verificar que el archivo se encuentre abierto */
-			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_ASIGNAR_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Le pido a FM9 que actualize los datos */
-			cpu_send(fm9_socket, ESCRIBIR, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
+			cpu_send(fm9_socket, ESCRIBIR_FM9, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
 
 			/* Recibo de FM9 el resultado de escribir */
 			msg_recibido = malloc(sizeof(t_msg));
 			if(msg_await(fm9_socket, msg_recibido) == -1){
 				log_error(logger, "Se desconecto FM9");
+				free(msg_recibido);
 				cpu_exit();
 				exit(EXIT_FAILURE);
 			}
-			ok = (int) msg_recibido->payload;
+			ok = desempaquetar_int(msg_recibido);
 			msg_free(&msg_recibido);
 			return ok;
 		break;
@@ -334,15 +336,17 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			msg_recibido = malloc(sizeof(t_msg));
 			if(msg_await(safa_socket, msg_recibido) == -1){
 				log_error(logger, "Se desconecto SAFA");
+				free(msg_recibido);
 				cpu_exit();
 				exit(EXIT_FAILURE);
 			}
-			ok = (int) msg_recibido->payload;
+			ok = desempaquetar_int(msg_recibido);
 			if(ok == NO_OK){
 				msg_free(&msg_recibido);
 				/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 				return BLOCK;
 			}
+			msg_free(&msg_recibido);
 		break;
 
 		case OP_SIGNAL:
@@ -352,6 +356,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			msg_recibido = malloc(sizeof(t_msg));
 			if(msg_await(safa_socket, msg_recibido) == -1){
 				log_error(logger, "Se desconecto SAFA");
+				free(msg_recibido);
 				cpu_exit();
 				exit(EXIT_FAILURE);
 			}
@@ -391,7 +396,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			cant_lineas = atoi((char*) dictionary_get(operacion->operandos, "cant_lineas"));
 
 			/* 1. Le envio a DAM el archivo a crear */
-			cpu_send(dam_socket, CREAR, path, cant_lineas);
+			cpu_send(dam_socket, CREAR_MDJ, path, cant_lineas);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;

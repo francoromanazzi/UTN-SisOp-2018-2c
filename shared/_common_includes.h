@@ -1,8 +1,8 @@
 #ifndef COMMON_INCLUDES_H_
 #define COMMON_INCLUDES_H_
 
-	#define OK 10
-	#define NO_OK 11
+	#define OK -10
+	#define NO_OK -11
 
 	#define ERROR_ABRIR_PATH_INEXISTENTE 10001
 	#define ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9 10002

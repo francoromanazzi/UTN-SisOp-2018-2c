@@ -20,4 +20,8 @@
 	*/
 	void free_memory(void** puntero);
 
+	void split_liberar(char** split);
+
+	int split_cant_elem(char**split);
+
 #endif /* SHARED_UTIL_H_ */

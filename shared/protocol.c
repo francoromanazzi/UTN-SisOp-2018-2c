@@ -332,14 +332,14 @@ void desempaquetar_tiempo_respuesta(t_msg* msg, unsigned int* id, struct timespe
 	memcpy((void*) &(time->tv_nsec), msg->payload + sizeof(unsigned int) + sizeof(time->tv_sec), sizeof(time->tv_nsec));
 }
 
-t_msg* empaquetar_escribir(int base, int offset, char* datos){
+t_msg* empaquetar_escribir_fm9(int base, int offset, char* datos){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));
 
 	int datos_len = strlen(datos);
 	int payload_offset = 0;
 
-	ret->header->payload_size = sizeof(int) + sizeof(int) + datos_len;
+	ret->header->payload_size = sizeof(int) + sizeof(int) + sizeof(int) + datos_len;
 	ret->payload = malloc(ret->header->payload_size);
 
 	memcpy(ret->payload, (void*) &base, sizeof(int));
@@ -356,7 +356,7 @@ t_msg* empaquetar_escribir(int base, int offset, char* datos){
 	return ret;
 }
 
-void desempaquetar_escribir(t_msg* msg, int* base, int* offset, char** datos){
+void desempaquetar_escribir_fm9(t_msg* msg, int* base, int* offset, char** datos){
 	int payload_offset = 0;
 	int datos_len;
 
@@ -406,7 +406,32 @@ void desempaquetar_crear(t_msg* msg, char** path, int* cant_lineas){
 	desempaquetar_flush(msg, path, cant_lineas);
 }
 
+t_msg* empaquetar_get_mdj(char* path, int offset, int size){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
 
+	int path_len = strlen(path);
+	ret->header->payload_size = sizeof(int) + path_len + sizeof(int) + sizeof(int);
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &path_len, sizeof(int));
+	memcpy(ret->payload + sizeof(int), (void*) path, path_len);
+	memcpy(ret->payload + sizeof(int) + path_len, (void*) &offset, sizeof(int));
+	memcpy(ret->payload + sizeof(int) + path_len + sizeof(int), (void*) &size, sizeof(int));
+	return ret;
+}
+
+void desempaquetar_get_mdj(t_msg* msg, char** path, int* offset, int* size){
+	int path_len;
+	memcpy((void*) &path_len, msg->payload, sizeof(int));
+
+	*path = malloc(path_len + 1);
+	memcpy((void*) *path, msg->payload + sizeof(int), path_len);
+	(*path)[path_len] = '\0';
+
+	memcpy((void*) offset, msg->payload + sizeof(int) + path_len, sizeof(int));
+	memcpy((void*) size, msg->payload + sizeof(int) + path_len + sizeof(int), sizeof(int));
+}
 
 
 

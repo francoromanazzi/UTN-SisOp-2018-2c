@@ -1,0 +1,7 @@
+abrir boca_juniors.txt
+abrir river_plate.txt
+concentrar
+asignar river_plate.txt  2 FrancoArmani
+asignar boca_juniors.txt 0 PabloPerez
+concentrar
+

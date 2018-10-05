@@ -1,5 +1,7 @@
 #include "MDJ.h"
 
+void mdj_enviar_datos_HARDCODEADO(int dam_socket, char* path, int offset, int size);
+
 int main(void) {
 
 	void config_create_fixed(){
@@ -15,6 +17,7 @@ int main(void) {
 	datosConfigMDJ[PUNTO_MONTAJE] = config_get_string_value(config, "PUNTO_MONTAJE");
 	datosConfigMDJ[TAMANIO_BLOQUES] = config_get_string_value(config, "TAMANIO_BLOQUES");
 	datosConfigMDJ[CANTIDAD_BLOQUES] = config_get_string_value(config, "CANTIDAD_BLOQUES");
+	retardo_microsegundos = config_get_int_value(config, "RETARDO") * 1000;
 	crearEstructuras();
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
@@ -32,21 +35,21 @@ int main(void) {
 
 int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
-	int ret;
-	int ok;
+	int ret, ok;
+	char* str;
 
  	va_list arguments;
 	va_start(arguments, tipo_msg);
 
 	switch(tipo_msg){
-		case VALIDAR:
+		case RESULTADO_VALIDAR:
 			ok = va_arg(arguments, int);
 			mensaje_a_enviar = empaquetar_int(ok);
 		break;
 
-		case RESULTADO_VALIDAR:
-			ok = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_int(ok);
+		case RESULTADO_GET_MDJ:
+			str = va_arg(arguments, char*);
+			mensaje_a_enviar = empaquetar_string(str);
 		break;
 	}
 
@@ -62,6 +65,7 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	char* path;
+	int ok, offset, size;
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
@@ -74,35 +78,37 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 				return -1;
 			break;
 
-			case HANDSHAKE:
-				transfer_size = desempaquetar_int(msg);
-				log_info(logger, "Recibi de DAM el transfer size: %d", transfer_size);
-				return -1;
-			break;
-
 			case VALIDAR:
 				log_info(logger, "Recibi ordenes de DAM de validar un archivo");
 				path = desempaquetar_string(msg);
 
 				/* Valido que el archivo exista y se lo comunico a diego */
-				mdj_send(socket, RESULTADO_VALIDAR, validarArchivo(path));
-
+				ok = validarArchivo(path);
 				free(path);
+
+				usleep(retardo_microsegundos);
+				mdj_send(socket, RESULTADO_VALIDAR, ok);
 			break;
 
-			case CREAR:
+			case CREAR_MDJ:
 				log_info(logger, "Recibi ordenes de DAM de crear un archivo");
 			break;
 
-			case GET:
+			case GET_MDJ:
 				log_info(logger, "Recibi ordenes de DAM de obtener datos");
-				path = desempaquetar_string(msg);
+				desempaquetar_get_mdj(msg, &path, &offset, &size);
+
+				mdj_enviar_datos_HARDCODEADO(socket, path, offset, size);
 
 				free(path);
 			break;
 
-			case ESCRIBIR:
+			case ESCRIBIR_MDJ:
 				log_info(logger, "Recibi ordenes de DAM de escribir en un archivo");
+			break;
+
+			case BORRAR:
+				log_info(logger, "Recibi ordenes de DAM de borrar un archivo");
 			break;
 
 			default:
@@ -173,9 +179,13 @@ void crearEstructuras(){
 
 }
 
-int validarArchivo(char* path){
-	return OK;
-	//return !(fopen(path,"r") == NULL) ? OK : NO_OK; // En vez de NO_OK poner el numero de error
+int validarArchivo(char* path){ // Despues rehacer bien esto (sin archivos de texto)
+	FILE* f;
+	if((f = fopen(path, "r")) != NULL){ // Encontro el archivo de texto
+		fclose(f);
+		return OK;
+	}
+	return ERROR_ABRIR_PATH_INEXISTENTE;
 }
 
 void crearArchivo(char* path,int cantidadLineas){
@@ -225,3 +235,32 @@ void mdj_exit(){
 	log_destroy(logger);
 	config_destroy(config);
 }
+
+void mdj_enviar_datos_HARDCODEADO(int dam_socket, char* path, int offset, int size){
+	FILE* f = fopen(path, "r");
+	char* buffer = malloc(size + 1);
+
+	if(f == NULL){
+		free(buffer);
+		return;
+	}
+
+	fseek(f, offset, SEEK_SET);
+	int caracteres_leidos = fread((void*) buffer, sizeof(char), size, f);
+	memset(buffer + caracteres_leidos, 0, size - caracteres_leidos);
+
+	usleep(retardo_microsegundos);
+	log_info(logger, "Le envio %s a DAM", buffer);
+	mdj_send(dam_socket, RESULTADO_GET_MDJ, buffer);
+
+	free(buffer);
+	fclose(f);
+}
+
+
+
+
+
+
+
+

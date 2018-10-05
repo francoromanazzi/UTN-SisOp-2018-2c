@@ -10,6 +10,7 @@
 
 	#include <commons/config.h>
 	#include <commons/log.h>
+	#include <commons/string.h>
 	#include <shared/socket.h>
 	#include <shared/util.h>
 	#include <shared/msg.h>
@@ -26,7 +27,6 @@
 	t_config* config;
 	t_log* logger;
 
-	int temp_socket;
 	int safa_socket;
 	int listenning_socket;
 

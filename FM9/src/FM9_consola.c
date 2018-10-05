@@ -5,8 +5,9 @@ static void fm9_procesar_comando(char*);
 void fm9_consola_init(){
 	char* linea;
 	printf("Bienvenido a la consola de FM9, las funciones que puede realizar son:\n");
-	printf("1. dump [pcb_id]\n");
-	printf("2. salir\n");
+	printf("1. dump \n");
+	printf("2. dump [pcb_id]\n");
+	printf("3. salir\n\n");
 	while(1) {
 			linea = readline("FM9> ");
 			if(linea)
@@ -23,28 +24,27 @@ void fm9_consola_init(){
 
 static void fm9_procesar_comando(char* linea){
 
-	void split_liberar(char** split){
-			unsigned int i = 0;
-			for(;split[i] != NULL;i++){
-				free(split[i]);
-			}
-			free(split);
-		}
-		int split_cant_elem(char**split){
-			int i = 0;
-			for(;split[i] != NULL; i++);
-			return i;
-		}
+	char** argv = string_split(linea, " ");
+	int argc = split_cant_elem(argv);
 
-		char** argv = string_split(linea, " ");
-		int argc = split_cant_elem(argv);
-		if(argc == 2 && !strcmp(argv[0], "dump")){
-				printf("En construccion\n\n");
-				split_liberar(argv);
-			}else{
-				printf("No se pudo reconocer el comando\n\n");
-						split_liberar(argv);
-			}
+	if(argc == 1 && !strcmp(argv[0], "dump")){
+		//Muestra su storage completo
+		int i = 0;
+		char* str;
+		for(; i< (tamanio/max_linea); i++){
+			str = fm9_storage_leer(i);
+			printf("%d: %s\n", i, str);
+			free(str);
+		}
+		printf("\n");
+	}
+	else if(argc == 2 && !strcmp(argv[0], "dump")){
+		printf("No se pudo reconocer el comando\n\n");
+	}
+	else{
+		printf("No se pudo reconocer el comando\n\n");
+	}
+	split_liberar(argv);
 }
 
 

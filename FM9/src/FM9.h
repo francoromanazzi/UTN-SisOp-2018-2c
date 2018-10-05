@@ -2,6 +2,7 @@
 #define FM9_H_
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <stdarg.h>
 	#include <sys/stat.h>
  	#include <sys/types.h>
 	#include <unistd.h>
@@ -40,12 +41,16 @@
 
 	int fm9_initialize();
 
-	int fm9_send(int socket, e_tipo_msg tipo_msg, void* data);
+	int fm9_send(int socket, e_tipo_msg tipo_msg, ...);
 
 	bool fm9_crear_nuevo_hilo(int socket_nuevo_cliente);
 	void fm9_nuevo_cliente_iniciar(int socket);
 	int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg);
+
 	int escribirEnMemoria(int tam,char* contenido);
+	void fm9_storage_escribir(int base, int offset, char* str);
+	char* fm9_storage_leer(int direccion_fisica);
+
 	void fm9_exit();
 
 #endif /* FM9_H_ */

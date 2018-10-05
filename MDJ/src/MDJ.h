@@ -31,6 +31,7 @@
 
 	char* datosConfigMDJ[5];
 	int transfer_size;
+	int retardo_microsegundos;
 
 	int mdj_send(int socket, e_tipo_msg tipo_msg, ...);
 	int mdj_manejador_de_eventos(int socket, t_msg* msg);
