@@ -155,9 +155,17 @@ void plp_cargar_archivo(t_dtb* dtb_a_actualizar, int base){
 
 t_status* plp_empaquetar_status(){
 	t_status* ret = malloc(sizeof(t_status));
+
+	void dtb_duplicar_y_agregar_a_ret_new(void* dtb_original){
+		list_add(ret->new, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+
+
 	ret->cant_procesos_activos = cant_procesos;
-	ret->new = list_duplicate(cola_new);
-	list_iterate(ret->new, dtb_copiar_sobreescribir);
+
+	ret->new = list_create();
+	list_iterate(cola_new, dtb_duplicar_y_agregar_a_ret_new);
+
 	ret->ready = list_create();
 	ret->exec = list_create();
 	ret->block = list_create();

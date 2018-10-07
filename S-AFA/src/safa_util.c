@@ -45,22 +45,40 @@ char* safa_config_get_string_value(char* key){
 
 t_status* status_copiar(t_status* otro_status){
 	t_status* ret = malloc(sizeof(t_status));
+
+	void dtb_duplicar_y_agregar_a_ret_new(void* dtb_original){
+		list_add(ret->new, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_ready(void* dtb_original){
+		list_add(ret->ready, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_exec(void* dtb_original){
+		list_add(ret->exec, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_block(void* dtb_original){
+		list_add(ret->block, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_exit(void* dtb_original){
+		list_add(ret->exit, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+
+
 	ret->cant_procesos_activos = otro_status->cant_procesos_activos;
 
-	ret->new = list_duplicate(otro_status->new);
-	list_iterate(ret->new, dtb_copiar_sobreescribir);
+	ret->new = list_create();
+	list_iterate(otro_status->new, dtb_duplicar_y_agregar_a_ret_new);
 
-	ret->ready = list_duplicate(otro_status->ready);
-	list_iterate(ret->ready, dtb_copiar_sobreescribir);
+	ret->ready = list_create();
+	list_iterate(otro_status->ready, dtb_duplicar_y_agregar_a_ret_ready);
 
-	ret->exec = list_duplicate(otro_status->exec);
-	list_iterate(ret->exec, dtb_copiar_sobreescribir);
+	ret->exec = list_create();
+	list_iterate(otro_status->exec, dtb_duplicar_y_agregar_a_ret_exec);
 
-	ret->block = list_duplicate(otro_status->block);
-	list_iterate(ret->block, dtb_copiar_sobreescribir);
+	ret->block = list_create();
+	list_iterate(otro_status->block, dtb_duplicar_y_agregar_a_ret_block);
 
-	ret->exit = list_duplicate(otro_status->exit);
-	list_iterate(ret->exit, dtb_copiar_sobreescribir);
+	ret->exit = list_create();
+	list_iterate(otro_status->exit, dtb_duplicar_y_agregar_a_ret_exit);
 
 	return ret;
 }

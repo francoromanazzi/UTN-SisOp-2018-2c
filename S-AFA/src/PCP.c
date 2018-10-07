@@ -177,8 +177,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 				break;
 
 				case STATUS:
-					status = status_copiar((t_status*) (msg->data));
-					safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, STATUS, pcp_empaquetar_status(status));
+					safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, STATUS, status_copiar(pcp_empaquetar_status((t_status*) (msg->data))));
 					status_free((t_status*) (msg->data));
 					msg->data = NULL;
 				break;
@@ -336,26 +335,32 @@ t_dtb* pcp_encontrar_dtb(unsigned int id){
 
 t_status* pcp_empaquetar_status(t_status* status){
 
-	list_destroy(status->ready);
-	list_destroy(status->exec);
-	list_destroy(status->block);
-	list_destroy(status->exit);
+	void dtb_duplicar_y_agregar_a_ret_ready(void* dtb_original){
+		list_add(status->ready, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_exec(void* dtb_original){
+		list_add(status->exec, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_block(void* dtb_original){
+		list_add(status->block, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
+	void dtb_duplicar_y_agregar_a_ret_exit(void* dtb_original){
+		list_add(status->exit, (void*) dtb_copiar(((t_dtb*) dtb_original)));
+	}
 
 	pthread_mutex_lock(&sem_mutex_cola_ready);
-	status->ready = list_duplicate(cola_ready);
+	list_iterate(cola_ready, dtb_duplicar_y_agregar_a_ret_ready);
 	pthread_mutex_unlock(&sem_mutex_cola_ready);
-	list_iterate(status->ready, dtb_copiar_sobreescribir);
 
-	status->exec = list_duplicate(cola_exec);
-	list_iterate(status->exec, dtb_copiar_sobreescribir);
 
-	status->block = list_duplicate(cola_block);
-	list_iterate(status->block, dtb_copiar_sobreescribir);
+	list_iterate(cola_exec, dtb_duplicar_y_agregar_a_ret_exec);
+
+	list_iterate(cola_block, dtb_duplicar_y_agregar_a_ret_block);
 
 	pthread_mutex_lock(&sem_mutex_cola_exit);
-	status->exit = list_duplicate(cola_exit);
+	list_iterate(cola_exit, dtb_duplicar_y_agregar_a_ret_exit);
 	pthread_mutex_unlock(&sem_mutex_cola_exit);
-	list_iterate(status->exit, dtb_copiar_sobreescribir);
+
 	return status;
 }
 
