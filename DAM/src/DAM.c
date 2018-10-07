@@ -104,14 +104,16 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 		break;
 
 		case CREAR_FM9: // A FM9
-			mensaje_a_enviar = empaquetar_int(OK);
+			id = va_arg(arguments, unsigned int);
+			mensaje_a_enviar = empaquetar_int(id);
 		break;
 
 		case ESCRIBIR_FM9: // A FM9
+			id = va_arg(arguments, unsigned int);
 			base = va_arg(arguments, int);
 			offset = va_arg(arguments, int);
 			datos = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_escribir_fm9(base, offset, datos);
+			mensaje_a_enviar = empaquetar_escribir_fm9(id, base, offset, datos);
 		break;
 	}
 	mensaje_a_enviar->header->emisor = DAM;
@@ -171,7 +173,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 
 	void _enviar_string_a_fm9(char* str){
 		log_info(logger, "Le envio %s a FM9. Base: %d, offset: %d", str, base, offset_fm9);
-		dam_send(fm9_socket, ESCRIBIR_FM9, base, offset_fm9, str);
+		dam_send(fm9_socket, ESCRIBIR_FM9, id , base, offset_fm9, str);
 		offset_fm9++;
 
 		msg_recibido = malloc(sizeof(t_msg));
@@ -210,7 +212,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 
 				/* Ok, el archivo existe. Comienzo la transferencia del archivo de MDJ a FM9*/
 				//Primero le pido a FM9 que reserve el espacio suficiente para el archivo, y que me de la base
-				dam_send(fm9_socket, CREAR_FM9);
+				dam_send(fm9_socket, CREAR_FM9, id);
 				msg_recibido = malloc(sizeof(t_msg));
 				msg_await(fm9_socket, msg_recibido);
 				ok = desempaquetar_int(msg_recibido);
@@ -315,32 +317,6 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 
 	return resultadoManejar;
 }
-/*
-int enviarArchivo(void** payload, int tamPayload){
-	int resultadoTransferencia = 1;
-
-	if(tamPayload != -1){
-
-		t_msg* mensajeResultado = msg_create(DAM,RESULTADO_ABRIR,payload, tamPayload);
-
-		if(msg_send(fm9_socket, mensajeResultado) == -1){
-			log_info(logger, "Problemas al enviar linea de archivo a FM9");
-			msg_free(mensajeResultado);
-			resultadoTransferencia = -1;
-		}
-
-		if (msg_await(MDJ,mensajeResultado) == -1){
-			log_info(logger, "Problema al recibir linea de archivo de MDJ");
-			resultadoTransferencia = -1;
-		}else{
-			resultadoTransferencia = enviarArchivo(mensajeResultado->payload, mensajeResultado->header->payload_size);
-		}
-
-		msg_free(mensajeResultado);
-	}
-	return resultadoTransferencia;
-}
-*/
 
 void dam_exit(){
 	close(safa_socket);

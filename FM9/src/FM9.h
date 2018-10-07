@@ -10,34 +10,58 @@
 	#include <pthread.h>
 
 	#include <commons/config.h>
+	#include <commons/bitarray.h>
 	#include <commons/log.h>
 	#include <shared/socket.h>
 	#include <shared/util.h>
 
 	#include "FM9_consola.h"
 
-
 	/* Constantes */
-	#define IP "127.0.0.1"
+		#define IP "127.0.0.1"
 
-	#define CONFIG_PATH "../configs/FM9.txt"
-	#define LOG_DIRECTORY_PATH "../logs/"
-	#define LOG_PATH "../logs/FM9.log"
+		#define CONFIG_PATH "../configs/FM9.txt"
+		#define LOG_DIRECTORY_PATH "../logs/"
+		#define LOG_PATH "../logs/FM9.log"
+
+		#define FM9_ERROR_SEG_FAULT -500
+		#define FM9_ERROR_INSUFICIENTE_ESPACIO -501
+		#define FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM -500
+
+
+	typedef enum {SEG, TPI, SPA} e_modo;
+
+	/* SEGMENTACION PURA */
+		typedef struct {
+			unsigned int pid;
+			t_list* lista_tabla_segmentos; // lista de t_fila_tabla_segmento
+		} t_proceso;
+
+		typedef struct {
+			unsigned int nro_seg;
+			unsigned int base;
+			unsigned int limite;
+		} t_fila_tabla_segmento;
+
+		t_list* lista_procesos; // lista de t_proceso
+		t_bitarray* bitarray_lineas;
+
+		int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok);
 
 	/* Variables globales */
-	t_config* config;
-	t_log* logger;
-	int listening_socket;
-	pthread_t thread_consola;
-	char* modo;
-	int tamanio;
-	int max_linea;
-	int tam_pagina;
-	int transfer_size;
+		t_config* config;
+		t_log* logger;
+		int listening_socket;
+		pthread_t thread_consola;
+		e_modo modo;
+		int tamanio;
+		int max_linea;
+		int cant_lineas;
+		int tam_pagina;
+		int transfer_size;
 
-	char* storage;
+		char* storage;
 
-	int marca;
 
 	int fm9_initialize();
 
@@ -47,9 +71,11 @@
 	void fm9_nuevo_cliente_iniciar(int socket);
 	int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg);
 
-	int escribirEnMemoria(int tam,char* contenido);
-	void fm9_storage_escribir(int base, int offset, char* str);
-	char* fm9_storage_leer(int direccion_fisica);
+	int (*fm9_dir_logica_a_fisica)(unsigned int, int, int, int*);
+	void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok);
+	char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok);
+	int fm9_storage_nuevo_archivo(unsigned int id, int* ok);
+	void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok); // First fit
 
 	void fm9_exit();
 

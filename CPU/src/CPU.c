@@ -93,30 +93,35 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 		break;
 
 		case GET_FM9: // A FM9
+			id = va_arg(arguments, unsigned int);
 			base = va_arg(arguments, int);
 			offset = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_get(base, offset);
+			mensaje_a_enviar = empaquetar_get_fm9(id, base, offset);
 		break;
 
 		case ESCRIBIR_FM9: // A FM9 (asignar)
+			id = va_arg(arguments, unsigned int);
 			base = va_arg(arguments, int);
 			offset = va_arg(arguments, int);
 			datos = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_escribir_fm9(base, offset, datos);
+			mensaje_a_enviar = empaquetar_escribir_fm9(id, base, offset, datos);
 		break;
 
 		case FLUSH: // A DAM
+			id = va_arg(arguments, unsigned int);
 			path = va_arg(arguments, char*);
 			base = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_flush(path, base);
+			mensaje_a_enviar = empaquetar_flush(id, path, base);
 		break;
 
 		case CLOSE: // A FM9
+			id = va_arg(arguments, unsigned int);
 			base = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_int(base);
+			mensaje_a_enviar = empaquetar_close(id, base);
 		break;
 
 		case WAIT: // A SAFA
+			//id = va_arg(arguments, unsigned int); ?????
 			recurso = va_arg(arguments, char*);
 			mensaje_a_enviar = empaquetar_string(recurso);
 		break;
@@ -259,16 +264,20 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 
 char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 	char* ret;
+	int ok;
 
 	/* Le pido a FM9 la proxima instruccion */
-	cpu_send(fm9_socket, GET_FM9, base_escriptorio, dtb->pc);
+	cpu_send(fm9_socket, GET_FM9, dtb->gdt_id, base_escriptorio, dtb->pc);
 
 	/* Espero de FM9 la proxima instruccion */
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
 	msg_await(fm9_socket, msg_resultado_get);
-	ret = (char*) desempaquetar_resultado_get(msg_resultado_get);
-
+	desempaquetar_resultado_get_fm9(msg_resultado_get, &ok, &ret);
 	msg_free(&msg_resultado_get);
+
+	if(ok != OK){
+		// TODO: Fin de archivo, o es un error?
+	}
 
 	dtb->pc++;
 	return ret;
@@ -314,7 +323,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 				return ERROR_ASIGNAR_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Le pido a FM9 que actualize los datos */
-			cpu_send(fm9_socket, ESCRIBIR_FM9, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
+			cpu_send(fm9_socket, ESCRIBIR_FM9, dtb->gdt_id, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
 
 			/* Recibo de FM9 el resultado de escribir */
 			msg_recibido = malloc(sizeof(t_msg));
@@ -371,7 +380,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 				return ERROR_FLUSH_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a DAM que haga flush */
-			cpu_send(dam_socket, FLUSH, path, (int) dictionary_get(dtb->archivos_abiertos, path));
+			cpu_send(dam_socket, FLUSH, dtb->gdt_id, path, (int) dictionary_get(dtb->archivos_abiertos, path));
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -385,7 +394,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 				return ERROR_CLOSE_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a FM9 que libere el archivo */
-			cpu_send(fm9_socket, CLOSE, (int) dictionary_get(dtb->archivos_abiertos, path));
+			cpu_send(fm9_socket, CLOSE, dtb->gdt_id, (int) dictionary_get(dtb->archivos_abiertos, path));
 
 			/* 3. Saco el archivo del DTB */
 			dictionary_remove(dtb->archivos_abiertos, path);

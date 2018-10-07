@@ -10,6 +10,11 @@
 	#include <shared/util.h>
 	#include "FM9.h"
 
-void fm9_consola_init();
+	void fm9_consola_init();
+
+	void fm9_procesar_comando(char*);
+
+	void (*fm9_dump_pid)(unsigned int);
+	void _fm9_dump_pid_seg_pura(unsigned int id);
 
 #endif /* FM9_CONSOLA_H_ */
