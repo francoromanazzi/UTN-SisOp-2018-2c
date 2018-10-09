@@ -56,7 +56,11 @@ void fm9_procesar_comando(char* linea){
 		char* str;
 
 		log_info(logger, "~~~~~~~~~~ DUMP ~~~~~~~~~~");
+		pthread_mutex_lock(&sem_mutex_bitarray_lineas);
 		_bitarray_print_y_log();
+		pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
+
+		pthread_mutex_lock(&sem_mutex_escritura_en_progreso);
 		for(i = 0; i < cant_lineas; i++){
 			str = malloc(max_linea);
 			memcpy((void*) str, (void*) storage + (i * max_linea), max_linea);
@@ -64,6 +68,7 @@ void fm9_procesar_comando(char* linea){
 			printf("%d: %s\n", i, str);
 			free(str);
 		}
+		pthread_mutex_unlock(&sem_mutex_escritura_en_progreso);
 		printf("\n");
 	}
 
@@ -108,7 +113,9 @@ void _estr_adm_proceso_print_y_log(void* _proceso){
 
 	t_proceso* proceso = ((t_proceso*) _proceso);
 
+	pthread_mutex_lock(&sem_mutex_bitarray_lineas);
 	_bitarray_print_y_log();
+	pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
 
 	log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
 	printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
@@ -122,8 +129,10 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		return ((t_proceso*) proceso)->pid == pid;
 	}
 
-
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
 	t_proceso* proceso = list_find(lista_procesos, _mismo_id);
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
 	int i = 0;
 
 	void _fila_tabla_segmento_print_y_log(void* _fila_tabla){
@@ -134,12 +143,14 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		log_info(logger,"Segmento %d", fila_tabla->nro_seg);
 		printf("Segmento %d\n", fila_tabla->nro_seg);
 
+		pthread_mutex_lock(&sem_mutex_escritura_en_progreso);
 		for(i = 0; i <= fila_tabla->limite; i++){
 			linea = fm9_storage_leer(proceso->pid, fila_tabla->nro_seg, i, &ok);
 			log_info(logger,"\t%d: %s", i, linea);
 			printf("\t%d: %s\n", i, linea);
 			free(linea);
 		}
+		pthread_mutex_unlock(&sem_mutex_escritura_en_progreso);
 	}
 
 

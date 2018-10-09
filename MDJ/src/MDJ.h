@@ -17,6 +17,8 @@
 	#define LOG_DIRECTORY_PATH "../logs/"
 	#define LOG_PATH "../logs/MDJ.log"
 
+	#define MDJ_ERROR_PATH_INEXISTENTE -600
+
 
 	/* Escructuras de datos */
 	enum keys{

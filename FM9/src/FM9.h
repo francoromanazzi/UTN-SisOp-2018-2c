@@ -26,7 +26,7 @@
 
 		#define FM9_ERROR_SEG_FAULT -500
 		#define FM9_ERROR_INSUFICIENTE_ESPACIO -501
-		#define FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM -500
+		#define FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM -502
 
 
 	typedef enum {SEG, TPI, SPA} e_modo;
@@ -44,7 +44,10 @@
 		} t_fila_tabla_segmento;
 
 		t_list* lista_procesos; // lista de t_proceso
+		pthread_mutex_t sem_mutex_lista_procesos; // Mutex sobre dump y operacion asignar
+
 		t_bitarray* bitarray_lineas;
+		pthread_mutex_t sem_mutex_bitarray_lineas; // Mutex sobre dump y operacion asignar
 
 		int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok);
 
@@ -52,15 +55,18 @@
 		t_config* config;
 		t_log* logger;
 		int listening_socket;
-		pthread_t thread_consola;
+
+		/* Config: */
 		e_modo modo;
 		int tamanio;
 		int max_linea;
 		int cant_lineas;
 		int tam_pagina;
 		int transfer_size;
-
 		char* storage;
+
+		pthread_mutex_t sem_mutex_realocacion_en_progreso; // Mutex sobre hilos queriendo abrir (crear) archivos en simultaneo
+		pthread_mutex_t sem_mutex_escritura_en_progreso; // Mutex sobre dump y operacion asignar
 
 
 	int fm9_initialize();

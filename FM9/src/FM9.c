@@ -29,7 +29,10 @@ int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset,
 		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
 	}
 
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
 	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
 	if(proceso == NULL) {
 		*ok = FM9_ERROR_SEG_FAULT;
 		return -1;
@@ -56,9 +59,12 @@ int fm9_initialize(){
 		char* bitarray;
 		switch(modo){
 			case SEG:
-				bitarray = calloc(1 + ((cant_lineas - 1) / 8), sizeof(char));
 				lista_procesos = list_create();
+				pthread_mutex_init(&sem_mutex_lista_procesos, NULL);
+
+				bitarray = calloc(1 + ((cant_lineas - 1) / 8), sizeof(char));
 				bitarray_lineas = bitarray_create_with_mode(bitarray, 1 + ((cant_lineas - 1) / 8), MSB_FIRST);
+				pthread_mutex_init(&sem_mutex_bitarray_lineas, NULL);
 
 				fm9_dir_logica_a_fisica = &_fm9_dir_logica_a_fisica_seg_pura;
 				fm9_dump_pid = &_fm9_dump_pid_seg_pura;
@@ -86,6 +92,9 @@ int fm9_initialize(){
 	storage = calloc(1, tamanio);
 	_modo_y_estr_administrativas_init();
 
+	pthread_mutex_init(&sem_mutex_realocacion_en_progreso, NULL);
+
+	pthread_t thread_consola;
 	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
 		log_error(logger,"No se pudo crear el hilo para la consola");
 		return -1;
@@ -111,8 +120,6 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 	switch(tipo_msg){
 		case RESULTADO_CREAR_FM9:
 			ok = va_arg(arguments, int);
-			if(ok == FM9_ERROR_INSUFICIENTE_ESPACIO)
-				ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
 			mensaje_a_enviar = empaquetar_int(ok);
 		break;
 
@@ -183,8 +190,11 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				id = desempaquetar_int(msg);
 
 				base = fm9_storage_nuevo_archivo(id, &operacion_ok);
-				if(operacion_ok != OK)
+				if(operacion_ok != OK){
+					if(operacion_ok == FM9_ERROR_INSUFICIENTE_ESPACIO)
+						operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
 					fm9_send(socket, RESULTADO_CREAR_FM9, operacion_ok);
+				}
 				else
 					fm9_send(socket, RESULTADO_CREAR_FM9, base);
 			break;
@@ -237,6 +247,9 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok);
 				free(datos);
+				if(operacion_ok == FM9_ERROR_SEG_FAULT){
+					operacion_ok = ERROR_ASIGNAR_FALLO_SEGMENTO;
+				}
 				fm9_send(socket, RESULTADO_ESCRIBIR_FM9, operacion_ok);
 			break;
 
@@ -271,25 +284,30 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	bool linea_disponible = false;
 	*ok = OK;
 
+	pthread_mutex_lock(&sem_mutex_bitarray_lineas);
 	for(nro_linea = 0; nro_linea < cant_lineas && !(linea_disponible = !(bitarray_test_bit(bitarray_lineas, nro_linea))); nro_linea++);
 
 	if(!linea_disponible){
+		pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
 		*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
 		return 0;
 	}
 	bitarray_set_bit(bitarray_lineas, nro_linea);
+	pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
 
 	t_proceso* proceso;
 	t_fila_tabla_segmento* nueva_fila_tabla;
 
 	switch(modo){
 		case SEG:
+			pthread_mutex_lock(&sem_mutex_lista_procesos);
 			if((proceso = list_find(lista_procesos, _mismo_pid)) == NULL){ // Este proceso no existia en la lista
 				proceso = malloc(sizeof(t_proceso));
 				proceso->pid = id;
 				proceso->lista_tabla_segmentos = list_create();
 				list_add(lista_procesos, proceso);
 			}
+			pthread_mutex_unlock(&sem_mutex_lista_procesos);
 
 			nueva_fila_tabla = malloc(sizeof(t_fila_tabla_segmento));
 
@@ -337,21 +355,29 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 	int i, j, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0;
 	t_list* backup_lineas;
 
+	pthread_mutex_lock(&sem_mutex_realocacion_en_progreso);
 	switch(modo){
 		case SEG:
+			pthread_mutex_lock(&sem_mutex_lista_procesos);
 			proceso = list_find(lista_procesos, _mismo_id);
+			pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
 			if(proceso == NULL){
 				log_error(logger, "No se encontro el proceso al realocar");
 				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+				pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 				return;
 			}
 			fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
 			if(fila_tabla == NULL){
 				log_error(logger, "No se encontro el segmento al realocar");
 				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+				pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 				return;
 			}
 			log_info(logger, "Intento realocar el segmento %d del PID: %d con base %d, de %d a %d lineas", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite + 1, offset + 1);
+
+			pthread_mutex_lock(&sem_mutex_bitarray_lineas);
 			for(j = 0; j <= fila_tabla->limite; j++){
 				bitarray_clean_bit(bitarray_lineas, fila_tabla->base + j);
 			}
@@ -384,8 +410,10 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 						for(j = fila_tabla->base; j <= (fila_tabla->base + fila_tabla->limite); j++){
 							bitarray_set_bit(bitarray_lineas, j);
 						}
+						pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
 
 						log_info(logger, "Pude realocar el segmento %d del PID: %d. Nueva base: %d, nuevo limite: %d", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite);
+						pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 						return;
 					}
 				}
@@ -397,11 +425,12 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			for(j = 0; j <= fila_tabla->limite; j++){
 				bitarray_set_bit(bitarray_lineas, fila_tabla->base + j);
 			}
+			pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
 
 			*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
 		break;
-	}
-
+	} // Fin switch(modo)
+	pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 }
 
 void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok){

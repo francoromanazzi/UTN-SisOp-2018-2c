@@ -35,8 +35,9 @@ int main(void) {
 
 int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
-	int ret, ok;
+	int ret, ok, size;
 	char* str;
+	void* buffer;
 
  	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -48,8 +49,9 @@ int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
 		break;
 
 		case RESULTADO_GET_MDJ:
-			str = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_string(str);
+			buffer = va_arg(arguments, void*);
+			size = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_void_ptr(buffer, size);
 		break;
 	}
 
@@ -238,7 +240,7 @@ void mdj_exit(){
 
 void mdj_enviar_datos_HARDCODEADO(int dam_socket, char* path, int offset, int size){
 	FILE* f = fopen(path, "r");
-	char* buffer = malloc(size + 1);
+	void* buffer = malloc(size);
 
 	if(f == NULL){
 		free(buffer);
@@ -246,12 +248,17 @@ void mdj_enviar_datos_HARDCODEADO(int dam_socket, char* path, int offset, int si
 	}
 
 	fseek(f, offset, SEEK_SET);
-	int caracteres_leidos = fread((void*) buffer, sizeof(char), size, f);
-	memset(buffer + caracteres_leidos, 0, size - caracteres_leidos);
+	int caracteres_leidos = fread(buffer, 1, size, f);
 
 	usleep(retardo_microsegundos);
-	log_info(logger, "Le envio %s a DAM", buffer);
-	mdj_send(dam_socket, RESULTADO_GET_MDJ, buffer);
+
+	char* buffer_str = malloc(caracteres_leidos + 1);
+	memcpy((void*) buffer_str, buffer, caracteres_leidos);
+	buffer_str[caracteres_leidos] = '\0';
+	log_info(logger, "Le envio %s a DAM", buffer_str);
+	free(buffer_str);
+
+	mdj_send(dam_socket, RESULTADO_GET_MDJ, buffer, caracteres_leidos);
 
 	free(buffer);
 	fclose(f);

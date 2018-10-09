@@ -224,7 +224,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			do
 				instruccion = cpu_fetch(dtb, base_escriptorio);
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
-			if(!strcmp(instruccion, " ")){ // No hay mas instrucciones para leer
+			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
 				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
@@ -276,7 +276,7 @@ char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 	msg_free(&msg_resultado_get);
 
 	if(ok != OK){
-		// TODO: Fin de archivo, o es un error?
+		// TODO: Fin de archivo, o es un error? Creo que igual nunca va a ser != OK
 	}
 
 	dtb->pc++;

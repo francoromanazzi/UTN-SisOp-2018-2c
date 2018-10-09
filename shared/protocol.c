@@ -41,6 +41,23 @@ char* desempaquetar_string(t_msg* msg){
 	return ret;
 }
 
+t_msg* empaquetar_void_ptr(void* data, int data_size){
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+	ret->header->payload_size = sizeof(int) + data_size;
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload, (void*) &data_size, sizeof(int));
+	memcpy(ret->payload + sizeof(int), data, data_size);
+	return ret;
+}
+
+void desempaquetar_void_ptr(t_msg* msg, void** ret, int* data_size){
+	memcpy((void*) data_size, msg->payload, sizeof(int));
+	*ret = malloc(*data_size);
+	memcpy(*ret, msg->payload + sizeof(int), *data_size);
+}
+
 t_msg* empaquetar_dtb(t_dtb* dtb){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));

@@ -9,6 +9,9 @@
 	t_msg* empaquetar_string(char*);
 	char* desempaquetar_string(t_msg*);
 
+	t_msg* empaquetar_void_ptr(void* data, int data_size);
+	void desempaquetar_void_ptr(t_msg*, void** data, int* data_size);
+
 	t_msg* empaquetar_dtb(t_dtb*);
 	t_dtb* desempaquetar_dtb(t_msg*);
 

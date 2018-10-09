@@ -162,25 +162,14 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	t_msg* msg_recibido;
-	int ok, i = 0, offset = 0;
+	int ok, base;
 	int resultadoManejar = 1; // Valor de retorno. -1 si quiero cerrar el hilo que atendia a esa CPU
 	unsigned int id;
-	char* path, *stream, **strings_a_enviar_a_fm9, **split_temp, *temp, *temp2, *linea_incompleta = NULL;
-	int base = 0;
-	bool str_anterior_terminaba_en_salto_linea = false;
-	int offset_fm9 = 0; // Despues sacar
-	int ok_escribir_fm9 = OK; // TODO: Usarlo despues de cada invocacion a _enviar_string_a_fm9
+	char* path;
 
-	void _enviar_string_a_fm9(char* str){
-		log_info(logger, "Le envio %s a FM9. Base: %d, offset: %d", str, base, offset_fm9);
-		dam_send(fm9_socket, ESCRIBIR_FM9, id , base, offset_fm9, str);
-		offset_fm9++;
-
-		msg_recibido = malloc(sizeof(t_msg));
-		msg_await(fm9_socket, msg_recibido);
-		ok_escribir_fm9 = desempaquetar_int(msg_recibido);
-		msg_free(&msg_recibido);
-	}
+	/* Para dam_transferencia_mdj_a_fm9, porque las variables estaticas se comparten entre hilos :( */
+	char* linea_incompleta_buffer_anterior = NULL;
+	int offset_mdj = 0, offset_fm9 = 0;
 
 	if(msg->header->emisor == CPU){
 		switch(msg->header->tipo_mensaje){
@@ -206,7 +195,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 					msg_free(&msg_recibido);
 					free(path);
-					break;
+					return resultadoManejar;
 				}
 				msg_free(&msg_recibido);
 
@@ -220,83 +209,18 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 					msg_free(&msg_recibido);
 					free(path);
-					break;
+					return resultadoManejar;
 				}
 				msg_free(&msg_recibido);
 				base = ok;
 				ok = OK;
 
-				offset = 0;
-				while(1){
-					dam_send(mdj_socket, GET_MDJ, path, offset, config_get_int_value(config, "TRANSFER_SIZE"));
-					offset += config_get_int_value(config, "TRANSFER_SIZE");
-					msg_recibido = malloc(sizeof(t_msg));
-					msg_await(mdj_socket, msg_recibido);
-					stream = desempaquetar_string(msg_recibido);
-					msg_free(&msg_recibido);
-
-					log_info(logger, "Recibi de MDJ: %s.", stream);
-
-					/* Me fijo si habia quedado incompleta una linea, del pedido anterior */
-					if(linea_incompleta != NULL){
-						if(!string_starts_with(stream, "\n")){ // Habia que agregarle cosas a la linea anterior
-							split_temp = string_split(stream, "\n");
-							temp = strdup(split_temp[0]);
-							string_append(&linea_incompleta, temp);
-							temp2 = string_substring_from(stream, strlen(temp)); // Saco del stream al faltante de la linea
-							free(stream);
-							stream = temp2;
-
-							free(temp);
-							split_liberar(split_temp);
-						}
-						if(string_contains(stream, "\n")){ // No hace falta otro pedido mas
-							_enviar_string_a_fm9(linea_incompleta);
-							if(ok_escribir_fm9 != OK){ // Fallo FM9, le aviso a SAFA
-								dam_send(safa_socket, RESULTADO_ABRIR, ok_escribir_fm9, id, path, base);
-								free(linea_incompleta);
-								return resultadoManejar;
-							}
-							free(linea_incompleta);
-							linea_incompleta = NULL;
-						}
-					}
-
-					strings_a_enviar_a_fm9 = string_split(stream, "\n");
-
-					if(split_cant_elem(strings_a_enviar_a_fm9) > 0 && !string_ends_with(stream, "\n")){ // No esta completa la ultima linea, me la guardo para el siguiente pedido
-						linea_incompleta = strdup(strings_a_enviar_a_fm9[split_cant_elem(strings_a_enviar_a_fm9) - 1]);
-						free(strings_a_enviar_a_fm9[split_cant_elem(strings_a_enviar_a_fm9) - 1]);
-						strings_a_enviar_a_fm9[split_cant_elem(strings_a_enviar_a_fm9) - 1] = NULL;
-					}
-
-					string_iterate_lines(strings_a_enviar_a_fm9, _enviar_string_a_fm9);
-					split_liberar(strings_a_enviar_a_fm9);
-
-					if(ok_escribir_fm9 != OK){ // Fallo FM9, le aviso a SAFA
-						dam_send(safa_socket, RESULTADO_ABRIR, ok_escribir_fm9, id, path, base);
-						return resultadoManejar;
-					}
-
-					if(string_contains(stream, "\n\n") || (string_starts_with(stream, "\n") && str_anterior_terminaba_en_salto_linea)){
-						free(stream);
-						_enviar_string_a_fm9(" ");
-						if(ok_escribir_fm9 != OK){ // Fallo FM9, le aviso a SAFA
-							dam_send(safa_socket, RESULTADO_ABRIR, ok_escribir_fm9, id, path, base);
-							return resultadoManejar;
-						}
-						break; // Termine de trasferir toodo el archivo
-					}
-
-					if(string_ends_with(stream, "\n")){
-						str_anterior_terminaba_en_salto_linea = true;
-					}
-					else{
-						str_anterior_terminaba_en_salto_linea = false;
-					}
-
-					free(stream);
-				}
+				/* Transfiero de MDJ a FM9 */
+				while(dam_transferencia_mdj_a_fm9(
+						mdj_socket, &offset_mdj,
+						fm9_socket, &offset_fm9,
+						id, path, base, &ok,
+						&linea_incompleta_buffer_anterior)); // Mira todos esos parametros papa
 
 				/* Le mando a SAFA el resultado de abrir el archivo */
 				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
@@ -316,6 +240,112 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	}
 
 	return resultadoManejar;
+}
+
+// Return: 0-> Transferencia completada, 1-> Transferencia no completada
+int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket, int* fm9_offset,
+		unsigned int id, char* path, int base, int* ok, char** linea_incompleta_buffer_anterior){
+
+	void* buffer;
+	char* buffer_str;
+	int buffer_size, ok_escribir_fm9 = OK;
+	t_msg* msg_recibido;
+
+	void _enviar_linea_a_fm9_y_liberarla(char* str){
+		log_info(logger, "Le envio %s a FM9. Base: %d, offset: %d", str, base, *fm9_offset);
+		dam_send(fm9_socket, ESCRIBIR_FM9, id , base, *fm9_offset, str);
+		free(str);
+		(*fm9_offset)++;
+
+		msg_recibido = malloc(sizeof(t_msg));
+		msg_await(fm9_socket, msg_recibido);
+		ok_escribir_fm9 = desempaquetar_int(msg_recibido);
+		msg_free(&msg_recibido);
+	}
+
+	char** _buffer_to_lineas(){ // Utiliza "buffer", y utiliza y modifica "linea_incompleta_buffer_anterior"
+		char** ret = NULL;
+		char* linea_actual = strdup("");
+		int nro_linea_actual = 0, i, c;
+
+		if(*linea_incompleta_buffer_anterior != NULL){
+			string_append(&linea_actual, *linea_incompleta_buffer_anterior);
+			free(*linea_incompleta_buffer_anterior);
+			*linea_incompleta_buffer_anterior = NULL;
+		}
+
+		for(i = 0; i < buffer_size; i++){ // Recorro el buffer
+			if(buffer_str[i] == '\n'){ // Fin de linea_actual
+				ret = realloc(ret, sizeof(char*) * (nro_linea_actual + 1));
+				*(ret + nro_linea_actual) = strdup(linea_actual);
+				free(linea_actual);
+				linea_actual = strdup("");
+				nro_linea_actual++;
+			}
+			else{ // La linea_actual no termino
+				char c = buffer_str[i];
+				char *c_str = malloc(sizeof(char) * 2);
+				c_str[0] = c;
+				c_str[1] = '\0';
+				string_append(&linea_actual, c_str);
+				free(c_str);
+			}
+		}
+
+		if(strcmp(linea_actual, "")){ // Habia linea incompleta al final del buffer
+			*linea_incompleta_buffer_anterior = linea_actual;
+		}
+		else{
+			free(linea_actual);
+			*linea_incompleta_buffer_anterior = NULL;
+		}
+
+		/* Agrego un NULL al final, para el string_iterate_lines */
+		if(ret != NULL){
+			ret = realloc(ret, sizeof(char*) * (nro_linea_actual + 1));
+			*(ret + nro_linea_actual) = NULL;
+		}
+		return ret;
+	}
+
+
+	/* Le pido a MDJ obtener datos */
+	dam_send(mdj_socket, GET_MDJ, path, *mdj_offset, config_get_int_value(config, "TRANSFER_SIZE"));
+	(*mdj_offset) += config_get_int_value(config, "TRANSFER_SIZE");
+	msg_recibido = malloc(sizeof(t_msg));
+	msg_await(mdj_socket, msg_recibido);
+	desempaquetar_void_ptr(msg_recibido, &buffer, &buffer_size); // Si buffer_size < transfer_size => Fin de archivo (return 0)
+	msg_free(&msg_recibido);
+
+	buffer_str = malloc(buffer_size + 1);
+	memcpy((void*) buffer_str, buffer, buffer_size);
+	free(buffer);
+	buffer_str[buffer_size] = '\0';
+	log_info(logger, "Recibi de MDJ: %s.", buffer_str);
+
+
+	/* Divido al buffer en lineas */
+	char** lineas = _buffer_to_lineas();
+	free(buffer_str);
+
+	/* Le mando las lineas (si hay) a FM9 */
+	if(lineas != NULL){
+		string_iterate_lines(lineas, _enviar_linea_a_fm9_y_liberarla);
+		*ok = ok_escribir_fm9;
+		free(lineas);
+	}
+
+	if(buffer_size < config_get_int_value(config, "TRANSFER_SIZE")){
+		if(*linea_incompleta_buffer_anterior != NULL){
+			_enviar_linea_a_fm9_y_liberarla(*linea_incompleta_buffer_anterior);
+			*ok = ok_escribir_fm9;
+			*linea_incompleta_buffer_anterior = NULL;
+		}
+		*mdj_offset = 0;
+		*fm9_offset = 0;
+		return 0;
+	}
+	return 1;
 }
 
 void dam_exit(){

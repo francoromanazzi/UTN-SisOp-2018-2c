@@ -1,0 +1,4 @@
+abrir river_plate.txt
+asignar river_plate.txt 0 D'Alessandro
+asignar river_plate.txt 0 Gallardo
+
