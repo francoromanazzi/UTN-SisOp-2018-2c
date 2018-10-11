@@ -60,7 +60,7 @@
 		e_modo modo;
 		int tamanio;
 		int max_linea;
-		int cant_lineas;
+		int storage_cant_lineas;
 		int tam_pagina;
 		int transfer_size;
 		char* storage;

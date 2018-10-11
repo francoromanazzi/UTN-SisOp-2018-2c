@@ -5,10 +5,18 @@
 	#include <stdarg.h>
 	#include <sys/stat.h>
 	#include <sys/types.h>
+	#include <limits.h>
+	#include <errno.h>
+	#include <pthread.h>
+	#include <assert.h>
+
 	#include <commons/config.h>
 	#include <commons/log.h>
+	#include <commons/bitarray.h>
+
 	#include <shared/socket.h>
 	#include <shared/util.h>
+	#include "MDJ_consola.h"
 
 	/* Constantes */
 	#define IP "127.0.0.1"
@@ -18,34 +26,37 @@
 	#define LOG_PATH "../logs/MDJ.log"
 
 	#define MDJ_ERROR_PATH_INEXISTENTE -600
-
+	#define MDJ_ERROR_ARCHIVO_YA_EXISTENTE -601
+	#define MDJ_ERROR_ARCHIVO_NO_EXISTENTE -602
+	#define MDJ_ERROR_ESPACIO_INSUFICIENTE -603
 
 	/* Escructuras de datos */
-	enum keys{
-		PUERTO, PUNTO_MONTAJE, RETARDO, TAMANIO_BLOQUES, CANTIDAD_BLOQUES
-	};
-
+	typedef enum{METADATA, ARCHIVOS, BLOQUES} e_key_path_estructura;
 
 	/* Variables globales */
-	t_config* config;
-	t_log* logger;
-	int listenning_socket;
+		t_config* config;
+		t_config* config_metadata;
+		t_log* logger;
+		int listenning_socket;
+		FILE* f_bitmap; // Usado por mdj_bitmap_abrir y mdj_bitmap_save
+		char* paths_estructuras[3]; // e_key_path_estructura
+		int cant_bloques;
+		int tam_bloques;
 
-	char* datosConfigMDJ[5];
-	int transfer_size;
-	int retardo_microsegundos;
+	void crearEstructuras();
 
 	int mdj_send(int socket, e_tipo_msg tipo_msg, ...);
 	int mdj_manejador_de_eventos(int socket, t_msg* msg);
 
-	void crearEstructuras();
-	//crearArchivo
-	//agrega al principio del path "../"
-		void crearArchivo(char* path,int cantidadLineas);
-	//borrarArchivo
-	//agrega al principio del path "../"
-		void borrarArchivo(char* path);
-	int validarArchivo(char* path);
+	t_bitarray* mdj_bitmap_abrir();
+	void mdj_bitmap_save(t_bitarray* bitarray);
+
+	void validarArchivo(char* path, int* ok);
+	void crearArchivo(char* path, int cant_lineas, int* ok);
+	void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer, int* ret_buffer_size);
+	void guardarDatos(char* path, int offset, int size, void* buffer, int* ok);
+	void borrarArchivo(char* path, int* ok);
+
 	void mdj_exit();
 
 #endif /* MDJ_H_ */

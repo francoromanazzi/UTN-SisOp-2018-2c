@@ -162,7 +162,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	t_msg* msg_recibido;
-	int ok, base;
+	int ok, base, cant_lineas;
 	int resultadoManejar = 1; // Valor de retorno. -1 si quiero cerrar el hilo que atendia a esa CPU
 	unsigned int id;
 	char* path;
@@ -229,6 +229,31 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 
 			case FLUSH:
 				log_info(logger, "Iniciando operacion FLUSH");
+				desempaquetar_flush(msg, &id, &path, &base);
+				// TODO
+			break;
+
+			case CREAR_MDJ:
+				log_info(logger, "Iniciando operacion CREAR");
+				desempaquetar_crear(msg, &path, &cant_lineas);
+
+				dam_send(mdj_socket, CREAR_MDJ, path, cant_lineas);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(mdj_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+
+				if(ok != OK){
+					dam_send(safa_socket, RESULTADO_CREAR_MDJ, ok);
+					msg_free(&msg_recibido);
+					free(path);
+					return resultadoManejar;
+				}
+			break;
+
+			case BORRAR:
+				log_info(logger, "Iniciando operacion BORRAR");
+				path = desempaquetar_string(msg);
+				// TODO
 			break;
 
 			default:

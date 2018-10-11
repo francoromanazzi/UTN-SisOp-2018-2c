@@ -62,8 +62,8 @@ int fm9_initialize(){
 				lista_procesos = list_create();
 				pthread_mutex_init(&sem_mutex_lista_procesos, NULL);
 
-				bitarray = calloc(1 + ((cant_lineas - 1) / 8), sizeof(char));
-				bitarray_lineas = bitarray_create_with_mode(bitarray, 1 + ((cant_lineas - 1) / 8), MSB_FIRST);
+				bitarray = calloc(storage_cant_lineas / 8, sizeof(char));
+				bitarray_lineas = bitarray_create_with_mode(bitarray, storage_cant_lineas / 8, MSB_FIRST);
 				pthread_mutex_init(&sem_mutex_bitarray_lineas, NULL);
 
 				fm9_dir_logica_a_fisica = &_fm9_dir_logica_a_fisica_seg_pura;
@@ -86,7 +86,7 @@ int fm9_initialize(){
 	modo = !strcmp("SEG", config_get_string_value(config, "MODO")) ? SEG : !strcmp("TPI", config_get_string_value(config, "MODO")) ? TPI : SPA;
 	tamanio = config_get_int_value(config, "TAMANIO");
 	max_linea = config_get_int_value(config, "MAX_LINEA");
-	cant_lineas = tamanio / max_linea;
+	storage_cant_lineas = tamanio / max_linea;
 	tam_pagina = config_get_int_value(config, "TAM_PAGINA");
 	log_info(logger,"Se realiza la inicializacion del storage y de las estructuras administrativas");
 	storage = calloc(1, tamanio);
@@ -285,7 +285,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	*ok = OK;
 
 	pthread_mutex_lock(&sem_mutex_bitarray_lineas);
-	for(nro_linea = 0; nro_linea < cant_lineas && !(linea_disponible = !(bitarray_test_bit(bitarray_lineas, nro_linea))); nro_linea++);
+	for(nro_linea = 0; nro_linea < storage_cant_lineas && !(linea_disponible = !(bitarray_test_bit(bitarray_lineas, nro_linea))); nro_linea++);
 
 	if(!linea_disponible){
 		pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
@@ -382,7 +382,7 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 				bitarray_clean_bit(bitarray_lineas, fila_tabla->base + j);
 			}
 
-			for(i = 0; i < cant_lineas; i++){ // Tengo que encontrar una cantidad "offset" de lineas contiguas disponibles
+			for(i = 0; i < storage_cant_lineas; i++){ // Tengo que encontrar una cantidad "offset" de lineas contiguas disponibles
 
 				if(bitarray_test_bit(bitarray_lineas, i) == true){ // Linea no disponible
 					lineas_contiguas_disponibles = 0;

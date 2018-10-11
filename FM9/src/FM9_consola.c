@@ -61,7 +61,7 @@ void fm9_procesar_comando(char* linea){
 		pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
 
 		pthread_mutex_lock(&sem_mutex_escritura_en_progreso);
-		for(i = 0; i < cant_lineas; i++){
+		for(i = 0; i < storage_cant_lineas; i++){
 			str = malloc(max_linea);
 			memcpy((void*) str, (void*) storage + (i * max_linea), max_linea);
 			log_info(logger, "%d: %s", i, str);

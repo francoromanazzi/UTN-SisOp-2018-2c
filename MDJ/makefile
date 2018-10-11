@@ -9,7 +9,7 @@ OBJS=$(SOURCES:./src/%.c=$(BUILD_DIR)/%.o)
 all: $(APPLICATION)
 
 $(APPLICATION): create-dirs $(OBJS)
-	$(CC) -g -o $(APPLICATION) $(OBJS) -lshared -lcommons
+	$(CC) -g -o $(APPLICATION) $(OBJS) -lshared -lcommons -pthread -lreadline -lcrypto
 
 $(BUILD_DIR)/%.o: src/%.c
 	$(CC) -g -c -o "$@" "$<"
