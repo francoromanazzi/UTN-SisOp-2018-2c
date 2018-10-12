@@ -1,7 +1,7 @@
 #ifndef SHARED_PROTOCOL_H_
 #define SHARED_PROTOCOL_H_
 	#include "_common_includes.h"
-#include "msg.h"
+	#include "msg.h"
 	
 	t_msg* empaquetar_int(int);
 	int desempaquetar_int(t_msg*);
@@ -36,11 +36,20 @@
 	t_msg* empaquetar_flush(unsigned int id, char* path, int base);
 	void desempaquetar_flush(t_msg*, unsigned int* id, char** path, int* base);
 
-	t_msg* empaquetar_crear(char* path, int cant_lineas);
-	void desempaquetar_crear(t_msg*, char** path, int* cant_lineas);
+	t_msg* empaquetar_crear_mdj(unsigned int id, char* path, int cant_lineas);
+	void desempaquetar_crear_mdj(t_msg*, unsigned int* id, char** path, int* cant_lineas);
 
 	t_msg* empaquetar_get_mdj(char* path, int offset, int size);
 	void desempaquetar_get_mdj(t_msg*, char** path, int* offset, int* size);
+
+	t_msg* empaquetar_escribir_mdj(char* path, int offset, int size, void* buffer);
+	void desempaquetar_escribir_mdj(t_msg*, char** path, int* offset, int* size, void** buffer);
+
+	t_msg* empaquetar_borrar(unsigned int id, char* path);
+	void desempaquetar_borrar(t_msg*, unsigned int* id, char** path);
+
+	t_msg* empaquetar_resultado_io(int ok, unsigned int id);
+	void desempaquetar_resultado_io(t_msg*, int* ok, unsigned int* id);
 
 	t_msg* empaquetar_close(unsigned int id, int base);
 	void desempaquetar_close(t_msg* msg, unsigned int* id, int* base);

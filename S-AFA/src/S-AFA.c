@@ -115,6 +115,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 	void* data;
 	struct timespec time;
 	unsigned int id;
+	int ok;
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
@@ -138,6 +139,27 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				data = malloc(msg->header->payload_size);
 				memcpy(data, msg->payload, msg->header->payload_size);
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PLP, RESULTADO_ABRIR_DAM, data);
+			break;
+
+			case RESULTADO_FLUSH:
+				log_info(logger, "[S-AFA] Recibi el resultado del flush");
+				data = malloc(msg->header->payload_size);
+				memcpy(data, msg->payload, msg->header->payload_size);
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, RESULTADO_IO_DAM, data);
+			break;
+
+			case RESULTADO_CREAR_MDJ:
+				log_info(logger, "[S-AFA] Recibi el resultado de crear un nuevo archivo");
+				data = malloc(msg->header->payload_size);
+				memcpy(data, msg->payload, msg->header->payload_size);
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, RESULTADO_IO_DAM, data);
+			break;
+
+			case RESULTADO_BORRAR:
+				log_info(logger, "[S-AFA] Recibi el resultado de borrar un archivo");
+				data = malloc(msg->header->payload_size);
+				memcpy(data, msg->payload, msg->header->payload_size);
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, RESULTADO_IO_DAM, data);
 			break;
 
 			default:

@@ -41,6 +41,8 @@
 
 	int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket, int* fm9_offset,
 			unsigned int id, char* path, int base, int* ok, char** linea_incompleta_buffer_anterior);
+	int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket, int* fm9_offset,
+			unsigned int id, char* path, int base, int* ok, char** linea_incompleta_buffer_anterior);
 
 	void dam_exit();
 

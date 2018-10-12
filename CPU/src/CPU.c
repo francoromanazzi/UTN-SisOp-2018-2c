@@ -132,14 +132,16 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 		break;
 
 		case CREAR_MDJ: // A DAM
+			id = va_arg(arguments, unsigned int);
 			path = va_arg(arguments, char*);
 			cant_lineas = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_crear(path, cant_lineas);
+			mensaje_a_enviar = empaquetar_crear_mdj(id, path, cant_lineas);
 		break;
 
 		case BORRAR: // A DAM
+			id = va_arg(arguments, unsigned int);
 			path = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_string(path);
+			mensaje_a_enviar = empaquetar_borrar(id, path);
 		break;
 
 		case BLOCK: // A SAFA
@@ -376,7 +378,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
 			/* 1. Verificar que el archivo se encuentre abierto */
-			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_FLUSH_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a DAM que haga flush */
@@ -390,7 +392,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
 			/* 1. Verificar que el archivo se encuentre abierto */
-			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_CLOSE_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a FM9 que libere el archivo */
@@ -398,6 +400,18 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* 3. Saco el archivo del DTB */
 			dictionary_remove(dtb->archivos_abiertos, path);
+
+			/* Recibo de FM9 el resultado de cerrar el archivo */
+			msg_recibido = malloc(sizeof(t_msg));
+			if(msg_await(fm9_socket, msg_recibido) == -1){
+				log_error(logger, "Se desconecto FM9");
+				free(msg_recibido);
+				cpu_exit();
+				exit(EXIT_FAILURE);
+			}
+			ok = desempaquetar_int(msg_recibido);
+			msg_free(&msg_recibido);
+			return ok;
 		break;
 
 		case OP_CREAR:
@@ -405,7 +419,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			cant_lineas = atoi((char*) dictionary_get(operacion->operandos, "cant_lineas"));
 
 			/* 1. Le envio a DAM el archivo a crear */
-			cpu_send(dam_socket, CREAR_MDJ, path, cant_lineas);
+			cpu_send(dam_socket, CREAR_MDJ, dtb->gdt_id, path, cant_lineas);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -415,7 +429,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
 			/* 1. Le envio a DAM el archivo a borrar */
-			cpu_send(dam_socket, BORRAR, path);
+			cpu_send(dam_socket, BORRAR, dtb->gdt_id, path);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;

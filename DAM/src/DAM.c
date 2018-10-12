@@ -55,6 +55,7 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 	int ok, offset, size, base, cant_lineas;
 	unsigned int id;
 	char* path, *datos;
+	void* buffer;
 
 	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -80,7 +81,7 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 		case CREAR_MDJ: // A MDJ
 			path = va_arg(arguments, char*);
 			cant_lineas = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_int(OK); //TODO: Empaquetar
+			mensaje_a_enviar = empaquetar_crear_mdj(-1, path, cant_lineas);
 		break;
 
 		case GET_MDJ: // A MDJ
@@ -94,8 +95,8 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			path = va_arg(arguments, char*);
 			offset = va_arg(arguments, int);
 			size = va_arg(arguments, int);
-			datos = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_int(OK); //TODO: Empaquetar
+			buffer = va_arg(arguments, void*);
+			mensaje_a_enviar = empaquetar_escribir_mdj(path, offset, size, buffer);
 		break;
 
 		case BORRAR: // A MDJ
@@ -114,6 +115,21 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			offset = va_arg(arguments, int);
 			datos = va_arg(arguments, char*);
 			mensaje_a_enviar = empaquetar_escribir_fm9(id, base, offset, datos);
+		break;
+
+		case GET_FM9: // A FM9
+			id = va_arg(arguments, unsigned int);
+			base = va_arg(arguments, int);
+			offset = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_get_fm9(id, base, offset);
+		break;
+
+		case RESULTADO_FLUSH: // A SAFA
+		case RESULTADO_CREAR_MDJ: // A SAFA
+		case RESULTADO_BORRAR: // A SAFA
+			ok = va_arg(arguments, int);
+			id = va_arg(arguments, unsigned int);
+			mensaje_a_enviar = empaquetar_resultado_io(ok, id);
 		break;
 	}
 	mensaje_a_enviar->header->emisor = DAM;
@@ -166,8 +182,6 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	int resultadoManejar = 1; // Valor de retorno. -1 si quiero cerrar el hilo que atendia a esa CPU
 	unsigned int id;
 	char* path;
-
-	/* Para dam_transferencia_mdj_a_fm9, porque las variables estaticas se comparten entre hilos :( */
 	char* linea_incompleta_buffer_anterior = NULL;
 	int offset_mdj = 0, offset_fm9 = 0;
 
@@ -183,8 +197,8 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 			break;
 
 			case ABRIR:
-				desempaquetar_abrir(msg,&path,&id);
-				log_info(logger, "Ehhh, voy a busar %s para %d", path, id);
+				desempaquetar_abrir(msg, &path, &id);
+				log_info(logger, "Ehhh, voy a buscar %s para %d", path, id);
 
 				/* Le pregunto a MDJ si el archivo existe */
 				dam_send(mdj_socket, VALIDAR, path);
@@ -220,7 +234,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 						mdj_socket, &offset_mdj,
 						fm9_socket, &offset_fm9,
 						id, path, base, &ok,
-						&linea_incompleta_buffer_anterior)); // Mira todos esos parametros papa
+						&linea_incompleta_buffer_anterior));
 
 				/* Le mando a SAFA el resultado de abrir el archivo */
 				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
@@ -228,32 +242,60 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 			break;
 
 			case FLUSH:
-				log_info(logger, "Iniciando operacion FLUSH");
 				desempaquetar_flush(msg, &id, &path, &base);
-				// TODO
-			break;
+				log_info(logger, "Iniciando operacion FLUSH del archivo %s para %d", path, id);
 
-			case CREAR_MDJ:
-				log_info(logger, "Iniciando operacion CREAR");
-				desempaquetar_crear(msg, &path, &cant_lineas);
-
-				dam_send(mdj_socket, CREAR_MDJ, path, cant_lineas);
+				/* Le pregunto a MDJ si el archivo existe */
+				dam_send(mdj_socket, VALIDAR, path);
 				msg_recibido = malloc(sizeof(t_msg));
 				msg_await(mdj_socket, msg_recibido);
 				ok = desempaquetar_int(msg_recibido);
-
-				if(ok != OK){
-					dam_send(safa_socket, RESULTADO_CREAR_MDJ, ok);
+				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
+					dam_send(safa_socket, RESULTADO_FLUSH, ok, id);
 					msg_free(&msg_recibido);
 					free(path);
 					return resultadoManejar;
 				}
+				msg_free(&msg_recibido);
+
+				/* Ok, el archivo existe. Comienzo la transferencia del archivo de FM9 a MDJ*/
+				while(dam_transferencia_fm9_a_mdj(
+										mdj_socket, &offset_mdj,
+										fm9_socket, &offset_fm9,
+										id, path, base, &ok,
+										&linea_incompleta_buffer_anterior));
+				free(path);
+
+				/* Le mando a SAFA el resultado del flush */
+				dam_send(safa_socket, RESULTADO_FLUSH, ok, id);
+			break;
+
+			case CREAR_MDJ:
+				desempaquetar_crear_mdj(msg, &id, &path, &cant_lineas);
+				log_info(logger, "Iniciando operacion CREAR del archivo %s con %d lineas para %d", path, cant_lineas, id);
+
+				dam_send(mdj_socket, CREAR_MDJ, path, cant_lineas);
+				free(path);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(mdj_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+				msg_free(&msg_recibido);
+
+				dam_send(safa_socket, RESULTADO_CREAR_MDJ, ok, id);
 			break;
 
 			case BORRAR:
-				log_info(logger, "Iniciando operacion BORRAR");
-				path = desempaquetar_string(msg);
-				// TODO
+				desempaquetar_borrar(msg, &id, &path);
+				log_info(logger, "Iniciando operacion BORRAR del archivo %s para %d", path, id);
+
+				dam_send(mdj_socket, BORRAR, path);
+				free(path);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(mdj_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+				msg_free(&msg_recibido);
+
+				dam_send(safa_socket, RESULTADO_BORRAR, ok, id);
 			break;
 
 			default:
@@ -372,6 +414,92 @@ int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket,
 	}
 	return 1;
 }
+
+// Return: 0-> Transferencia completada, 1-> Transferencia no completada
+int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket, int* fm9_offset,
+		unsigned int id, char* path, int base, int* ok, char** linea_incompleta_buffer_anterior){
+	t_msg* msg_recibido;
+
+	void _enviar_buffer_a_mdj_y_liberarlo(void* buffer, int buffer_size){
+		char* buffer_str = malloc(buffer_size + 1);
+		memcpy((void*) buffer_str, buffer, buffer_size);
+		buffer_str[buffer_size] = '\0';
+		log_info(logger, "Le envio %d bytes con %s a MDJ. Offset: %d", buffer_size, buffer_str, *mdj_offset);
+		free(buffer_str);
+
+		dam_send(mdj_socket, ESCRIBIR_MDJ, path, *mdj_offset, buffer_size, buffer);
+		(*mdj_offset) += buffer_size;
+		free(buffer);
+
+		msg_recibido = malloc(sizeof(t_msg));
+		msg_await(mdj_socket, msg_recibido);
+		*ok = desempaquetar_int(msg_recibido);
+		msg_free(&msg_recibido);
+	}
+
+
+	void* buffer;
+	int buffer_size;
+	char* linea;
+	int ok_get_fm9;
+
+	/* Le pido a FM9 obtener datos */
+	dam_send(fm9_socket, GET_FM9, id, base, *fm9_offset);
+	(*fm9_offset) ++;
+	msg_recibido = malloc(sizeof(t_msg));
+	msg_await(fm9_socket, msg_recibido);
+	desempaquetar_resultado_get_fm9(msg_recibido, &ok_get_fm9, &linea); // Si ok != OK => Fin de archivo (return 0)
+	msg_free(&msg_recibido);
+	if(ok_get_fm9 == OK) string_append(&linea, "\n"); // Le agrego un salto de linea al final de "linea" (excepto en la ultima)
+	log_info(logger, "Recibi de FM9: %s.", linea);
+
+	/* Preparo el buffer para enviar a MDJ */
+	if(*linea_incompleta_buffer_anterior != NULL){ // Agrego la linea incompleta de antes al principio de "linea"
+		char* aux = strdup(linea);
+		free(linea);
+		linea = strdup(*linea_incompleta_buffer_anterior);
+		free(*linea_incompleta_buffer_anterior);
+		*linea_incompleta_buffer_anterior = NULL;
+		string_append(&linea, aux);
+		free(aux);
+	}
+
+	if(strlen(linea) >= config_get_int_value(config, "TRANSFER_SIZE")){ // Tengo suficientes bytes para mandar a MDJ
+		*linea_incompleta_buffer_anterior = string_substring_from(linea, config_get_int_value(config, "TRANSFER_SIZE"));
+		buffer = malloc(config_get_int_value(config, "TRANSFER_SIZE"));
+		memcpy(buffer, (void*) linea, config_get_int_value(config, "TRANSFER_SIZE"));
+		_enviar_buffer_a_mdj_y_liberarlo(buffer, config_get_int_value(config, "TRANSFER_SIZE"));
+	}
+	else{
+		*linea_incompleta_buffer_anterior = strdup(linea);
+	}
+
+	if(ok_get_fm9 != OK){ // Fin de archivo
+		if(*linea_incompleta_buffer_anterior != NULL){ // Le mando a MDJ lo que me pudo haber quedado
+			while(strlen(*linea_incompleta_buffer_anterior) > 0){
+				int bytes_a_enviar = min(strlen(*linea_incompleta_buffer_anterior), config_get_int_value(config, "TRANSFER_SIZE"));
+				buffer = malloc(bytes_a_enviar);
+				memcpy(buffer, (void*) *linea_incompleta_buffer_anterior, bytes_a_enviar);
+				_enviar_buffer_a_mdj_y_liberarlo(buffer, bytes_a_enviar);
+
+				char* aux = strdup(*linea_incompleta_buffer_anterior);
+				free(*linea_incompleta_buffer_anterior);
+				*linea_incompleta_buffer_anterior = string_substring_from(aux, bytes_a_enviar);
+				free(aux);
+			}
+			free(*linea_incompleta_buffer_anterior);
+			*linea_incompleta_buffer_anterior = NULL;
+		}
+
+		free(linea);
+		*mdj_offset = 0;
+		*fm9_offset = 0;
+		return 0;
+	}
+	free(linea);
+	return 1;
+}
+
 
 void dam_exit(){
 	close(safa_socket);

@@ -97,6 +97,11 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					msg->data = safa_protocol_empaquetar_resultado_abrir(data);
 				break;
 
+				case RESULTADO_IO_DAM:
+					data = va_arg(arguments, void*);
+					msg->data = data;
+				break;
+
 				case DESBLOQUEAR_DUMMY:
 					id = va_arg(arguments, unsigned int);
 					path = va_arg(arguments, char*);
@@ -219,6 +224,25 @@ void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned i
 	free(msg);
 }
 
+void* safa_protocol_empaquetar_resultado_io(void* data){
+	int ok;
+	unsigned int id;
+	void* ret;
+
+	safa_protocol_desempaquetar_resultado_io(data, &ok, &id);
+	t_msg* msg = empaquetar_resultado_io(ok, id);
+	ret = malloc(msg->header->payload_size);
+	memcpy(ret, msg->payload, msg->header->payload_size);
+	msg_free(&msg);
+	return ret;
+}
+
+void safa_protocol_desempaquetar_resultado_io(void* data, int* ok, unsigned int* id){
+	t_msg* msg = malloc(sizeof(t_msg));
+	msg->payload = data;
+	desempaquetar_resultado_io(msg, ok, id);
+	free(msg);
+}
 
 
 

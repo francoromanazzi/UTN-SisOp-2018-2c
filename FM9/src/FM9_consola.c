@@ -166,7 +166,6 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		printf("[PID: %d] No tiene datos asociados\n\n", proceso->pid);
 	}
 
-	log_info(logger, "~~~~~~~~~~ DUMP [ID: %d] ~~~~~~~~~~", proceso->pid);
 	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
 }
 

@@ -113,6 +113,7 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
 	int ret, ok;
 	char* str;
+	bool str_free = false;
 
  	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -126,8 +127,12 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 		case RESULTADO_GET_FM9:
 			ok = va_arg(arguments, int);
 			str = va_arg(arguments, char*);
-			if(str == NULL) str = strdup("");
+			if(str == NULL){
+				str = strdup("");
+				str_free = true;
+			}
 			mensaje_a_enviar = empaquetar_resultado_get_fm9(ok, str);
+			if(str_free) free(str);
 		break;
 
 		case RESULTADO_ESCRIBIR_FM9:
@@ -186,8 +191,8 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case CREAR_FM9:
-				log_info(logger,"DAM me pidio reservar memoria para un nuevo archivo");
 				id = desempaquetar_int(msg);
+				log_info(logger,"DAM me pidio reservar memoria para un nuevo archivo del ID: %d", id);
 
 				base = fm9_storage_nuevo_archivo(id, &operacion_ok);
 				if(operacion_ok != OK){
@@ -200,8 +205,8 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case ESCRIBIR_FM9:
-				log_info(logger,"DAM me pidio la operacion ESCRIBIR");
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
+				log_info(logger,"DAM me pidio la operacion ESCRIBIR %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok);
 
@@ -216,13 +221,13 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case GET_FM9:
-				log_info(logger,"DAM me pidio la operacion GET");
-
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
+				log_info(logger,"DAM me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
+
 				datos = fm9_storage_leer(id, base, offset, &operacion_ok);
 
 				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
-				free(datos);
+				if(datos != NULL) free(datos);
 			break;
 
 			default:
@@ -242,8 +247,8 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case ESCRIBIR_FM9:
-				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar)");
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
+				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar) %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok);
 				free(datos);
@@ -254,13 +259,12 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case GET_FM9:
-				log_info(logger,"CPU me pidio la operacion GET");
-
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
+				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
 				datos = fm9_storage_leer(id, base, offset, &operacion_ok);
 				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
-				free(datos);
+				if(datos != NULL) free(datos);
 			break;
 
 			default:
@@ -450,7 +454,7 @@ void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int*
 char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok){
 	int dir_fisica_lineas = fm9_dir_logica_a_fisica(id, base, offset, ok);
 	if(*ok != OK) {
-		log_error(logger, "Seg fault al traducir una direccion");
+		log_error(logger, "Seg fault al traducir una direccion (si fue DAM, todo bien)");
 		return NULL;
 	}
 

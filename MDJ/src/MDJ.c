@@ -1,6 +1,5 @@
 #include "MDJ.h"
 
-//void mdj_enviar_datos_HARDCODEADO(int dam_socket, char* path, int offset, int size);
 static void _hardcodear_archivos();
 static int _mkpath(char* file_path, mode_t mode);
 
@@ -52,7 +51,6 @@ int main(void) {
 }
 
 static int _mkpath(char* file_path, mode_t mode) {
-	log_info(logger, "%s",file_path);
   assert(file_path && *file_path);
   char* p;
   for (p=strchr(file_path+1, '/'); p; p=strchr(p+1, '/')) {
@@ -92,10 +90,13 @@ int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
 		break;
 
 		case RESULTADO_ESCRIBIR_MDJ:
-			// TODO
+			ok = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(ok);
 		break;
 
 		case RESULTADO_BORRAR:
+			ok = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(ok);
 		break;
 	}
 
@@ -110,9 +111,10 @@ int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
 int mdj_manejador_de_eventos(int socket, t_msg* msg){
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
-	char* path;
+	char* path, *buffer_str;
 	void* buffer;
 	int ok, offset, size, cant_lineas, buffer_size;
+	unsigned int _basura;
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
@@ -126,8 +128,8 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case VALIDAR: // Puede ser por ABRIR o por FLUSH
-				log_info(logger, "Recibi ordenes de DAM de validar un archivo");
 				path = desempaquetar_string(msg);
+				log_info(logger, "Recibi ordenes de DAM de validar el archivo %s", path);
 
 				validarArchivo(path, &ok);
 				if(ok == MDJ_ERROR_PATH_INEXISTENTE) ok = MDJ_ERROR_PATH_INEXISTENTE; // TODO cambiar el codigo de error?
@@ -138,11 +140,11 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case CREAR_MDJ:
-				log_info(logger, "Recibi ordenes de DAM de crear un archivo");
-				desempaquetar_crear(msg, &path, &cant_lineas);
+				desempaquetar_crear_mdj(msg, &_basura, &path, &cant_lineas);
+				log_info(logger, "Recibi ordenes de DAM de crear el archivo %s con %d lineas", path, cant_lineas);
 
 				crearArchivo(path, cant_lineas, &ok);
-				free(path);
+
 				if(ok == MDJ_ERROR_ARCHIVO_YA_EXISTENTE){
 					ok = ERROR_CREAR_ARCHIVO_YA_EXISTENTE;
 					log_error(logger, "El archivo ya existe");
@@ -155,18 +157,19 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 					log_info(logger, "Pude crear el archivo %s con %d lineas", path, cant_lineas);
 				}
 
+				free(path);
 				usleep(config_get_int_value(config, "RETARDO"));
 				mdj_send(socket, RESULTADO_CREAR_MDJ, ok);
 			break;
 
 			case GET_MDJ:
-				log_info(logger, "Recibi ordenes de DAM de obtener datos");
 				desempaquetar_get_mdj(msg, &path, &offset, &size);
+				log_info(logger, "Recibi ordenes de DAM de obtener %d bytes del archivo %s, con offset: %d", size, path, offset);
+
 				obtenerDatos(path, offset, size, &buffer, &buffer_size);
-				//mdj_enviar_datos_HARDCODEADO(socket, path, offset, size);
 				free(path);
 
-				char* buffer_str = malloc(buffer_size + 1);
+				buffer_str = malloc(buffer_size + 1);
 				memcpy((void*) buffer_str, buffer, buffer_size);
 				buffer_str[buffer_size] = '\0';
 				log_info(logger, "Le envio %d bytes con %s a DAM", buffer_size, buffer_str);
@@ -178,8 +181,20 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case ESCRIBIR_MDJ:
-				log_info(logger, "Recibi ordenes de DAM de escribir en un archivo");
-				//desempaquetar_
+				desempaquetar_escribir_mdj(msg, &path, &offset, &buffer_size, &buffer);
+				buffer_str = malloc(buffer_size + 1);
+				memcpy((void*) buffer_str, buffer, buffer_size);
+				buffer_str[buffer_size] = '\0';
+				log_info(logger, "Recibi ordenes de DAM de escribir %d bytes con %s en el archivo %s, con offset: %d",
+						buffer_size, buffer_str, path, offset);
+				free(buffer_str);
+
+				guardarDatos(path, offset, buffer_size, buffer, &ok);
+				free(path);
+				free(buffer);
+
+				usleep(config_get_int_value(config, "RETARDO"));
+				mdj_send(socket, RESULTADO_ESCRIBIR_MDJ, ok);
 			break;
 
 			case BORRAR:
@@ -275,13 +290,37 @@ static void _hardcodear_archivos(){
 	int ok;
 
 	/* Escriptorio: test1.bin */
-	crearArchivo("/Escriptorios/test1.bin", 3, &ok);
+	crearArchivo("/Escriptorios/test1.bin", 4, &ok);
+	if(ok != OK) log_error(logger, "test1.bin - crear - %d", ok);
+	ok = OK;
 	buffer_str = strdup("concentrar\nconcentrar\nconcentrar\n\n");
 	buffer = malloc(strlen(buffer_str));
 	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
 	guardarDatos("/Escriptorios/test1.bin", 0, strlen(buffer_str), buffer, &ok);
 	free(buffer);
 	free(buffer_str);
+	if(ok != OK) log_error(logger, "test1.bin - guardar - %d", ok);
+	ok = OK;
+
+	/* Escriptorio: test2.bin */
+	crearArchivo("/Escriptorios/test2.bin", 7, &ok);
+	if(ok != OK) log_error(logger, "test2.bin - crear - %d", ok);
+	ok = OK;
+	/* crear /Equipos/Boca.txt 3
+	 * abrir /Equipos/Boca.txt
+	 * asignar /Equipos/Boca.txt 0 JuanRomanRiquelme
+	 * asignar /Equipos/Boca.txt 1 MartinPalermo
+	 * asignar /Equipos/Boca.txt 2 SebastianBattaglia
+	 * flush /Equipos/Boca.txt
+	 * */
+	buffer_str = strdup("crear /Equipos/Boca.txt 3\nabrir /Equipos/Boca.txt\nasignar /Equipos/Boca.txt 0 JuanRomanRiquelme\nasignar /Equipos/Boca.txt 1 MartinPalermo\nasignar /Equipos/Boca.txt 2 SebastianBattaglia\nflush /Equipos/Boca.txt\n\n");
+	buffer = malloc(strlen(buffer_str));
+	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
+	guardarDatos("/Escriptorios/test2.bin", 0, strlen(buffer_str), buffer, &ok);
+	free(buffer);
+	free(buffer_str);
+
+	if(ok != OK) log_error(logger, "test2.bin - guardar - %d", ok);
 }
 
 t_bitarray* mdj_bitmap_abrir(){
@@ -347,7 +386,7 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 	}
 
 	FILE *archivo;
-	int i, bloques_necesarios = (cant_lineas / tam_bloques) + 1;
+	int i, bloques_necesarios = (cant_lineas / config_get_int_value(config_metadata, "TAMANIO_BLOQUES")) + 1;
 	t_list* lista_nro_bloques = list_create();
 	char* rutaFinal = string_new();
 	string_append(&rutaFinal, paths_estructuras[ARCHIVOS]);
@@ -363,7 +402,7 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 
 	/* Busco en el bitmap la cantidad de bloques necesarios */
 	t_bitarray* bitmap = mdj_bitmap_abrir();
-	for(i = 0; i < bitmap->size && lista_nro_bloques->elements_count < bloques_necesarios; i++){
+	for(i = 0; i < bitmap->size * 8 && lista_nro_bloques->elements_count < bloques_necesarios; i++){
 		if(!bitarray_test_bit(bitmap, i)){ // Bloque disponible
 			list_add(lista_nro_bloques, (void*) i);
 			bitarray_set_bit(bitmap, i);
@@ -402,20 +441,27 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 	for(i = 0; i<lista_nro_bloques->elements_count; i++){
 		char* ruta_bloque = string_new();
 		char* nro_bloque_str = string_itoa((int) list_get(lista_nro_bloques, i));
-		char vacio = ' ';
-		char salto_de_linea = '\n';
+
+		void* vacio = malloc(config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
+		memset(vacio, 0, config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
+
+		int cant_saltos_de_linea = min(cant_lineas - (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") * i), config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
+		void* salto_de_linea = malloc(cant_saltos_de_linea);
+		int barra_ene = (int) '\n';
+		memset(salto_de_linea, barra_ene, cant_saltos_de_linea);
 
 		string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
 		string_append(&ruta_bloque, nro_bloque_str);
 		string_append(&ruta_bloque, ".bin");
 		archivo = fopen(ruta_bloque, "wb+");
-		fwrite((void*) &vacio, sizeof(char), config_get_int_value(config_metadata, "TAMANIO_BLOQUES"), archivo);
+		fwrite(vacio, config_get_int_value(config_metadata, "TAMANIO_BLOQUES"), 1, archivo);
+		free(vacio);
 		fflush(archivo);
 
 		/* Escribo los \n necesarios */
 		fseek(archivo, 0 ,SEEK_SET);
-		int cant_saltos_de_linea = ((cant_lineas - (tam_bloques * i)) - tam_bloques) < 0 ? cant_lineas - (tam_bloques * i) : tam_bloques;
-		fwrite((void*) &salto_de_linea, sizeof(char), cant_saltos_de_linea, archivo);
+		fwrite(salto_de_linea, cant_saltos_de_linea, 1, archivo);
+		free(salto_de_linea);
 		fflush(archivo);
 
 		fclose(archivo);
@@ -434,7 +480,7 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer, int* ret_buffer_size){
 	*ret_buffer = malloc(bytes_restantes);
 	*ret_buffer_size = 0;
-	int i = 0;
+	int i = 0, indice_bloque_inicial;
 	char** bloques_strings;
 	t_config* config_archivo;
 
@@ -447,14 +493,12 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 		fseek(bloque, offset, SEEK_SET);
 		free(ruta_bloque);
 
-		int cant_bytes_a_leer = (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset) > bytes_restantes
-				? bytes_restantes : config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset;
-
+		int cant_bytes_a_leer = min(config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset, bytes_restantes);
 		/* Me fijo si es el ultimo bloque */
 		if(split_cant_elem(bloques_strings) - 1 == indice_bloque){
 			int tam_ultimo_bloque = config_get_int_value(config_archivo, "TAMANIO") -
-					(i * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
-			cant_bytes_a_leer = (cant_bytes_a_leer + offset > tam_ultimo_bloque) ? tam_ultimo_bloque - offset : cant_bytes_a_leer;
+					((indice_bloque_inicial + i) * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
+			cant_bytes_a_leer = min(tam_ultimo_bloque - offset, cant_bytes_a_leer);
 		}
 
 		void* data = malloc(cant_bytes_a_leer);
@@ -473,13 +517,12 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 
 	bloques_strings = config_get_array_value(config_archivo, "BLOQUES");
 	// Agrego el bloque inicial:
-	int indice_bloque_inicial = offset/config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
+	indice_bloque_inicial = offset/config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
 	int offset_bloque_inicial = offset - (indice_bloque_inicial * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
 	_agregar_bloque_a_buffer(bloques_strings[indice_bloque_inicial],  offset_bloque_inicial, indice_bloque_inicial);
 	bytes_restantes -= (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset_bloque_inicial);
 
 	// Agrego el resto de bloques a abrir
-
 	while(bytes_restantes > 0){
 		int indice = indice_bloque_inicial + ++i;
 		_agregar_bloque_a_buffer(bloques_strings[indice], 0, indice);
@@ -493,7 +536,8 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int* ok){
 	char* bloques_string;
 	int offset_buffer = 0;
-	int tamanio_total = 0;
+	int tamanio_total;
+	int nuevo_indice_bloque = 0;
 
 	void _escribir_bloque(char* nro_bloque, int offset){
 		char* ruta_bloque = string_new();
@@ -504,9 +548,8 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 		fseek(bloque, offset, SEEK_SET);
 		free(ruta_bloque);
 
-		int cant_bytes_a_escribir = (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset) > bytes_restantes ?
-				bytes_restantes : config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset;
-		tamanio_total += cant_bytes_a_escribir;
+		int cant_bytes_a_escribir = min(config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset, bytes_restantes);
+		tamanio_total = max(tamanio_total, offset + cant_bytes_a_escribir + (nuevo_indice_bloque * config_get_int_value(config_metadata, "TAMANIO_BLOQUES")));
 		fwrite(buffer + offset_buffer, 1, cant_bytes_a_escribir, bloque);
 		offset_buffer += cant_bytes_a_escribir;
 
@@ -521,7 +564,9 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 		bool bloque_disponible;
 		t_bitarray* bitarray = mdj_bitmap_abrir();
 
-		for(nro_bloque = 0; nro_bloque < bitarray->size && !(bloque_disponible = !(bitarray_test_bit(bitarray, nro_bloque))); nro_bloque++);
+		for(nro_bloque = 0;
+			nro_bloque < bitarray->size * 8 && !(bloque_disponible = !(bitarray_test_bit(bitarray, nro_bloque)));
+			nro_bloque++);
 
 		if(!bloque_disponible){
 			*ok = MDJ_ERROR_ESPACIO_INSUFICIENTE;
@@ -557,6 +602,7 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 	t_config* config_archivo = config_create(rutaFinal);
 	free(rutaFinal);
 
+	tamanio_total = config_get_int_value(config_archivo, "TAMANIO");
 	char** bloques_arr_strings = config_get_array_value(config_archivo, "BLOQUES");
 	bloques_string = strdup(config_get_string_value(config_archivo, "BLOQUES"));
 	int bloques_strings_len = split_cant_elem(bloques_arr_strings);
@@ -565,10 +611,12 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 	_escribir_bloque(bloques_arr_strings[indice_bloque_inicial],  offset_bloque_inicial);
 	bytes_restantes -= (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset_bloque_inicial);
 
-	int i;
 	// Agrego el resto de bloques a abrir
-	for(i = 0; i < bytes_restantes; i+= config_get_int_value(config_metadata, "TAMANIO_BLOQUES")){
-		if(i + 1 < bloques_strings_len){
+
+	for(nuevo_indice_bloque = 1;
+			bytes_restantes > 0;
+			nuevo_indice_bloque++, bytes_restantes -= config_get_int_value(config_metadata, "TAMANIO_BLOQUES")){
+		if(nuevo_indice_bloque > bloques_strings_len - 1){
 			char* nro_bloque = _crear_bloque();
 			if(*ok != OK){
 				free(bloques_string);
@@ -581,24 +629,22 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			free(nro_bloque);
 		}
 		else{
-			_escribir_bloque(bloques_arr_strings[indice_bloque_inicial + i + 1], 0);
+			_escribir_bloque(bloques_arr_strings[indice_bloque_inicial + nuevo_indice_bloque], 0);
 		}
 
 	}
 
 	config_remove_key(config_archivo, "BLOQUES");
 	config_set_value(config_archivo, "BLOQUES", bloques_string);
-	split_liberar(bloques_arr_strings);
-	bloques_arr_strings = config_get_array_value(config_archivo, "BLOQUES");
+	free(bloques_string);
 
 	char* tamanio_str = string_itoa(tamanio_total);
 	config_set_value(config_archivo, "TAMANIO", tamanio_str);
 	config_save(config_archivo);
 	free(tamanio_str);
 
-	free(bloques_string);
-	config_destroy(config_archivo);
 	split_liberar(bloques_arr_strings);
+	config_destroy(config_archivo);
 }
 
 void borrarArchivo(char* path, int* ok){
@@ -624,33 +670,6 @@ void mdj_exit(){
 	config_destroy(config);
 }
 
-/*
-void mdj_enviar_datos_HARDCODEADO(int dam_socket, char* path, int offset, int size){
-	FILE* f = fopen(path, "r");
-	void* buffer = malloc(size);
-
-	if(f == NULL){
-		free(buffer);
-		return;
-	}
-
-	fseek(f, offset, SEEK_SET);
-	int caracteres_leidos = fread(buffer, 1, size, f);
-
-	usleep(config_get_int_value(config, "RETARDO"));
-
-	char* buffer_str = malloc(caracteres_leidos + 1);
-	memcpy((void*) buffer_str, buffer, caracteres_leidos);
-	buffer_str[caracteres_leidos] = '\0';
-	log_info(logger, "Le envio %s a DAM", buffer_str);
-	free(buffer_str);
-
-	mdj_send(dam_socket, RESULTADO_GET_MDJ, buffer, caracteres_leidos);
-
-	free(buffer);
-	fclose(f);
-}
-*/
 
 
 

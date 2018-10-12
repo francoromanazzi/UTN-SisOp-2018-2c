@@ -3,6 +3,7 @@
 void pcp_iniciar(){
 	lista_procesos_a_finalizar_en_exec = list_create();
 	lista_procesos_a_actualizar_en_exec = list_create();
+	lista_procesos_a_finalizar_IO_en_exec = list_create();
 
 	/* Espero mensajes */
 	while(1){
@@ -78,6 +79,13 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 								safa_protocol_encolar_msg_y_avisar(PLP /* Trampa */, PCP, RESULTADO_ABRIR_DAM, data);
 								free(data);
 							}
+
+							/* Me fijo si llego un fin de IO de DAM antes de que este proceso llegue a bloquearse */
+							for(i = 0; i<lista_procesos_a_finalizar_IO_en_exec->elements_count; i++){
+								data = list_remove(lista_procesos_a_finalizar_IO_en_exec, i);
+								safa_protocol_encolar_msg_y_avisar(S_AFA /* Trampa */, PCP, RESULTADO_IO_DAM, data);
+								free(data);
+							}
 						}
 					}
 					dtb_destroy(dtb);
@@ -94,7 +102,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					}
 					else{
 						if(dtb->flags.error_nro != OK){
-							log_error(logger, "Error %d", dtb->flags.error_nro);
+							log_error(logger, "[PCP] Error %d", dtb->flags.error_nro);
 						}
 
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d", dtb->gdt_id);
@@ -104,6 +112,28 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
 					dtb_destroy(dtb);
 					msg->data=NULL;
+				break;
+
+				case RESULTADO_IO_DAM:
+					safa_protocol_desempaquetar_resultado_io(msg->data, &ok, &id);
+
+					/* Encuentro al DTB bloqueado */
+					if((dtb = (t_dtb*) list_find(cola_block, _mismo_id)) == NULL){ // Todavia no llego el DTB a block
+						log_info(logger, "[PCP] No pude desbloquear (o finalizar) por fin de IO al DTB con ID: %d porque todavia no llego a BLOCK. Cuando llegue, sera desbloqueado", id);
+						list_add(lista_procesos_a_finalizar_IO_en_exec, safa_protocol_empaquetar_resultado_io(msg->data));
+					}
+					else{
+						if(ok != OK){
+							dtb->flags.error_nro = ok;
+							log_error(logger, "[PCP] Error %d", dtb->flags.error_nro);
+							log_info(logger, "[PCP] Finalizo el DTB con ID: %d", dtb->gdt_id);
+							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_EXIT);
+						}
+						else{ // OK
+							log_info(logger, "[PCP] Fin de IO del DTB con ID: %d", dtb->gdt_id);
+							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_READY);
+						}
+					}
 				break;
 
 				case NUEVO_CPU_DISPONIBLE:

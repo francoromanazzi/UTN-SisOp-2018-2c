@@ -26,6 +26,7 @@
 		FIN_OP_DUMMY, // PLP -> PLP
 		NUEVO_DTB_EN_READY, // (PLP || PCP) -> PCP
 		RESULTADO_ABRIR_DAM, // SAFA -> PLP || PLP -> PCP
+		RESULTADO_IO_DAM, // SAFA -> PCP
 		PROCESO_FINALIZADO, // (PLP || PCP) -> PLP
 		STATUS, // CONSOLA -> PLP || PLP -> PCP
 		STATUS_PCB, // CONSOLA -> PLP || PLP -> PCP
@@ -72,5 +73,8 @@
 
 	void* safa_protocol_empaquetar_resultado_abrir(void* data);
 	void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, int* base);
+
+	void* safa_protocol_empaquetar_resultado_io(void* data);
+	void safa_protocol_desempaquetar_resultado_io(void* data, int* ok, unsigned int* id);
 
 #endif /* SAFA_PROTOCOL_H_ */

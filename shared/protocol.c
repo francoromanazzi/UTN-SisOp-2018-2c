@@ -430,30 +430,32 @@ void desempaquetar_flush(t_msg* msg, unsigned int* id, char** path, int* base){
 	memcpy((void*) base, msg->payload + sizeof(unsigned int) + sizeof(int) + path_len, sizeof(int));
 }
 
-t_msg* empaquetar_crear(char* path, int cant_lineas){
+t_msg* empaquetar_crear_mdj(unsigned int id, char* path, int cant_lineas){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));
 
 	int path_len = strlen(path);
-	ret->header->payload_size = sizeof(int) + path_len + sizeof(int);
+	ret->header->payload_size = sizeof(unsigned int) + sizeof(int) + path_len + sizeof(int);
 	ret->payload = malloc(ret->header->payload_size);
 
-	memcpy(ret->payload, (void*) &path_len, sizeof(int));
-	memcpy(ret->payload + sizeof(int) + sizeof(int), (void*) path, path_len);
-	memcpy(ret->payload + sizeof(int) + path_len, (void*) &cant_lineas, sizeof(int));
+	memcpy(ret->payload, (void*) &id, sizeof(unsigned int));
+	memcpy(ret->payload + sizeof(unsigned int), (void*) &path_len, sizeof(int));
+	memcpy(ret->payload + sizeof(unsigned int) + sizeof(int), (void*) path, path_len);
+	memcpy(ret->payload + sizeof(unsigned int) + sizeof(int) + path_len, (void*) &cant_lineas, sizeof(int));
 	return ret;
 }
 
-void desempaquetar_crear(t_msg* msg, char** path, int* cant_lineas){
+void desempaquetar_crear_mdj(t_msg* msg, unsigned int* id, char** path, int* cant_lineas){
+	memcpy((void*) id, msg->payload, sizeof(unsigned int));
 
 	int path_len;
-	memcpy((void*) &path_len, msg->payload, sizeof(int));
+	memcpy((void*) &path_len, msg->payload + sizeof(unsigned int), sizeof(int));
 
 	*path = malloc(path_len + 1);
-	memcpy((void*) *path, msg->payload + sizeof(int), path_len);
+	memcpy((void*) *path, msg->payload + sizeof(unsigned int) + sizeof(int), path_len);
 	(*path)[path_len] = '\0';
 
-	memcpy((void*) cant_lineas, msg->payload + sizeof(int) + path_len, sizeof(int));
+	memcpy((void*) cant_lineas, msg->payload + sizeof(unsigned int) + sizeof(int) + path_len, sizeof(int));
 }
 
 t_msg* empaquetar_get_mdj(char* path, int offset, int size){
@@ -481,6 +483,63 @@ void desempaquetar_get_mdj(t_msg* msg, char** path, int* offset, int* size){
 
 	memcpy((void*) offset, msg->payload + sizeof(int) + path_len, sizeof(int));
 	memcpy((void*) size, msg->payload + sizeof(int) + path_len + sizeof(int), sizeof(int));
+}
+
+t_msg* empaquetar_escribir_mdj(char* path, int offset, int size, void* buffer){
+	int payload_offset = 0;
+	t_msg* ret = malloc(sizeof(t_msg));
+	ret->header = malloc(sizeof(t_header));
+
+	int path_len = strlen(path);
+	ret->header->payload_size = sizeof(int) + path_len + sizeof(int) + sizeof(int) + size;
+	ret->payload = malloc(ret->header->payload_size);
+
+	memcpy(ret->payload , (void*) &path_len, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy(ret->payload + payload_offset, (void*) path, path_len);
+	payload_offset += path_len;
+	memcpy(ret->payload + payload_offset, (void*) &offset, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy(ret->payload + payload_offset, (void*) &size, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy(ret->payload + payload_offset, buffer, size);
+	return ret;
+}
+
+void desempaquetar_escribir_mdj(t_msg* msg, char** path, int* offset, int* size, void** buffer){
+	int payload_offset = 0;
+	int path_len;
+	memcpy((void*) &path_len, msg->payload, sizeof(int));
+	payload_offset += sizeof(int);
+
+	*path = malloc(path_len + 1);
+	memcpy((void*) *path, msg->payload + payload_offset, path_len);
+	payload_offset += path_len;
+	(*path)[path_len] = '\0';
+
+	memcpy((void*) offset, msg->payload + payload_offset, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy((void*) size, msg->payload + payload_offset, sizeof(int));
+	payload_offset += sizeof(int);
+
+	*buffer = malloc(*size);
+	memcpy(*buffer, msg->payload + payload_offset, *size);
+}
+
+t_msg* empaquetar_borrar(unsigned int id, char* path){
+	return empaquetar_abrir(path, id);
+}
+
+void desempaquetar_borrar(t_msg* msg, unsigned int* id, char** path){
+	desempaquetar_abrir(msg, path, id);
+}
+
+t_msg* empaquetar_resultado_io(int ok, unsigned int id){
+	return empaquetar_close(id, ok);
+}
+
+void desempaquetar_resultado_io(t_msg* msg, int* ok, unsigned int* id){
+	desempaquetar_close(msg, id, ok);
 }
 
 t_msg* empaquetar_close(unsigned int id, int base){

@@ -8,6 +8,7 @@
 
 	t_list* lista_procesos_a_finalizar_en_exec; // Lista de gdt_id
 	t_list* lista_procesos_a_actualizar_en_exec; // Lista de resultado_abrir
+	t_list* lista_procesos_a_finalizar_IO_en_exec; // Lista de resultado_io_dam
 
 	void pcp_iniciar();
 	void pcp_gestionar_msg(t_safa_msg* msg);
