@@ -78,8 +78,8 @@
 	int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg);
 
 	int (*fm9_dir_logica_a_fisica)(unsigned int, int, int, int*);
-	void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok);
-	char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok);
+	void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales);
+	char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales);
 	int fm9_storage_nuevo_archivo(unsigned int id, int* ok);
 	void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok); // First fit
 

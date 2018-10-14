@@ -3,7 +3,7 @@
 	#include "_common_includes.h"
 	#include "msg.h"
 	
-	//es una prueba de commit
+
 	t_msg* empaquetar_int(int);
 	int desempaquetar_int(t_msg*);
 

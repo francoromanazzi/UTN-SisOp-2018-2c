@@ -145,7 +145,7 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 
 		pthread_mutex_lock(&sem_mutex_escritura_en_progreso);
 		for(i = 0; i <= fila_tabla->limite; i++){
-			linea = fm9_storage_leer(proceso->pid, fila_tabla->nro_seg, i, &ok);
+			linea = fm9_storage_leer(proceso->pid, fila_tabla->nro_seg, i, &ok, false);
 			log_info(logger,"\t%d: %s", i, linea);
 			printf("\t%d: %s\n", i, linea);
 			free(linea);

@@ -25,7 +25,8 @@
 	#include "consola.h"
 	#include "safa_util.h"
 	#include "metricas.h"
-    //commit prueba
+
+
 	/* Constantes */
 	#define IP "127.0.0.1"
 

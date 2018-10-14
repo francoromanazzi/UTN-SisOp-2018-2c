@@ -1,3 +1,0 @@
-abrir boca_juniors.txt
-asignar boca_juniors.txt 0 PabloPerez
-

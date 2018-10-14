@@ -208,12 +208,12 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
 				log_info(logger,"DAM me pidio la operacion ESCRIBIR %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
-				fm9_storage_escribir(id, base, offset, datos, &operacion_ok);
+				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, true);
 
 				if(operacion_ok != OK){ // Intento realocar el segmento a otro lugar mas grande
 					fm9_storage_realocar(id, base, offset, &operacion_ok);
 					if(operacion_ok){
-						fm9_storage_escribir(id, base, offset, datos, &operacion_ok);
+						fm9_storage_escribir(id, base, offset, datos, &operacion_ok, true);
 					}
 				}
 				free(datos);
@@ -224,7 +224,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
 				log_info(logger,"DAM me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok);
+				datos = fm9_storage_leer(id, base, offset, &operacion_ok, true);
 
 				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
 				if(datos != NULL) free(datos);
@@ -250,7 +250,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
 				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar) %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
-				fm9_storage_escribir(id, base, offset, datos, &operacion_ok);
+				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, false);
 				free(datos);
 				if(operacion_ok == FM9_ERROR_SEG_FAULT){
 					operacion_ok = ERROR_ASIGNAR_FALLO_SEGMENTO;
@@ -262,7 +262,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
 				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok);
+				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false);
 				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
 				if(datos != NULL) free(datos);
 			break;
@@ -400,14 +400,14 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 
 						/* Actualizo storage y bitarray */
 						for(j = 0; j <= fila_tabla->limite; j++){
-							list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) fila_tabla->nro_seg, j , ok));
+							list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) fila_tabla->nro_seg, j , ok, true));
 						}
 
 						fila_tabla->base = base_nuevo_segmento;
 						fila_tabla->limite = offset;
 
 						for(j = 0; j<backup_lineas->elements_count; j++){
-							fm9_storage_escribir(id, (int) fila_tabla->nro_seg, j, (char*) list_get(backup_lineas, j), ok);
+							fm9_storage_escribir(id, (int) fila_tabla->nro_seg, j, (char*) list_get(backup_lineas, j), ok, true);
 						}
 						list_destroy_and_destroy_elements(backup_lineas, free);
 
@@ -437,10 +437,11 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 	pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 }
 
-void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok){
+void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales){
 	int dir_fisica_lineas = fm9_dir_logica_a_fisica(id, base, offset, ok);
 	if(*ok != OK) {
-		log_error(logger, "Seg fault al traducir una direccion (si fue DAM, todo bien)");
+		if(!permisos_totales)
+			log_error(logger, "Seg fault al traducir una direccion");
 		return;
 	}
 
@@ -451,10 +452,11 @@ void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int*
 	memcpy(dir_fisica_bytes, (void*) str, strlen(str) + 1);
 }
 
-char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok){
+char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales){
 	int dir_fisica_lineas = fm9_dir_logica_a_fisica(id, base, offset, ok);
 	if(*ok != OK) {
-		log_error(logger, "Seg fault al traducir una direccion (si fue DAM, todo bien)");
+		if(!permisos_totales)
+			log_error(logger, "Seg fault al traducir una direccion");
 		return NULL;
 	}
 
