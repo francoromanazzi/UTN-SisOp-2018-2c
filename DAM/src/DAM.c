@@ -429,7 +429,7 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 
 		dam_send(mdj_socket, ESCRIBIR_MDJ, path, *mdj_offset, buffer_size, buffer);
 		(*mdj_offset) += buffer_size;
-		free(buffer);
+		if(buffer != NULL) free(buffer);
 
 		msg_recibido = malloc(sizeof(t_msg));
 		msg_await(mdj_socket, msg_recibido);
@@ -464,15 +464,19 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 		free(aux);
 	}
 
-	if(strlen(linea) >= config_get_int_value(config, "TRANSFER_SIZE")){ // Tengo suficientes bytes para mandar a MDJ
-		*linea_incompleta_buffer_anterior = string_substring_from(linea, config_get_int_value(config, "TRANSFER_SIZE"));
+	while(strlen(linea) >= config_get_int_value(config, "TRANSFER_SIZE")){ // Tengo suficientes bytes para mandar a MDJ
 		buffer = malloc(config_get_int_value(config, "TRANSFER_SIZE"));
 		memcpy(buffer, (void*) linea, config_get_int_value(config, "TRANSFER_SIZE"));
 		_enviar_buffer_a_mdj_y_liberarlo(buffer, config_get_int_value(config, "TRANSFER_SIZE"));
+
+		char* aux = string_substring_from(linea, config_get_int_value(config, "TRANSFER_SIZE"));
+		free(linea);
+		linea = strdup(aux);
+		free(aux);
 	}
-	else{
-		*linea_incompleta_buffer_anterior = strdup(linea);
-	}
+
+	*linea_incompleta_buffer_anterior = strdup(linea);
+
 
 	if(ok_get_fm9 != OK){ // Fin de archivo
 		if(*linea_incompleta_buffer_anterior != NULL){ // Le mando a MDJ lo que me pudo haber quedado
@@ -490,6 +494,8 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 			free(*linea_incompleta_buffer_anterior);
 			*linea_incompleta_buffer_anterior = NULL;
 		}
+		// Le aviso a MDJ que este offset es el fin de archivo
+		_enviar_buffer_a_mdj_y_liberarlo(NULL, 0);
 
 		free(linea);
 		*mdj_offset = 0;

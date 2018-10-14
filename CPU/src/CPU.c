@@ -320,9 +320,12 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			linea = atoi((char*) dictionary_get(operacion->operandos, "linea"));
 			datos = (char*) dictionary_get(operacion->operandos, "datos");
 
-			/* 1. Verificar que el archivo se encuentre abierto */
+			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
 			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_ASIGNAR_ARCHIVO_NO_ABIERTO;
+
+			if(!strcmp(path, dtb->ruta_escriptorio))
+				return ERROR_ASIGNAR_ARCHIVO_ES_ESCRIPTORIO;
 
 			/* 2. Le pido a FM9 que actualize los datos */
 			cpu_send(fm9_socket, ESCRIBIR_FM9, dtb->gdt_id, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);

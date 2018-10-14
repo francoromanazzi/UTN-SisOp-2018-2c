@@ -290,36 +290,48 @@ static void _hardcodear_archivos(){
 	int ok;
 
 	/* Escriptorio: test1.bin */
-	crearArchivo("/Escriptorios/test1.bin", 4, &ok);
+	crearArchivo("/Escriptorios/test1.bin", 12, &ok);
 	if(ok != OK) log_error(logger, "test1.bin - crear - %d", ok);
 	ok = OK;
-	buffer_str = strdup("concentrar\nconcentrar\nconcentrar\n\n");
+	buffer_str = strdup(
+			"crear /Equipos/Boca.txt 4\n"
+			"abrir /Equipos/Boca.txt\n"
+			"asignar /Equipos/Boca.txt 0 JuanRomanRiquelmeElUltimoDiez\n"
+			"asignar /Equipos/Boca.txt 1 MartinElLocoPalermo\n"
+			"asignar /Equipos/Boca.txt 2 SebastianBattaglia\n"
+			"asignar /Equipos/Boca.txt 3 GuillermoBarrosSchelotto\n"
+			"flush /Equipos/Boca.txt\n"
+			"asignar /Equipos/Boca.txt 0 s\n"
+			"asignar /Equipos/Boca.txt 1 k\n"
+			"asignar /Equipos/Boca.txt 2 e\n"
+			"flush /Equipos/Boca.txt\n"
+			"\n");
 	buffer = malloc(strlen(buffer_str));
 	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
 	guardarDatos("/Escriptorios/test1.bin", 0, strlen(buffer_str), buffer, &ok);
 	free(buffer);
 	free(buffer_str);
 	if(ok != OK) log_error(logger, "test1.bin - guardar - %d", ok);
+
 	ok = OK;
 
 	/* Escriptorio: test2.bin */
 	crearArchivo("/Escriptorios/test2.bin", 7, &ok);
 	if(ok != OK) log_error(logger, "test2.bin - crear - %d", ok);
 	ok = OK;
-	/* crear /Equipos/Boca.txt 3
-	 * abrir /Equipos/Boca.txt
-	 * asignar /Equipos/Boca.txt 0 JuanRomanRiquelme
-	 * asignar /Equipos/Boca.txt 1 MartinPalermo
-	 * asignar /Equipos/Boca.txt 2 SebastianBattaglia
-	 * flush /Equipos/Boca.txt
-	 * */
-	buffer_str = strdup("crear /Equipos/Boca.txt 3\nabrir /Equipos/Boca.txt\nasignar /Equipos/Boca.txt 0 JuanRomanRiquelme\nasignar /Equipos/Boca.txt 1 MartinPalermo\nasignar /Equipos/Boca.txt 2 SebastianBattaglia\nflush /Equipos/Boca.txt\n\n");
+	buffer_str = strdup(
+			"crear /Equipos/Boca.txt 3\n"
+			"abrir /Equipos/Boca.txt\n"
+			"asignar /Equipos/Boca.txt 0 JuanRomanRiquelme\n"
+			"asignar /Equipos/Boca.txt 1 MartinPalermo\n"
+			"asignar /Equipos/Boca.txt 2 SebastianBattaglia\n"
+			"flush /Equipos/Boca.txt\n"
+			"\n");
 	buffer = malloc(strlen(buffer_str));
 	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
 	guardarDatos("/Escriptorios/test2.bin", 0, strlen(buffer_str), buffer, &ok);
 	free(buffer);
 	free(buffer_str);
-
 	if(ok != OK) log_error(logger, "test2.bin - guardar - %d", ok);
 }
 
@@ -605,18 +617,74 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 	tamanio_total = config_get_int_value(config_archivo, "TAMANIO");
 	char** bloques_arr_strings = config_get_array_value(config_archivo, "BLOQUES");
 	bloques_string = strdup(config_get_string_value(config_archivo, "BLOQUES"));
-	int bloques_strings_len = split_cant_elem(bloques_arr_strings);
+	int bloques_arr_strings_len = split_cant_elem(bloques_arr_strings);
 	int indice_bloque_inicial = offset/config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
 	int offset_bloque_inicial = offset - (indice_bloque_inicial * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
-	_escribir_bloque(bloques_arr_strings[indice_bloque_inicial],  offset_bloque_inicial);
-	bytes_restantes -= (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset_bloque_inicial);
 
-	// Agrego el resto de bloques a abrir
+	if(bytes_restantes == 0){ // DAM me aviso que en este offset finaliza el archivo
+		int i;
+		t_bitarray* bitarray = mdj_bitmap_abrir();
 
-	for(nuevo_indice_bloque = 1;
+		/* Elimino los bloques sobrantes y actualizo el bitmap */
+		for(i = bloques_arr_strings_len - 1; i > 0 && i > indice_bloque_inicial; i--){
+			char* nro_bloque = bloques_arr_strings[i];
+
+			char* ruta_bloque = string_new();
+			string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
+			string_append(&ruta_bloque, nro_bloque);
+			string_append(&ruta_bloque, ".bin");
+			remove(ruta_bloque);
+			free(ruta_bloque);
+
+			bitarray_clean_bit(bitarray, atoi(nro_bloque));
+
+			free(bloques_arr_strings[i]);
+			bloques_arr_strings[i] = NULL;
+		}
+		mdj_bitmap_save(bitarray);
+		free(bitarray->bitarray);
+		bitarray_destroy(bitarray);
+		bloques_arr_strings_len = split_cant_elem(bloques_arr_strings);
+
+		/* Actualizo config */
+		free(bloques_string);
+		bloques_string = string_new();
+		string_append(&bloques_string, "[");
+		for(i = 0; i < bloques_arr_strings_len; i++){
+			string_append(&bloques_string, bloques_arr_strings[i]);
+			string_append(&bloques_string, ",");
+		}
+		bloques_string[strlen(bloques_string) - 1] = ']';
+		config_set_value(config_archivo, "BLOQUES", bloques_string);
+		free(bloques_string);
+
+		tamanio_total = offset + nuevo_indice_bloque * config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
+		char* tamanio_str = string_itoa(tamanio_total);
+		config_set_value(config_archivo, "TAMANIO", tamanio_str);
+		config_save(config_archivo);
+		free(tamanio_str);
+
+		split_liberar(bloques_arr_strings);
+		config_destroy(config_archivo);
+		return;
+	}
+
+	// Guardo lo del buffer, creando los bloques necesarios
+	int bytes_guardados_bloque_actual, offset_bloque_actual;
+	for(nuevo_indice_bloque = indice_bloque_inicial;
 			bytes_restantes > 0;
-			nuevo_indice_bloque++, bytes_restantes -= config_get_int_value(config_metadata, "TAMANIO_BLOQUES")){
-		if(nuevo_indice_bloque > bloques_strings_len - 1){
+			nuevo_indice_bloque++, bytes_restantes -= bytes_guardados_bloque_actual){
+
+		if(nuevo_indice_bloque == indice_bloque_inicial){ // Primer bloque{
+			bytes_guardados_bloque_actual = config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset_bloque_inicial;
+			offset_bloque_actual = offset_bloque_inicial;
+		}
+		else{
+			bytes_guardados_bloque_actual = config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
+			offset_bloque_actual = 0;
+		}
+
+		if(nuevo_indice_bloque > bloques_arr_strings_len - 1){
 			char* nro_bloque = _crear_bloque();
 			if(*ok != OK){
 				free(bloques_string);
@@ -625,16 +693,15 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 				return;
 			}
 
-			_escribir_bloque(nro_bloque, 0);
+			_escribir_bloque(nro_bloque, offset_bloque_actual);
 			free(nro_bloque);
 		}
 		else{
-			_escribir_bloque(bloques_arr_strings[indice_bloque_inicial + nuevo_indice_bloque], 0);
+			_escribir_bloque(bloques_arr_strings[nuevo_indice_bloque], offset_bloque_actual);
 		}
-
 	}
 
-	config_remove_key(config_archivo, "BLOQUES");
+
 	config_set_value(config_archivo, "BLOQUES", bloques_string);
 	free(bloques_string);
 
