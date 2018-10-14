@@ -100,6 +100,10 @@ void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(
 			return (void*) max((int) max_fd_hasta_ahora, ((t_fd_parametro*) fd_param)->fd);
 		}
 
+		if(list_is_empty(fds_por_parametro)){
+			return socketListener;
+		}
+
 		int max_fd_parametro = (int) list_fold(fds_por_parametro, 0, _fd_mayor);
 		return max(socketListener, max_fd_parametro);
 	}

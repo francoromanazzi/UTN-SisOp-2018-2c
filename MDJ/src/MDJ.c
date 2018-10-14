@@ -44,7 +44,7 @@ int main(void) {
 	}
 	log_info(logger,"Se creo el hilo para la consola");
 
-	socket_start_listening_select(listenning_socket, mdj_manejador_de_eventos);
+	socket_start_listening_select(listenning_socket, mdj_manejador_de_eventos, 0);
 
 	mdj_exit();
 	return EXIT_SUCCESS;

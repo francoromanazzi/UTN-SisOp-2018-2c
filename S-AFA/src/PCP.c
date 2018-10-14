@@ -1,6 +1,7 @@
 #include "PCP.h"
 
 void pcp_iniciar(){
+	dummy_en_ready = false;
 	lista_procesos_a_finalizar_en_exec = list_create();
 	lista_procesos_a_actualizar_en_exec = list_create();
 	lista_procesos_a_finalizar_IO_en_exec = list_create();
@@ -161,6 +162,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 
 					log_info(logger, "[PCP] Muevo el DUMMY de BLOCK a READY");
 					pcp_mover_dtb(id, ESTADO_BLOCK, ESTADO_READY);
+					dummy_en_ready = true;
 				break;
 
 				case RESULTADO_ABRIR_DAM:
@@ -266,7 +268,11 @@ void pcp_intentar_ejecutar_dtb(){
 	t_dtb* dtb_seleccionado = NULL;
 
 	pthread_mutex_lock(&sem_mutex_cola_ready);
-	if((dtb_seleccionado = list_find(cola_ready, dtb_es_dummy)) == NULL){ // Si no encontre al DUMMY, busco segun el algoritmo
+
+	if(dummy_en_ready){
+		dtb_seleccionado = list_find(cola_ready, dtb_es_dummy);
+	}
+	else{ // No hay dummy en ready => busco segun el algoritmo
 		if(!strcmp(algoritmo, "RR")){
 			if((dtb_seleccionado = list_get(cola_ready, 0)) != NULL){ // Fifo
 				dtb_seleccionado->quantum_restante = safa_config_get_int_value("QUANTUM"); // Reseteo quantum
@@ -291,8 +297,10 @@ void pcp_intentar_ejecutar_dtb(){
 		return;
 	}
 
-	if(dtb_es_dummy((void*) dtb_seleccionado))
+	if(dtb_es_dummy((void*) dtb_seleccionado)){
 		log_info(logger, "[PCP] Mando a ejecutar el DUMMY. El ID del solicitante es: %d", dtb_seleccionado->gdt_id);
+		dummy_en_ready = false;
+	}
 	else
 		log_info(logger, "[PCP] Mando a ejecutar el DTB con ID: %d por %d unidades de quantum", dtb_seleccionado->gdt_id, dtb_seleccionado->quantum_restante);
 
