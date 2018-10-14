@@ -14,6 +14,9 @@
 	typedef enum {
 		CONEXION, DESCONEXION, HANDSHAKE,
 
+		/* SAFA - SAFA */
+		INOTIFY,
+
 		/* SAFA - CPU */
 		EXEC, READY, BLOCK, EXIT,
 		TIEMPO_RESPUESTA,

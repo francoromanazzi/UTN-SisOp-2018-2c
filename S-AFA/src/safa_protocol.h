@@ -12,7 +12,7 @@
 	#include <shared/msg.h>
 	#include <shared/protocol.h>
 
-	typedef enum {S_AFA, CONSOLA, PLP, PCP, INOTIFY} e_safa_modulo;
+	typedef enum {S_AFA, CONSOLA, PLP, PCP} e_safa_modulo;
 
 	typedef enum {
 		READY_DTB, // SAFA -> PCP
@@ -22,6 +22,7 @@
 		CREAR_DTB, // CONSOLA -> PLP
 		NUEVO_CPU_DISPONIBLE, // SAFA -> PCP || PCP -> PCP
 		CPU_DESCONECTADO, // SAFA -> PCP
+		GRADO_MULTIPROGRAMACION_AUMENTADO, // SAFA -> PLP
 		DESBLOQUEAR_DUMMY, // PLP -> PCP
 		FIN_OP_DUMMY, // PLP -> PLP
 		NUEVO_DTB_EN_READY, // (PLP || PCP) -> PCP

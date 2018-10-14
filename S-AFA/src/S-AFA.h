@@ -29,6 +29,10 @@
 	/* Constantes */
 	#define IP "127.0.0.1"
 
+	#define CONFIG_PATH "../configs/S-AFA.txt"
+	#define LOG_DIRECTORY_PATH "../logs/"
+	#define LOG_PATH "../logs/S-AFA.log"
+
 	/* Variables globales */
 
 	bool estado_operatorio;
@@ -44,6 +48,7 @@
 
 	int listening_socket;
 	int dam_socket;
+	int fd_inotify;
 
 	t_list* cpu_conexiones;
 	pthread_mutex_t sem_mutex_cpu_conexiones;
@@ -56,8 +61,8 @@
 	int safa_send(int socket, e_tipo_msg tipo_msg, ...);
 
 	int safa_manejador_de_eventos(int socket, t_msg* msg); 	// Devuelvo -1 si quiero cerrar esa conexion
+	void safa_manejar_inotify();
 
 	void safa_exit();
-
 
 #endif /* S_AFA_H_ */

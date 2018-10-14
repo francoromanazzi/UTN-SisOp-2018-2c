@@ -13,7 +13,7 @@ int main(void){
 	}
 	log_info(logger, "[S-AFA] Escucho en el socket %d",listening_socket);
 
-	socket_start_listening_select(listening_socket, safa_manejador_de_eventos);
+	socket_start_listening_select(listening_socket, safa_manejador_de_eventos, 1, SAFA, INOTIFY, fd_inotify);
 
 	safa_exit();
 	return EXIT_SUCCESS;
@@ -21,9 +21,15 @@ int main(void){
 
 int safa_initialize(){
 
+	void _create_fd_inotify(){
+		fd_inotify = inotify_init1(IN_NONBLOCK);
+		inotify_add_watch(fd_inotify, CONFIG_PATH, IN_CLOSE_WRITE);
+	}
+
 	safa_protocol_initialize();
 	safa_util_initialize();
 	metricas_initialize();
+	_create_fd_inotify();
 
 	estado_operatorio = false;
 	cpu_conectado = false;
@@ -34,6 +40,7 @@ int safa_initialize(){
 	pthread_mutex_init(&sem_mutex_cpu_conexiones, NULL);
 
 	/* Creo el hilo inotify, que se encarga de toodo lo relacionado al archivo de config */
+	/*
 	pthread_t thread_safa_config_inotify;
 	if(pthread_create( &thread_safa_config_inotify, NULL, (void*) safa_config_inotify_iniciar, NULL) ){
 		log_error(logger,"[S-AFA] No pude crear el hilo inotify");
@@ -41,6 +48,7 @@ int safa_initialize(){
 	}
 	log_info(logger, "[S-AFA] Creo el hilo inotify");
 	pthread_detach(thread_safa_config_inotify);
+	*/
 
 	return 1;
 }
@@ -215,10 +223,69 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				log_info(logger, "[S-AFA] No entendi el mensaje de CPU");
 		}
 	}
+	else if(msg->header->emisor == SAFA){
+		switch(msg->header->tipo_mensaje){
+			case INOTIFY:
+				safa_manejar_inotify();
+			break;
+		}
+	}
 	else if(msg->header->emisor == DESCONOCIDO){
 		log_info(logger, "[S-AFA] Me hablo alguien desconocido");
 	}
 	return 1;
+}
+
+void safa_manejar_inotify(){
+	char buf[4096] __attribute__ ((aligned(__alignof__(struct inotify_event))));
+	const struct inotify_event *event;
+	int i;
+	ssize_t len;
+	char *ptr;
+
+	/* Read some events. */
+	len = read(fd_inotify, buf, sizeof buf);
+	if (len == -1 && errno != EAGAIN) {
+		log_error(logger, "[INOTIFY] read");
+	    return;
+	}
+
+   if (len <= 0)
+	   return;
+
+   /* Loop over all events in the buffer */
+   for (ptr = buf; ptr < buf + len; ptr += sizeof(struct inotify_event) + event->len) {
+	   event = (const struct inotify_event *) ptr;
+
+        if (event->mask & IN_CLOSE_WRITE){
+
+			/* Actualizo config */
+			pthread_mutex_lock(&sem_mutex_config);
+
+			char* viejo_algoritmo = strdup(config_get_string_value(config, "ALGORITMO"));
+			int viejo_quantum = config_get_int_value(config, "QUANTUM");
+			int vieja_multiprogramacion = config_get_int_value(config, "MULTIPROGRAMACION");
+			int viejo_retardo = config_get_int_value(config, "RETARDO_PLANIF");
+
+			config_destroy(config);
+			safa_config_create_fixed();
+
+			if(strcmp(viejo_algoritmo, config_get_string_value(config, "ALGORITMO")))
+				log_info(logger, "[INOTIFY] Nuevo algoritmo: %s", config_get_string_value(config, "ALGORITMO"));
+			if(viejo_quantum != config_get_int_value(config, "QUANTUM"))
+				log_info(logger, "[INOTIFY] Nuevo quantum: %d", config_get_int_value(config, "QUANTUM"));
+			if(vieja_multiprogramacion != config_get_int_value(config, "MULTIPROGRAMACION")){
+				log_info(logger, "[INOTIFY] Nueva multiprogramacion: %d", config_get_int_value(config, "MULTIPROGRAMACION"));
+				if(vieja_multiprogramacion < config_get_int_value(config, "MULTIPROGRAMACION"))
+					safa_protocol_encolar_msg_y_avisar(S_AFA, PLP, GRADO_MULTIPROGRAMACION_AUMENTADO);
+			}
+			if(viejo_retardo != config_get_int_value(config, "RETARDO_PLANIF"))
+				log_info(logger, "[INOTIFY] Nuevo retardo (uS): %d", config_get_int_value(config, "RETARDO_PLANIF"));
+			pthread_mutex_unlock(&sem_mutex_config);
+
+			free(viejo_algoritmo);
+        }
+    }
 }
 
 void safa_exit(){

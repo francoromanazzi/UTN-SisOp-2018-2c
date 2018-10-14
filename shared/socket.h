@@ -3,13 +3,14 @@
 	#include <stdio.h>
 	#include <string.h>
 	#include <stdlib.h>
+	#include <stdarg.h>
 	#include <sys/socket.h>
 	#include <netdb.h>
 	#include <unistd.h>
 
 	#include <commons/collections/list.h>
 
-#include "_common_includes.h"
+	#include "_common_includes.h"
 	#include "protocol.h"
 	
 	#define BACKLOG 100
@@ -51,9 +52,16 @@
 
 	/**
 	* @NAME: socket_start_listening_select
-	* @DESC: Gestiona eventos en un socket con la funcion que es parametro
+	* @DESC: Gestiona eventos en un socket con la funcion que es parametro + en los FD adicionales
+	* @PARAMS:
+	* 	socketListener -
+	* 	manejadorDeEvento - funcion a llamar en el caso de un evento con un descriptor de archivo
+	* 	... - FD adicionales a multiplexar. Al principio, se debe indicar la cantidad de FDs, y para c/u su emisor y el tipo de msj.
+	* 	      Ejemplos:
+	* 		      1, SAFA, INOTIFY, fd_inotify
+	* 		      2, SAFA, INOTIFY, fd_inotify1, SAFA, INOTIFY, fd_inotify2
 	*/
-	void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(int, t_msg*));
+	void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(int, t_msg*), ...);
 
 
 #endif /* SHARED_SOCKET_H_ */

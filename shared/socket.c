@@ -84,12 +84,45 @@ char* get_ip_socket(int fd){
 	return strdup(ipNodo);
 }
 
-void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(int, t_msg*)){
+void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(int, t_msg*), ...){
+
+	typedef struct fd_parametro{
+		e_emisor emisor;
+		e_tipo_msg tipo_msg;
+		int fd;
+	}t_fd_parametro;
+
+	t_list* fds_por_parametro = list_create();
+
+	int _get_max_fd(){
+
+		void* _fd_mayor(void* max_fd_hasta_ahora, void* fd_param){
+			return (void*) max((int) max_fd_hasta_ahora, ((t_fd_parametro*) fd_param)->fd);
+		}
+
+		int max_fd_parametro = (int) list_fold(fds_por_parametro, 0, _fd_mayor);
+		return max(socketListener, max_fd_parametro);
+	}
+
 	//Por si me mandan un socket con problemas
 	if(socketListener == -1) return;
 
+ 	va_list arguments;
+	va_start(arguments, manejadorDeEvento);
+
+	int i, cant_fd_por_parametro = va_arg(arguments, int);
+
+	for(i = 0; i<cant_fd_por_parametro; i++){
+		t_fd_parametro* fd = malloc(sizeof(t_fd_parametro));
+		fd->emisor = va_arg(arguments, e_emisor);
+		fd->tipo_msg = va_arg(arguments, e_tipo_msg);
+		fd->fd = va_arg(arguments, int);
+		list_add(fds_por_parametro, fd);
+	}
+
 	t_list* conexiones = list_create();
-	int activity, fdMax = socketListener;
+
+	int activity, fdMax = _get_max_fd(); // El mayor entre el socket de escucha y todos los FD pasados por parametro
 	fd_set readfds;
 
 	while(1){
@@ -100,6 +133,11 @@ void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(
 		//Agrego a todas las conexiones
 		for(int i = 0; i < list_size(conexiones); i++){
 			FD_SET( ((t_conexion*) list_get(conexiones, i))->socket , &readfds);
+		}
+
+		//Agrego a todos los FDs pasados por parametro
+		for(int i = 0; i < list_size(fds_por_parametro); i++){
+			FD_SET( ((t_fd_parametro*) list_get(fds_por_parametro, i))->fd , &readfds);
 		}
 
 		//Esperamos que ocurra algo con alguna de las conexiones (inclusive con el socket de escucha)
@@ -173,6 +211,19 @@ void socket_start_listening_select(int socketListener, int (*manejadorDeEvento)(
 			}
 		}
 
+		// Recorremos preguntando por cada FD pasado por parametro, si ocurrio algun evento
+		for(i = 0; i<list_size(fds_por_parametro); i++){
+			if(FD_ISSET( ((t_fd_parametro*) list_get(fds_por_parametro, i))->fd , &readfds )){ // Ocurrio algo con este FD
+				t_msg* msg = malloc(sizeof(t_msg));
+				msg->header = malloc(sizeof(t_header));
+				msg->header->emisor = ((t_fd_parametro*) list_get(fds_por_parametro, i))->emisor;
+				msg->header->tipo_mensaje = ((t_fd_parametro*) list_get(fds_por_parametro, i))->tipo_msg;
+				msg->header->payload_size = 0;
+				msg->payload = NULL;
+				manejadorDeEvento(((t_fd_parametro*) list_get(fds_por_parametro, i))->fd, msg);
+				msg_free(&msg);
+			}
+		}
 	}
 }
 

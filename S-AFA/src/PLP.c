@@ -49,6 +49,10 @@ void plp_gestionar_msg(t_safa_msg* msg){
 					}
 					free(path);
 				break;
+
+				case GRADO_MULTIPROGRAMACION_AUMENTADO:
+					plp_intentar_iniciar_op_dummy();
+				break;
 			}
 		break;
 

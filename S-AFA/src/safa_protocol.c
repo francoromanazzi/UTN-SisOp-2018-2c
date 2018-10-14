@@ -44,6 +44,9 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					msg->data = data;
 				break;
 
+				case GRADO_MULTIPROGRAMACION_AUMENTADO:
+				break;
+
 				case DUMMY_DISPONIBLE:
 				break;
 
