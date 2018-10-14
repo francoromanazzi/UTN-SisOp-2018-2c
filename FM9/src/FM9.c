@@ -1,5 +1,30 @@
 #include "FM9.h"
 
+				void __huecos_print_y_log(){ // TODO Sacarlo despues, esto sirve para debuggear
+					char* huecos_str = string_new(), *aux;
+					int i;
+
+					log_info(logger, "Lista de huecos final: ");
+
+					for(i = 0; i < list_size(lista_huecos_storage); i++){
+						t_vector2* hueco = (t_vector2*) list_get(lista_huecos_storage, i);
+						string_append(&huecos_str, "(");
+						aux = string_itoa(hueco->x);
+						string_append(&huecos_str, aux);
+						free(aux);
+						string_append(&huecos_str, ",");
+						aux = string_itoa(hueco->y);
+						string_append(&huecos_str, aux);
+						free(aux);
+						string_append(&huecos_str, ")");
+						string_append(&huecos_str, ",");
+					}
+					if(i > 0) huecos_str[strlen(huecos_str) - 1] = '\0';
+
+					log_info(logger, "\t[%s]", huecos_str);
+					free(huecos_str);
+				}
+
 int main(void) {
 	if(fm9_initialize() == -1){
 		fm9_exit(); return EXIT_FAILURE;
@@ -19,52 +44,21 @@ int main(void) {
 	return EXIT_SUCCESS;
 }
 
-int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok){
-
-	bool _mismo_pid(void* proceso){
-		return ((t_proceso*) proceso)->pid == pid;
-	}
-
-	bool _mismo_nro_seg(void* fila_tabla){
-		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
-	}
-
-	pthread_mutex_lock(&sem_mutex_lista_procesos);
-	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
-	pthread_mutex_unlock(&sem_mutex_lista_procesos);
-
-	if(proceso == NULL) {
-		*ok = FM9_ERROR_SEG_FAULT;
-		return -1;
-	}
-
-	t_fila_tabla_segmento* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
-	if(fila_tabla == NULL) {
-		*ok = FM9_ERROR_SEG_FAULT;
-		return -1;
-	}
-
-	if(offset > fila_tabla->limite) {
-		*ok = FM9_ERROR_SEG_FAULT;
-		return -1;
-	}
-
-	*ok = OK;
-	return (int) (fila_tabla->base + offset);
-}
-
 int fm9_initialize(){
 
 	void _modo_y_estr_administrativas_init(){
-		char* bitarray;
 		switch(modo){
 			case SEG:
 				lista_procesos = list_create();
 				pthread_mutex_init(&sem_mutex_lista_procesos, NULL);
 
-				bitarray = calloc(storage_cant_lineas / 8, sizeof(char));
-				bitarray_lineas = bitarray_create_with_mode(bitarray, storage_cant_lineas / 8, MSB_FIRST);
-				pthread_mutex_init(&sem_mutex_bitarray_lineas, NULL);
+				lista_huecos_storage = list_create();
+				t_vector2* hueco_inicial = malloc(sizeof(t_vector2));
+				hueco_inicial->x = 0;
+				hueco_inicial->y = storage_cant_lineas - 1;
+				list_add(lista_huecos_storage, hueco_inicial);
+				__huecos_print_y_log();
+				pthread_mutex_init(&sem_mutex_lista_huecos_storage, NULL);
 
 				fm9_dir_logica_a_fisica = &_fm9_dir_logica_a_fisica_seg_pura;
 				fm9_dump_pid = &_fm9_dump_pid_seg_pura;
@@ -262,7 +256,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
 				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false);
+				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false); // No deberia fallar nunca esto
 				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
 				if(datos != NULL) free(datos);
 			break;
@@ -288,22 +282,20 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	bool linea_disponible = false;
 	*ok = OK;
 
-	pthread_mutex_lock(&sem_mutex_bitarray_lineas);
-	for(nro_linea = 0; nro_linea < storage_cant_lineas && !(linea_disponible = !(bitarray_test_bit(bitarray_lineas, nro_linea))); nro_linea++);
-
-	if(!linea_disponible){
-		pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
-		*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
-		return 0;
-	}
-	bitarray_set_bit(bitarray_lineas, nro_linea);
-	pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
-
 	t_proceso* proceso;
 	t_fila_tabla_segmento* nueva_fila_tabla;
 
 	switch(modo){
 		case SEG:
+			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+			nro_linea = _fm9_best_fit_seg_pura(1);
+			__huecos_print_y_log();
+			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+			if(nro_linea == -1){
+				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+				return 0;
+			}
+
 			pthread_mutex_lock(&sem_mutex_lista_procesos);
 			if((proceso = list_find(lista_procesos, _mismo_pid)) == NULL){ // Este proceso no existia en la lista
 				proceso = malloc(sizeof(t_proceso));
@@ -356,8 +348,9 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 	*ok = OK;
 	t_proceso* proceso;
 	t_fila_tabla_segmento* fila_tabla;
-	int i, j, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0;
 	t_list* backup_lineas;
+	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0;
+	char* linea;
 
 	pthread_mutex_lock(&sem_mutex_realocacion_en_progreso);
 	switch(modo){
@@ -381,58 +374,49 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			}
 			log_info(logger, "Intento realocar el segmento %d del PID: %d con base %d, de %d a %d lineas", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite + 1, offset + 1);
 
-			pthread_mutex_lock(&sem_mutex_bitarray_lineas);
-			for(j = 0; j <= fila_tabla->limite; j++){
-				bitarray_clean_bit(bitarray_lineas, fila_tabla->base + j);
+			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+			_fm9_nuevo_hueco_disponible_seg_pura(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
+			base_nuevo_segmento = _fm9_best_fit_seg_pura(offset + 1);
+			__huecos_print_y_log();
+			if(base_nuevo_segmento == -1){
+				_fm9_compactar_seg_pura();
+				if((base_nuevo_segmento = _fm9_best_fit_seg_pura(offset)) == -1){
+					log_error(logger, "No hay suficiente espacio contiguo para realocar");
+					__huecos_print_y_log();
+					*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+					pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+					pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
+					return;
+				}
+			}
+			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+
+			/* Ok, pude realocar */
+			/* Me guardo las lineas que ya estaban desde antes */
+			backup_lineas = list_create();
+			for(i = 0; i <= fila_tabla->limite; i++){
+				list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) fila_tabla->nro_seg, i , ok, true));
 			}
 
-			for(i = 0; i < storage_cant_lineas; i++){ // Tengo que encontrar una cantidad "offset" de lineas contiguas disponibles
+			/* Actualizo tabla de segmentos */
+			fila_tabla->base = base_nuevo_segmento;
+			fila_tabla->limite = offset;
 
-				if(bitarray_test_bit(bitarray_lineas, i) == true){ // Linea no disponible
-					lineas_contiguas_disponibles = 0;
-					base_nuevo_segmento = i + 1; // Reset del comienzo del nuevo segmento destino
-				}
-				else { // Linea disponible
-					if(++lineas_contiguas_disponibles == offset + 1){ // Pude realocar!
-						*ok = OK;
-
-						backup_lineas = list_create();
-
-						/* Actualizo storage y bitarray */
-						for(j = 0; j <= fila_tabla->limite; j++){
-							list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) fila_tabla->nro_seg, j , ok, true));
-						}
-
-						fila_tabla->base = base_nuevo_segmento;
-						fila_tabla->limite = offset;
-
-						for(j = 0; j<backup_lineas->elements_count; j++){
-							fm9_storage_escribir(id, (int) fila_tabla->nro_seg, j, (char*) list_get(backup_lineas, j), ok, true);
-						}
-						list_destroy_and_destroy_elements(backup_lineas, free);
-
-						for(j = fila_tabla->base; j <= (fila_tabla->base + fila_tabla->limite); j++){
-							bitarray_set_bit(bitarray_lineas, j);
-						}
-						pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
-
-						log_info(logger, "Pude realocar el segmento %d del PID: %d. Nueva base: %d, nuevo limite: %d", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite);
-						pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
-						return;
-					}
-				}
-			} // Fin for bitarray
-
-			/* No pude realocar */
-			log_error(logger, "No hay suficiente espacio contiguo para realocar");
-			/* Restauro el bitarray */
-			for(j = 0; j <= fila_tabla->limite; j++){
-				bitarray_set_bit(bitarray_lineas, fila_tabla->base + j);
+			/* Escribo las lineas guardadas */
+			for(i = 0; i<backup_lineas->elements_count; i++){
+				fm9_storage_escribir(id, (int) fila_tabla->nro_seg, i, (char*) list_get(backup_lineas, i), ok, true);
 			}
-			pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
+			list_destroy_and_destroy_elements(backup_lineas, free);
 
-			*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+			log_info(logger, "Pude realocar el segmento %d del PID: %d. Nueva base: %d, nuevo limite: %d", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite);
 		break;
+
+		case SPA:
+		break;
+
+		case TPI:
+		break;
+
 	} // Fin switch(modo)
 	pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 }
@@ -465,6 +449,103 @@ char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool perm
 	char* ret = malloc(max_linea);
 	memcpy((void*) ret, dir_fisica_bytes, max_linea);
 	return ret;
+}
+
+int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok){
+
+	bool _mismo_pid(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	bool _mismo_nro_seg(void* fila_tabla){
+		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
+	}
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
+	if(proceso == NULL) {
+		*ok = FM9_ERROR_SEG_FAULT;
+		return -1;
+	}
+
+	t_fila_tabla_segmento* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+	if(fila_tabla == NULL) {
+		*ok = FM9_ERROR_SEG_FAULT;
+		return -1;
+	}
+
+	if(offset > fila_tabla->limite) {
+		*ok = FM9_ERROR_SEG_FAULT;
+		return -1;
+	}
+
+	*ok = OK;
+	return (int) (fila_tabla->base + offset);
+}
+
+int _fm9_best_fit_seg_pura(int cant_lineas){
+	int tam_mejor_hueco, i, ret = -1, indice_ret;
+	bool algun_hueco_encontrado = false;
+
+	if(list_is_empty(lista_huecos_storage)) return -1;
+
+	for(i = 0; i < list_size(lista_huecos_storage); i++){
+		t_vector2* hueco_actual = (t_vector2*) list_get(lista_huecos_storage, i);
+		int tam_hueco_actual = hueco_actual->y - hueco_actual->x + 1;
+
+		if((!algun_hueco_encontrado || tam_hueco_actual < tam_mejor_hueco) && tam_hueco_actual >= cant_lineas){
+			algun_hueco_encontrado = true;
+			tam_mejor_hueco = tam_hueco_actual;
+			ret = hueco_actual->x;
+			indice_ret = i;
+		}
+	}
+
+	if(ret == -1){
+		return -1;
+	}
+	t_vector2* hueco_a_actualizar = (t_vector2*) list_get(lista_huecos_storage, indice_ret);
+	hueco_a_actualizar->x += cant_lineas;
+	if(hueco_a_actualizar->x > hueco_a_actualizar->y){ // El hueco se lleno por completo
+		list_remove_and_destroy_element(lista_huecos_storage, indice_ret, free);
+	}
+
+	return ret;
+}
+
+void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin){
+
+	bool _criterio_orden_huecos(void* hueco1, void* hueco2){
+		return ((t_vector2*) hueco1)->x < ((t_vector2*) hueco2)->x;
+	}
+
+	int i;
+
+	/* Me expropio los huecos contiguos, si es que hay */
+	for(i = 0; i < list_size(lista_huecos_storage); i++){
+		t_vector2* hueco = (t_vector2*) list_get(lista_huecos_storage, i);
+		if(linea_inicio == hueco->y + 1){
+			linea_inicio = hueco->x;
+			list_remove_and_destroy_element(lista_huecos_storage, i, free);
+		}
+		else if(linea_fin == hueco->x - 1){
+			linea_fin = hueco->y;
+			list_remove_and_destroy_element(lista_huecos_storage, i, free);
+		}
+	}
+
+	/* Creo el hueco */
+	t_vector2* nuevo_hueco = malloc(sizeof(t_vector2));
+	nuevo_hueco->x = linea_inicio;
+	nuevo_hueco->y = linea_fin;
+	list_add(lista_huecos_storage, nuevo_hueco);
+	list_sort(lista_huecos_storage, _criterio_orden_huecos);
+}
+
+void _fm9_compactar_seg_pura(){
+	// TODO
 }
 
 void fm9_exit(){

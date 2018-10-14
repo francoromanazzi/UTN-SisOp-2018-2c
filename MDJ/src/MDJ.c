@@ -301,9 +301,10 @@ static void _hardcodear_archivos(){
 			"asignar /Equipos/Boca.txt 2 SebastianBattaglia\n"
 			"asignar /Equipos/Boca.txt 3 GuillermoBarrosSchelotto\n"
 			"flush /Equipos/Boca.txt\n"
-			"asignar /Equipos/Boca.txt 0 s\n"
-			"asignar /Equipos/Boca.txt 1 k\n"
-			"asignar /Equipos/Boca.txt 2 e\n"
+			"asignar /Equipos/Boca.txt 0 C\n"
+			"asignar /Equipos/Boca.txt 1 A\n"
+			"asignar /Equipos/Boca.txt 2 B\n"
+			"asignar /Equipos/Boca.txt 3 J\n"
 			"flush /Equipos/Boca.txt\n"
 			"\n");
 	buffer = malloc(strlen(buffer_str));
@@ -320,12 +321,12 @@ static void _hardcodear_archivos(){
 	if(ok != OK) log_error(logger, "test2.bin - crear - %d", ok);
 	ok = OK;
 	buffer_str = strdup(
-			"crear /Equipos/Boca.txt 3\n"
-			"abrir /Equipos/Boca.txt\n"
-			"asignar /Equipos/Boca.txt 0 JuanRomanRiquelme\n"
-			"asignar /Equipos/Boca.txt 1 MartinPalermo\n"
-			"asignar /Equipos/Boca.txt 2 SebastianBattaglia\n"
-			"flush /Equipos/Boca.txt\n"
+			"crear /Equipos/River.txt 3\n"
+			"abrir /Equipos/River.txt\n"
+			"asignar /Equipos/River.txt 0 Gallardo\n"
+			"asignar /Equipos/River.txt 1 Ponzio\n"
+			"asignar /Equipos/River.txt 2 PityMartinez\n"
+			"flush /Equipos/River.txt\n"
 			"\n");
 	buffer = malloc(strlen(buffer_str));
 	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));

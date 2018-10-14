@@ -26,23 +26,6 @@ void fm9_procesar_comando(char* linea){
 	int argc = split_cant_elem(argv);
 	t_proceso* proceso;
 
-	void _bitarray_print_y_log(){
-		char* bitarray_str = malloc((bitarray_lineas->size * 8) + 1);
-		int i;
-
-		log_info(logger, "Bitarray: ");
-		printf("Bitarray: %d\n", bitarray_lineas->size * 8);
-
-		for(i = 0; i < bitarray_lineas->size * 8; i++){
-			bitarray_str[i] = bitarray_test_bit(bitarray_lineas, i) == false ? '0' : '1';
-		}
-
-		bitarray_str[bitarray_lineas->size * 8] = '\0';
-		log_info(logger, "\t[%s]", bitarray_str);
-		printf("\t[%s]\n", bitarray_str);
-		free(bitarray_str);
-	}
-
 	bool _mismo_id(void* proceso){
 		if(atoi(argv[1]) == 0 && strcmp(argv[1], "0")) return false; // Por un error del atoi
 		return ((t_proceso*) proceso)->pid == atoi(argv[1]);
@@ -56,10 +39,6 @@ void fm9_procesar_comando(char* linea){
 		char* str;
 
 		log_info(logger, "~~~~~~~~~~ DUMP ~~~~~~~~~~");
-		pthread_mutex_lock(&sem_mutex_bitarray_lineas);
-		_bitarray_print_y_log();
-		pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
-
 		pthread_mutex_lock(&sem_mutex_escritura_en_progreso);
 		for(i = 0; i < storage_cant_lineas; i++){
 			str = malloc(max_linea);
@@ -86,43 +65,6 @@ void fm9_procesar_comando(char* linea){
 }
 
 
-void _estr_adm_proceso_print_y_log(void* _proceso){
-
-	void _estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
-		t_fila_tabla_segmento* fila_tabla = (t_fila_tabla_segmento*) _fila_tabla;
-		log_info(logger, "\tNroSeg: %d Base: %d Limite: %d", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
-		printf("\tNroSeg: %d Base: %d Limite: %d\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
-	}
-
-	void _bitarray_print_y_log(){
-		char* bitarray_str = malloc((bitarray_lineas->size * 8) + 1);
-		int i;
-
-		log_info(logger, "Bitarray: ");
-		printf("Bitarray: %d\n", bitarray_lineas->size * 8);
-
-		for(i = 0; i < bitarray_lineas->size * 8; i++){
-			bitarray_str[i] = bitarray_test_bit(bitarray_lineas, i) == false ? '0' : '1';
-		}
-
-		bitarray_str[bitarray_lineas->size * 8] = '\0';
-		log_info(logger, "\t[%s]", bitarray_str);
-		printf("\t[%s]\n", bitarray_str);
-		free(bitarray_str);
-	}
-
-	t_proceso* proceso = ((t_proceso*) _proceso);
-
-	pthread_mutex_lock(&sem_mutex_bitarray_lineas);
-	_bitarray_print_y_log();
-	pthread_mutex_unlock(&sem_mutex_bitarray_lineas);
-
-	log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
-	printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
-
-	list_iterate(proceso->lista_tabla_segmentos, _estr_adm_fila_tabla_segmento_print_y_log);
-}
-
 void _fm9_dump_pid_seg_pura(unsigned int pid){
 
 	bool _mismo_id(void* proceso){
@@ -134,6 +76,52 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 
 	int i = 0;
+
+
+	void _estr_adm_proceso_print_y_log(){
+
+		void _estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
+			t_fila_tabla_segmento* fila_tabla = (t_fila_tabla_segmento*) _fila_tabla;
+			log_info(logger, "\tNroSeg: %d Base: %d Limite: %d", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
+			printf("\tNroSeg: %d Base: %d Limite: %d\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
+		}
+
+		void _huecos_print_y_log(){
+			char* huecos_str = string_new(), *aux;
+			int i;
+
+			log_info(logger, "Lista de huecos: ");
+			printf("Lista de huecos: \n");
+
+			for(i = 0; i < list_size(lista_huecos_storage); i++){
+				t_vector2* hueco = (t_vector2*) list_get(lista_huecos_storage, i);
+				string_append(&huecos_str, "(");
+				aux = string_itoa(hueco->x);
+				string_append(&huecos_str, aux);
+				free(aux);
+				string_append(&huecos_str, ",");
+				aux = string_itoa(hueco->y);
+				string_append(&huecos_str, aux);
+				free(aux);
+				string_append(&huecos_str, ")");
+				string_append(&huecos_str, ",");
+			}
+			if(i > 0) huecos_str[strlen(huecos_str) - 1] = '\0';
+
+			log_info(logger, "\t[%s]", huecos_str);
+			printf("\t[%s]\n", huecos_str);
+			free(huecos_str);
+		}
+
+		pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+		_huecos_print_y_log();
+		pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+
+		log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
+		printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
+
+		list_iterate(proceso->lista_tabla_segmentos, _estr_adm_fila_tabla_segmento_print_y_log);
+	}
 
 	void _fila_tabla_segmento_print_y_log(void* _fila_tabla){
 		t_fila_tabla_segmento* fila_tabla = ((t_fila_tabla_segmento*) _fila_tabla);
@@ -159,13 +147,14 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		return;
 	}
 
-	_estr_adm_proceso_print_y_log((void*) proceso);
+	/* Imprimo estructuras administrativas */
+	_estr_adm_proceso_print_y_log();
 
+	/* Imprimo lineas de los segmentos del proceso */
 	if(proceso->lista_tabla_segmentos->elements_count <= 0){
 		log_info(logger, "[PID: %d] No tiene datos asociados ", proceso->pid);
 		printf("[PID: %d] No tiene datos asociados\n\n", proceso->pid);
 	}
-
 	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
 }
 

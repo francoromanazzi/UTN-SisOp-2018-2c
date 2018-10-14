@@ -46,10 +46,13 @@
 		t_list* lista_procesos; // lista de t_proceso
 		pthread_mutex_t sem_mutex_lista_procesos; // Mutex sobre dump y operacion asignar
 
-		t_bitarray* bitarray_lineas;
-		pthread_mutex_t sem_mutex_bitarray_lineas; // Mutex sobre dump y operacion asignar
+		t_list* lista_huecos_storage; // lista de t_vector2
+		pthread_mutex_t sem_mutex_lista_huecos_storage; // Mutex sobre dump y operacion asignar
 
 		int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok);
+		int _fm9_best_fit_seg_pura(int cant_lineas);
+		void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin);
+		void _fm9_compactar_seg_pura();
 
 	/* Variables globales */
 		t_config* config;

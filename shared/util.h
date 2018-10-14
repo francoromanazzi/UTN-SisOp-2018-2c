@@ -18,6 +18,12 @@
 		_a < _b ? _a : _b; })
 
 
+	typedef struct {
+		int x;
+		int y;
+	} t_vector2;
+
+
 	/**
 	* @NAME: util_config_fix_comillas
 	* @DESC: Dentro de los archivos de config, cuando lee una IP, lo convierte en memoria de ""127.0.0.1"\0" a "127.0.0.1\0"
