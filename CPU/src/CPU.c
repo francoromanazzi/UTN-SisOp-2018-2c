@@ -301,7 +301,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 		case OP_ABRIR:
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
-			/* 1. Verificar que el archivo no se encuentre abierto */
+			/* 1. Verificar que el archivo no se encuentre abierto, (puede ser el escriptorio) */
 			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
 				return OK;
 
@@ -321,11 +321,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			datos = (char*) dictionary_get(operacion->operandos, "datos");
 
 			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
-			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_ASIGNAR_ARCHIVO_NO_ABIERTO;
-
-			if(!strcmp(path, dtb->ruta_escriptorio))
-				return ERROR_ASIGNAR_ARCHIVO_ES_ESCRIPTORIO;
 
 			/* 2. Le pido a FM9 que actualize los datos */
 			cpu_send(fm9_socket, ESCRIBIR_FM9, dtb->gdt_id, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
@@ -380,8 +377,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 		case OP_FLUSH:
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
-			/* 1. Verificar que el archivo se encuentre abierto */
-			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
+			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_FLUSH_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a DAM que haga flush */
@@ -394,8 +391,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 		case OP_CLOSE:
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
-			/* 1. Verificar que el archivo se encuentre abierto */
-			if(!dictionary_has_key(dtb->archivos_abiertos, path) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
+			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
 				return ERROR_CLOSE_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a FM9 que libere el archivo */

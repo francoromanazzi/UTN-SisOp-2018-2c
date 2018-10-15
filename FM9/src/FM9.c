@@ -50,7 +50,7 @@ int fm9_initialize(){
 		switch(modo){
 			case SEG:
 				lista_procesos = list_create();
-				pthread_mutex_init(&sem_mutex_lista_procesos, NULL);
+				//pthread_mutex_init(&sem_mutex_lista_procesos, NULL);
 
 				lista_huecos_storage = list_create();
 				t_vector2* hueco_inicial = malloc(sizeof(t_vector2));
@@ -58,10 +58,11 @@ int fm9_initialize(){
 				hueco_inicial->y = storage_cant_lineas - 1;
 				list_add(lista_huecos_storage, hueco_inicial);
 				__huecos_print_y_log();
-				pthread_mutex_init(&sem_mutex_lista_huecos_storage, NULL);
+				//pthread_mutex_init(&sem_mutex_lista_huecos_storage, NULL);
 
 				fm9_dir_logica_a_fisica = &_fm9_dir_logica_a_fisica_seg_pura;
 				fm9_dump_pid = &_fm9_dump_pid_seg_pura;
+				fm9_close = &_fm9_close_seg_pura;
 			break;
 
 			case TPI:
@@ -85,8 +86,6 @@ int fm9_initialize(){
 	log_info(logger,"Se realiza la inicializacion del storage y de las estructuras administrativas");
 	storage = calloc(1, tamanio);
 	_modo_y_estr_administrativas_init();
-
-	pthread_mutex_init(&sem_mutex_realocacion_en_progreso, NULL);
 
 	pthread_t thread_consola;
 	if(pthread_create(&thread_consola,NULL,(void*) fm9_consola_init,NULL)){
@@ -134,6 +133,10 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_int(ok);
 		break;
 
+		case RESULTADO_CLOSE:
+			ok = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_int(ok);
+		break;
 	}
 	mensaje_a_enviar->header->emisor = FM9;
 	mensaje_a_enviar->header->tipo_mensaje = tipo_msg;
@@ -261,6 +264,17 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				if(datos != NULL) free(datos);
 			break;
 
+			case CLOSE:
+				desempaquetar_close(msg, &id, &base);
+				log_info(logger,"CPU me pidio liberar el archivo de ID: %d con base: %d", id, base);
+
+				fm9_close(id, base, &operacion_ok);
+				if(operacion_ok == FM9_ERROR_SEG_FAULT){
+					operacion_ok = ERROR_CLOSE_FALLO_SEGMENTO;
+				}
+				fm9_send(socket, RESULTADO_CLOSE, operacion_ok);
+			break;
+
 			default:
 				log_info(logger,"No entendi el mensaje de CPU");
 		}
@@ -287,25 +301,26 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 
 	switch(modo){
 		case SEG:
-			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+			//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
 			nro_linea = _fm9_best_fit_seg_pura(1);
 			__huecos_print_y_log();
-			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+			//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 			if(nro_linea == -1){
 				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
 				return 0;
 			}
 
-			pthread_mutex_lock(&sem_mutex_lista_procesos);
+			//pthread_mutex_lock(&sem_mutex_lista_procesos);
 			if((proceso = list_find(lista_procesos, _mismo_pid)) == NULL){ // Este proceso no existia en la lista
 				proceso = malloc(sizeof(t_proceso));
 				proceso->pid = id;
 				proceso->lista_tabla_segmentos = list_create();
 				list_add(lista_procesos, proceso);
 			}
-			pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
 
 			nueva_fila_tabla = malloc(sizeof(t_fila_tabla_segmento));
+			//pthread_mutex_init(&(nueva_fila_tabla->mutex), NULL);
 
 			if(proceso->lista_tabla_segmentos->elements_count >= 1){
 				nueva_fila_tabla->nro_seg = ((t_fila_tabla_segmento*) list_get(proceso->lista_tabla_segmentos, proceso->lista_tabla_segmentos->elements_count - 1))->nro_seg + 1;
@@ -321,6 +336,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 
 			log_info(logger, "Agrego el segmento %d del PID: %d, Base: %d, Limite: %d",
 					nueva_fila_tabla->nro_seg, proceso->pid, nueva_fila_tabla->base, nueva_fila_tabla->limite);
+			//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		break;
 
 		case TPI:
@@ -352,48 +368,58 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0;
 	char* linea;
 
-	pthread_mutex_lock(&sem_mutex_realocacion_en_progreso);
 	switch(modo){
 		case SEG:
-			pthread_mutex_lock(&sem_mutex_lista_procesos);
+			//pthread_mutex_lock(&sem_mutex_lista_procesos);
 			proceso = list_find(lista_procesos, _mismo_id);
-			pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
 
 			if(proceso == NULL){
 				log_error(logger, "No se encontro el proceso al realocar");
 				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
-				pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 				return;
 			}
 			fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
 			if(fila_tabla == NULL){
 				log_error(logger, "No se encontro el segmento al realocar");
 				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
-				pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 				return;
 			}
 			log_info(logger, "Intento realocar el segmento %d del PID: %d con base %d, de %d a %d lineas", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite + 1, offset + 1);
 
-			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+			//pthread_mutex_lock(&(fila_tabla->mutex));
+			//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+			log_info(logger, "Antes de liberar y best fit:"); // TODO Sacar
+			__huecos_print_y_log();// TODO Sacar
 			_fm9_nuevo_hueco_disponible_seg_pura(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
 			base_nuevo_segmento = _fm9_best_fit_seg_pura(offset + 1);
 			__huecos_print_y_log();
 			if(base_nuevo_segmento == -1){
+				log_info(logger, "Intento realizar una compactacion de los segmentos en memoria");
+				//pthread_mutex_unlock(&(fila_tabla->mutex));
+				//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+				//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 				_fm9_compactar_seg_pura();
-				if((base_nuevo_segmento = _fm9_best_fit_seg_pura(offset)) == -1){
+				//pthread_mutex_lock(&sem_mutex_lista_procesos);
+				//pthread_mutex_lock(&(fila_tabla->mutex));
+				//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+				if((base_nuevo_segmento = _fm9_best_fit_seg_pura(offset + 1)) == -1){
 					log_error(logger, "No hay suficiente espacio contiguo para realocar");
 					__huecos_print_y_log();
 					*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
-					pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
-					pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
+					//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+					//pthread_mutex_unlock(&(fila_tabla->mutex));
+					//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 					return;
 				}
 			}
-			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+			//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
 			/* Ok, pude realocar */
 			/* Me guardo las lineas que ya estaban desde antes */
 			backup_lineas = list_create();
+			//pthread_mutex_unlock(&(fila_tabla->mutex));
+			//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 			for(i = 0; i <= fila_tabla->limite; i++){
 				list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) fila_tabla->nro_seg, i , ok, true));
 			}
@@ -418,7 +444,6 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 		break;
 
 	} // Fin switch(modo)
-	pthread_mutex_unlock(&sem_mutex_realocacion_en_progreso);
 }
 
 void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales){
@@ -461,28 +486,36 @@ int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset,
 		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
 	}
 
-	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	//pthread_mutex_lock(&sem_mutex_lista_procesos);
 	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
-	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 
 	if(proceso == NULL) {
 		*ok = FM9_ERROR_SEG_FAULT;
+		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return -1;
 	}
 
 	t_fila_tabla_segmento* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+	//pthread_mutex_lock(&(fila_tabla->mutex));
 	if(fila_tabla == NULL) {
 		*ok = FM9_ERROR_SEG_FAULT;
+		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		//pthread_mutex_unlock(&(fila_tabla->mutex));
 		return -1;
 	}
 
 	if(offset > fila_tabla->limite) {
 		*ok = FM9_ERROR_SEG_FAULT;
+		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		//pthread_mutex_unlock(&(fila_tabla->mutex));
 		return -1;
 	}
 
 	*ok = OK;
-	return (int) (fila_tabla->base + offset);
+	int ret = fila_tabla->base + offset;
+	//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+	//pthread_mutex_unlock(&(fila_tabla->mutex));
+	return ret;
 }
 
 int _fm9_best_fit_seg_pura(int cant_lineas){
@@ -522,18 +555,25 @@ void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin){
 	}
 
 	int i;
+	t_list* lista_indices_huecos_a_eliminar = list_create();
 
 	/* Me expropio los huecos contiguos, si es que hay */
 	for(i = 0; i < list_size(lista_huecos_storage); i++){
 		t_vector2* hueco = (t_vector2*) list_get(lista_huecos_storage, i);
 		if(linea_inicio == hueco->y + 1){
 			linea_inicio = hueco->x;
-			list_remove_and_destroy_element(lista_huecos_storage, i, free);
+			list_add(lista_indices_huecos_a_eliminar, (void*) i);
 		}
 		else if(linea_fin == hueco->x - 1){
 			linea_fin = hueco->y;
-			list_remove_and_destroy_element(lista_huecos_storage, i, free);
+			list_add(lista_indices_huecos_a_eliminar, (void*) i);
 		}
+	}
+
+	/* Elimino los huecos que me expropie */
+	for(i = 0; i < list_size(lista_indices_huecos_a_eliminar); i++){
+		log_info(logger, "~Elimino hueco numero %d", (int) list_get(lista_indices_huecos_a_eliminar, i));
+		list_remove_and_destroy_element(lista_huecos_storage,  ((int) list_get(lista_indices_huecos_a_eliminar, i)) - i, free);
 	}
 
 	/* Creo el hueco */
@@ -542,10 +582,142 @@ void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin){
 	nuevo_hueco->y = linea_fin;
 	list_add(lista_huecos_storage, nuevo_hueco);
 	list_sort(lista_huecos_storage, _criterio_orden_huecos);
+
+	list_destroy(lista_indices_huecos_a_eliminar);
 }
 
 void _fm9_compactar_seg_pura(){
-	// TODO
+
+	void _unlock_mutex(){
+		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+		_fm9_lock_all_mutex_seg_pura(false);
+	}
+
+	t_fila_tabla_segmento* _encontrar_segmento_mas_arriba_desplazable(int* id){
+		t_vector2* hueco_mas_arriba = (t_vector2*) list_get(lista_huecos_storage, 0);
+		int i, j, target_base = hueco_mas_arriba->y + 1;
+
+		for(i = 0; i < list_size(lista_procesos); i++){
+			t_proceso* proceso = (t_proceso*) list_get(lista_procesos, i);
+			for(j = 0; j < list_size(proceso->lista_tabla_segmentos); j++){
+				t_fila_tabla_segmento* fila = (t_fila_tabla_segmento*) list_get(proceso->lista_tabla_segmentos, j);
+				if(fila->base == target_base){
+					*id = proceso->pid;
+					return fila;
+				}
+			}
+		}
+		return NULL; // Nunca va a retornar esto
+	}
+
+	void _subir_segmento(t_fila_tabla_segmento* segmento, int id){
+		int i, ok;
+
+		_fm9_nuevo_hueco_disponible_seg_pura(segmento->base, segmento->base + segmento->limite);
+
+		/* Me guardo las lineas que ya estaban desde antes */
+		t_list* backup_lineas = list_create();
+		for(i = 0; i <= segmento->limite; i++){
+			list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) segmento->nro_seg, i , &ok, true));
+		}
+
+		/* Actualizo tabla de segmentos y lista de huecos*/
+		t_vector2* hueco_mas_arriba = (t_vector2*) list_get(lista_huecos_storage, 0);
+		segmento->base = hueco_mas_arriba->x;
+		hueco_mas_arriba->x += (segmento->limite + 1);
+		if(hueco_mas_arriba->x > hueco_mas_arriba->y){ // El hueco se lleno por completo
+			list_remove_and_destroy_element(lista_huecos_storage, 0, free);
+		}
+
+		/* Escribo las lineas guardadas */
+		for(i = 0; i<backup_lineas->elements_count; i++){
+			fm9_storage_escribir(id, (int) segmento->nro_seg, i, (char*) list_get(backup_lineas, i), &ok, true);
+		}
+		list_destroy_and_destroy_elements(backup_lineas, free);
+	}
+
+
+	int i, j, id;
+
+	//_fm9_lock_all_mutex_seg_pura(true);
+	//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+	//pthread_mutex_lock(&sem_mutex_lista_procesos);
+
+	if(list_size(lista_huecos_storage) == 1 && ((t_vector2*) list_get(lista_huecos_storage, 0))->y == storage_cant_lineas - 1){
+		log_info(logger, "Es imposible realizar una compactacion");
+		//_unlock_mutex();
+		return;
+	}
+
+	while(list_size(lista_huecos_storage) > 1){
+		log_info(logger, "HUECOS: ");
+		__huecos_print_y_log();
+		t_fila_tabla_segmento* segmento_mas_arriba = _encontrar_segmento_mas_arriba_desplazable(&id);
+		_subir_segmento(segmento_mas_arriba, id);
+	}
+
+	log_info(logger, "Compactacion realizada satisfactoriamente");
+
+	//_unlock_mutex();
+}
+
+void _fm9_lock_all_mutex_seg_pura(bool lock){
+	int i, j;
+	//pthread_mutex_lock(&sem_mutex_lista_procesos);
+	for(i = 0; i < list_size(lista_procesos); i++){
+		t_proceso* proceso = (t_proceso*) list_get(lista_procesos, i);
+		for(j = 0; j < list_size(proceso->lista_tabla_segmentos); j++){
+			t_fila_tabla_segmento* fila = (t_fila_tabla_segmento*) list_get(proceso->lista_tabla_segmentos, i);
+			/*
+			if(lock)
+				pthread_mutex_lock(&(fila->mutex));
+			else
+				pthread_mutex_unlock(&(fila->mutex));
+			*/
+		}
+	}
+	//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+}
+
+void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
+
+	bool _mismo_pid(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	bool _mismo_nro_seg(void* fila_tabla){
+		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
+	}
+
+
+	//pthread_mutex_lock(&sem_mutex_lista_procesos);
+	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
+
+	if(proceso == NULL){
+		*ok = FM9_ERROR_SEG_FAULT;
+		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return;
+	}
+
+	t_fila_tabla_segmento* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+
+	if(fila_tabla == NULL){
+		*ok = FM9_ERROR_SEG_FAULT;
+		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return;
+	}
+
+	*ok = OK;
+
+	//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+	_fm9_nuevo_hueco_disponible_seg_pura(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
+	//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+
+	//pthread_mutex_destroy(&(fila_tabla->mutex));
+	list_remove_and_destroy_by_condition(proceso->lista_tabla_segmentos, _mismo_nro_seg, free);
+
+	//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
 void fm9_exit(){

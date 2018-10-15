@@ -41,18 +41,21 @@
 			unsigned int nro_seg;
 			unsigned int base;
 			unsigned int limite;
+			//pthread_mutex_t mutex; // Mutex sobre compactacion y lectura/escritura sobre el segmento
 		} t_fila_tabla_segmento;
 
 		t_list* lista_procesos; // lista de t_proceso
-		pthread_mutex_t sem_mutex_lista_procesos; // Mutex sobre dump y operacion asignar
+		//pthread_mutex_t sem_mutex_lista_procesos; // Mutex sobre dump y operacion asignar
 
 		t_list* lista_huecos_storage; // lista de t_vector2
-		pthread_mutex_t sem_mutex_lista_huecos_storage; // Mutex sobre dump y operacion asignar
+		//pthread_mutex_t sem_mutex_lista_huecos_storage; // Mutex sobre dump y operacion asignar
 
 		int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok);
 		int _fm9_best_fit_seg_pura(int cant_lineas);
 		void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin);
 		void _fm9_compactar_seg_pura();
+		void _fm9_lock_all_mutex_seg_pura(bool lock);
+		void _fm9_close_seg_pura(unsigned int id, int base, int* ok);
 
 	/* Variables globales */
 		t_config* config;
@@ -68,9 +71,6 @@
 		int transfer_size;
 		char* storage;
 
-		pthread_mutex_t sem_mutex_realocacion_en_progreso; // Mutex sobre hilos queriendo abrir (crear) archivos en simultaneo
-		pthread_mutex_t sem_mutex_escritura_en_progreso; // Mutex sobre dump y operacion asignar
-
 
 	int fm9_initialize();
 
@@ -84,7 +84,8 @@
 	void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales);
 	char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales);
 	int fm9_storage_nuevo_archivo(unsigned int id, int* ok);
-	void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok); // First fit
+	void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok);
+	void (*fm9_close)(unsigned int id, int base, int* ok);
 
 	void fm9_exit();
 

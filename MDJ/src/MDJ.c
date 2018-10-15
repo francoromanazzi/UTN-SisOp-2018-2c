@@ -290,22 +290,17 @@ static void _hardcodear_archivos(){
 	int ok;
 
 	/* Escriptorio: test1.bin */
-	crearArchivo("/Escriptorios/test1.bin", 12, &ok);
+	crearArchivo("/Escriptorios/test1.bin", 8, &ok);
 	if(ok != OK) log_error(logger, "test1.bin - crear - %d", ok);
 	ok = OK;
 	buffer_str = strdup(
-			"crear /Equipos/Boca.txt 4\n"
+			"crear /Equipos/Boca.txt 3\n"
+			"crear /Equipos/Racing.txt 3\n"
+			"crear /Equipos/SanLorenzo.txt 5\n"
 			"abrir /Equipos/Boca.txt\n"
-			"asignar /Equipos/Boca.txt 0 JuanRomanRiquelmeElUltimoDiez\n"
-			"asignar /Equipos/Boca.txt 1 MartinElLocoPalermo\n"
-			"asignar /Equipos/Boca.txt 2 SebastianBattaglia\n"
-			"asignar /Equipos/Boca.txt 3 GuillermoBarrosSchelotto\n"
-			"flush /Equipos/Boca.txt\n"
-			"asignar /Equipos/Boca.txt 0 C\n"
-			"asignar /Equipos/Boca.txt 1 A\n"
-			"asignar /Equipos/Boca.txt 2 B\n"
-			"asignar /Equipos/Boca.txt 3 J\n"
-			"flush /Equipos/Boca.txt\n"
+			"abrir /Equipos/Racing.txt\n"
+			"close /Equipos/Boca.txt\n"
+			"abrir /Equipos/SanLorenzo.txt\n"
 			"\n");
 	buffer = malloc(strlen(buffer_str));
 	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
