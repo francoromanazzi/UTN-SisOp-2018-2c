@@ -132,7 +132,6 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 				log_info(logger, "Recibi ordenes de DAM de validar el archivo %s", path);
 
 				validarArchivo(path, &ok);
-				if(ok == MDJ_ERROR_PATH_INEXISTENTE) ok = MDJ_ERROR_PATH_INEXISTENTE; // TODO cambiar el codigo de error?
 				free(path);
 
 				usleep(config_get_int_value(config, "RETARDO"));
@@ -145,16 +144,9 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 
 				crearArchivo(path, cant_lineas, &ok);
 
-				if(ok == MDJ_ERROR_ARCHIVO_YA_EXISTENTE){
-					ok = ERROR_CREAR_ARCHIVO_YA_EXISTENTE;
-					log_error(logger, "El archivo ya existe");
-				}
-				else if(ok == MDJ_ERROR_ESPACIO_INSUFICIENTE){
+				if(ok == MDJ_ERROR_ESPACIO_INSUFICIENTE){
 					ok = ERROR_CREAR_ESPACIO_INSUFICIENTE_MDJ;
-					log_error(logger, "No hay espacio");
-				}
-				else {
-					log_info(logger, "Pude crear el archivo %s con %d lineas", path, cant_lineas);
+					log_error(logger, "No hay espacio para crear el archivo");
 				}
 
 				free(path);
@@ -198,7 +190,15 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 			break;
 
 			case BORRAR:
-				log_info(logger, "Recibi ordenes de DAM de borrar un archivo");
+				path = desempaquetar_string(msg);
+				log_info(logger, "Recibi ordenes de DAM de borrar el archivo %s", path);
+				log_info(logger, "Pude borrar el archivo %s", path); // Nunca falla porque DAM le habia pedido validarlo
+
+				borrarArchivo(path, &ok);
+				free(path);
+
+				usleep(config_get_int_value(config, "RETARDO"));
+				mdj_send(socket, RESULTADO_BORRAR, ok);
 			break;
 
 			default:
@@ -329,6 +329,29 @@ static void _hardcodear_archivos(){
 	free(buffer);
 	free(buffer_str);
 	if(ok != OK) log_error(logger, "test2.bin - guardar - %d", ok);
+
+	ok = OK;
+
+	/* Escriptorio: test3.bin */
+	crearArchivo("/Escriptorios/test3.bin", 8, &ok);
+	if(ok != OK) log_error(logger, "test3.bin - crear - %d", ok);
+	ok = OK;
+	buffer_str = strdup(
+			"crear /Equipos/EquiposChicos/Sacachispas.txt 2\n"
+			"abrir /Equipos/EquiposChicos/Sacachispas.txt\n"
+			"asignar /Equipos/EquiposChicos/Sacachispas.txt 0 SACA\n"
+			"asignar /Equipos/EquiposChicos/Sacachispas.txt 1 CHISPAS\n"
+			"flush /Equipos/EquiposChicos/Sacachispas.txt\n"
+			"borrar /Equipos/EquiposChicos/Sacachispas.txt\n"
+			"close /Equipos/EquiposChicos/Sacachispas.txt\n"
+			"\n");
+	buffer = malloc(strlen(buffer_str));
+	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
+	guardarDatos("/Escriptorios/test3.bin", 0, strlen(buffer_str), buffer, &ok);
+	free(buffer);
+	free(buffer_str);
+	if(ok != OK) log_error(logger, "test3.bin - guardar - %d", ok);
+
 }
 
 t_bitarray* mdj_bitmap_abrir(){
@@ -359,8 +382,6 @@ void validarArchivo(char* path, int* ok){
 	char* rutaFinal = string_new();
 	string_append(&rutaFinal, paths_estructuras[ARCHIVOS]);
 	string_append(&rutaFinal, path);
-
-
 
 	if((f = fopen(rutaFinal, "rb")) != NULL){ // Encontro el archivo
 		log_info(logger, "Encontre el archivo %s", rutaFinal);
@@ -399,14 +420,6 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 	char* rutaFinal = string_new();
 	string_append(&rutaFinal, paths_estructuras[ARCHIVOS]);
 	string_append(&rutaFinal, path);
-
-	if((archivo = fopen(rutaFinal, "rb")) != NULL){ // El archivo a crear ya existia
-		fclose(archivo);
-		*ok = MDJ_ERROR_ARCHIVO_YA_EXISTENTE;
-		free(rutaFinal);
-		list_destroy(lista_nro_bloques);
-		return;
-	}
 
 	/* Busco en el bitmap la cantidad de bloques necesarios */
 	t_bitarray* bitmap = mdj_bitmap_abrir();
@@ -711,21 +724,40 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 }
 
 void borrarArchivo(char* path, int* ok){
-	char* rutaFinal = string_new();
-	string_append(&rutaFinal, "../");
-	string_append(&rutaFinal, path);
+	t_bitarray* bitmap = mdj_bitmap_abrir();
 
-	validarArchivo(rutaFinal, ok);
-	if(*ok == OK){
-		remove(rutaFinal);
+	void _borrar_bloque(char* nro_bloque){
+		char* ruta_bloque = string_new();
+		string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
+		string_append(&ruta_bloque, nro_bloque);
+		string_append(&ruta_bloque, ".bin");
+		remove(ruta_bloque);
 
-		//PENDIENTE actualizar bitmap
+		bitarray_clean_bit(bitmap, atoi(nro_bloque));
 
-		log_info(logger, "Archivo borrado correctamente");
-	}else{
-		log_error(logger,"El archivo no puede ser borrado ya que no existe");
+		free(ruta_bloque);
 	}
+
+	*ok = OK;
+
+	char* rutaFinal = string_new();
+	string_append(&rutaFinal, paths_estructuras[ARCHIVOS]);
+	string_append(&rutaFinal, path);
+	t_config* config_archivo = config_create(rutaFinal);
+
+
+	char** bloques_strings = config_get_array_value(config_archivo, "BLOQUES");
+	string_iterate_lines(bloques_strings, _borrar_bloque);
+
+	remove(rutaFinal);
 	free(rutaFinal);
+
+	mdj_bitmap_save(bitmap);
+	free(bitmap->bitarray);
+	bitarray_destroy(bitmap);
+
+	config_destroy(config_archivo);
+	split_liberar(bloques_strings);
 }
 
 void mdj_exit(){

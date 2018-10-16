@@ -206,6 +206,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				msg_await(mdj_socket, msg_recibido);
 				ok = desempaquetar_int(msg_recibido);
 				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
+					ok = ERROR_ABRIR_PATH_INEXISTENTE;
 					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 					msg_free(&msg_recibido);
 					free(path);
@@ -251,6 +252,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				msg_await(mdj_socket, msg_recibido);
 				ok = desempaquetar_int(msg_recibido);
 				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
+					ok = ERROR_FLUSH_ARCHIVO_NO_EXISTE_MDJ;
 					dam_send(safa_socket, RESULTADO_FLUSH, ok, id);
 					msg_free(&msg_recibido);
 					free(path);
@@ -274,6 +276,20 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				desempaquetar_crear_mdj(msg, &id, &path, &cant_lineas);
 				log_info(logger, "Iniciando operacion CREAR del archivo %s con %d lineas para %d", path, cant_lineas, id);
 
+				/* Le pregunto a MDJ si el archivo existe */
+				dam_send(mdj_socket, VALIDAR, path);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(mdj_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+				if(ok == OK){ // El archivo a crear ya existia
+					ok = ERROR_CREAR_ARCHIVO_YA_EXISTENTE;
+					dam_send(safa_socket, RESULTADO_CREAR_MDJ, ok, id);
+					msg_free(&msg_recibido);
+					free(path);
+					return resultadoManejar;
+				}
+				msg_free(&msg_recibido);
+
 				dam_send(mdj_socket, CREAR_MDJ, path, cant_lineas);
 				free(path);
 				msg_recibido = malloc(sizeof(t_msg));
@@ -287,6 +303,20 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 			case BORRAR:
 				desempaquetar_borrar(msg, &id, &path);
 				log_info(logger, "Iniciando operacion BORRAR del archivo %s para %d", path, id);
+
+				/* Le pregunto a MDJ si el archivo existe */
+				dam_send(mdj_socket, VALIDAR, path);
+				msg_recibido = malloc(sizeof(t_msg));
+				msg_await(mdj_socket, msg_recibido);
+				ok = desempaquetar_int(msg_recibido);
+				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
+					ok = ERROR_BORRAR_ARCHIVO_NO_EXISTE;
+					dam_send(safa_socket, RESULTADO_BORRAR, ok, id);
+					msg_free(&msg_recibido);
+					free(path);
+					return resultadoManejar;
+				}
+				msg_free(&msg_recibido);
 
 				dam_send(mdj_socket, BORRAR, path);
 				free(path);
