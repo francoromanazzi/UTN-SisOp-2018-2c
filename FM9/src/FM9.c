@@ -67,6 +67,11 @@ int fm9_initialize(){
 			break;
 
 			case TPI:
+				bitMap=calloc(1,cant_marcos);
+				int i;
+				for(i=0;i<cant_marcos;i++){
+					bitMap[i]=0;
+				}
 			break;
 
 			case SPA:
@@ -306,6 +311,9 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	t_proceso* proceso;
 	t_fila_tabla_segmento* nueva_fila_tabla;
 
+	t_tabla_paginacion* nuevaTabla;
+	t_fila_tabla_paginacion* nueva_fila_tablaDePaginas;
+
 	switch(modo){
 		case SEG:
 			//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
@@ -347,6 +355,25 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 		break;
 
 		case TPI:
+			nuevaTabla=malloc(sizeof(t_tabla_paginacion));
+			nuevaTabla->pid=id;
+			nuevaTabla->lista_filas=list_create();
+			list_add(lista_tablas,nuevaTabla);
+			int marco_libre=obtener_Marco_Libre();
+
+			nueva_fila_tablaDePaginas = malloc(sizeof(t_fila_tabla_paginacion));
+
+			if(nuevaTabla->lista_filas->elements_count>=1){
+				nueva_fila_tablaDePaginas->nro_pagina=nuevaTabla->lista_filas->elements_count-1;
+			}else{
+				nueva_fila_tablaDePaginas->nro_pagina=0;
+			}
+			nueva_fila_tablaDePaginas->nro_marco=marco_libre;
+			list_add(nuevaTabla->lista_filas,nueva_fila_tablaDePaginas);
+
+			log_info(logger, "Agrego la pagina %d del PID: %d, al Marco: %d",
+					nueva_fila_tablaDePaginas->nro_pagina, nuevaTabla->pid, nueva_fila_tablaDePaginas->nro_marco);
+
 		break;
 
 		case SPA:
@@ -746,7 +773,24 @@ void _fm9_liberar_memoria_proceso_seg_pura(unsigned int pid){
 
 	free(proceso);
 }
+//--------------paginacion---------------
+int obtener_Marco_Libre(){
+	int i=0;
+	int bit_no_encontrado=1;
+	while(i < cant_marcos  && bit_no_encontrado){
+		if(bitMap[i]==0){
+			bit_no_encontrado=0;
+		}else{
+			i++;
+		}
 
+	}
+	if(bit_no_encontrado){
+		return -1;
+	}else{return i;}
+
+}
+//--------------------------------
 void fm9_exit(){
 	free(storage);
 	close(listening_socket);

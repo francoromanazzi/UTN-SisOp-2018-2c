@@ -58,7 +58,24 @@
 		void _fm9_close_seg_pura(unsigned int id, int base, int* ok);
 		void _fm9_liberar_memoria_proceso_seg_pura(unsigned int id);
 
-	/* Variables globales */
+//-----------Paginacion---------------
+		char* bitMap;
+
+		typedef struct {
+			unsigned int pid;
+			t_list* lista_filas;
+			} t_tabla_paginacion;
+
+		typedef struct {
+			unsigned int nro_pagina;
+			unsigned int nro_marco;
+			} t_fila_tabla_paginacion;
+
+		t_list* lista_tablas;
+
+		int obtener_Marco_Libre();
+//-----------------------------
+/* Variables globales */
 		t_config* config;
 		t_log* logger;
 		int listening_socket;
@@ -69,6 +86,7 @@
 		int max_linea;
 		int storage_cant_lineas;
 		int tam_pagina;
+		int cant_marcos;
 		int transfer_size;
 		char* storage;
 
