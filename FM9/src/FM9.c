@@ -72,6 +72,7 @@ int fm9_initialize(){
 				for(i=0;i<cant_marcos;i++){
 					bitMap[i]=0;
 				}
+				tablaPaginasInvertida=calloc(sizeof(t_fila_tabla_paginas_invertida),cant_marcos);
 			break;
 
 			case SPA:
@@ -311,8 +312,9 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	t_proceso* proceso;
 	t_fila_tabla_segmento* nueva_fila_tabla;
 
-	t_tabla_paginacion* nuevaTabla;
-	t_fila_tabla_paginacion* nueva_fila_tablaDePaginas;
+
+	t_fila_tabla_paginas_invertida* nueva_fila_tablaDePaginas;
+
 
 	switch(modo){
 		case SEG:
@@ -355,24 +357,30 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 		break;
 
 		case TPI:
-			nuevaTabla=malloc(sizeof(t_tabla_paginacion));
-			nuevaTabla->pid=id;
-			nuevaTabla->lista_filas=list_create();
-			list_add(lista_tablas,nuevaTabla);
-			int marco_libre=obtener_Marco_Libre();
 
-			nueva_fila_tablaDePaginas = malloc(sizeof(t_fila_tabla_paginacion));
+			nueva_fila_tablaDePaginas = malloc(sizeof(t_fila_tabla_paginas_invertida));
+			int cantPaginas=cantidad_paginas_del_archivo(id);
+			int marco_libre;
+			int j=0;
+			if(cantPaginas<marcos_disponibles()){
+				while(j<cantPaginas){
+					//mutex lock
+					marco_libre=obtener_Marco_Libre();
+					nueva_fila_tablaDePaginas->nro_marco=marco_libre;
+					nueva_fila_tablaDePaginas->pid=id;
+					nueva_fila_tablaDePaginas->nro_pagina=j;
+					list_add(tablaPaginasInvertida,nueva_fila_tablaDePaginas);
+					bitMap[marco_libre]=1;
+					//mutex unlock
+					log_info(logger, "Agrego la pagina %d del PID: %d, al Marco: %d",
+										nueva_fila_tablaDePaginas->nro_pagina, nueva_fila_tablaDePaginas->pid, nueva_fila_tablaDePaginas->nro_marco);
+					j++;
+				}
 
-			if(nuevaTabla->lista_filas->elements_count>=1){
-				nueva_fila_tablaDePaginas->nro_pagina=nuevaTabla->lista_filas->elements_count-1;
-			}else{
-				nueva_fila_tablaDePaginas->nro_pagina=0;
 			}
-			nueva_fila_tablaDePaginas->nro_marco=marco_libre;
-			list_add(nuevaTabla->lista_filas,nueva_fila_tablaDePaginas);
-
-			log_info(logger, "Agrego la pagina %d del PID: %d, al Marco: %d",
-					nueva_fila_tablaDePaginas->nro_pagina, nuevaTabla->pid, nueva_fila_tablaDePaginas->nro_marco);
+			else{
+				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+			}
 
 		break;
 
@@ -789,6 +797,24 @@ int obtener_Marco_Libre(){
 		return -1;
 	}else{return i;}
 
+}
+int marcos_disponibles(){
+	int i,j=0;
+	for(i=0;i<cant_marcos;i++){
+		if(bitMap[i]==0){
+			j++;
+		}
+	}
+	return j;
+}
+int cantidad_paginas_del_archivo(int pid){
+	int x=0;
+
+	//
+
+	//
+
+	return x;
 }
 //--------------------------------
 void fm9_exit(){

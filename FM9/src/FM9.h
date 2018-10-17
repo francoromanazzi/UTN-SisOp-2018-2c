@@ -62,18 +62,15 @@
 		char* bitMap;
 
 		typedef struct {
-			unsigned int pid;
-			t_list* lista_filas;
-			} t_tabla_paginacion;
+		unsigned int nro_marco;
+		unsigned int pid;
+		unsigned int nro_pagina;
+		} t_fila_tabla_paginas_invertida;
 
-		typedef struct {
-			unsigned int nro_pagina;
-			unsigned int nro_marco;
-			} t_fila_tabla_paginacion;
-
-		t_list* lista_tablas;
-
+		t_list* tablaPaginasInvertida;
 		int obtener_Marco_Libre();
+		int cantidad_paginas_del_archivo(int id);
+		int marcos_disponibles();
 //-----------------------------
 /* Variables globales */
 		t_config* config;
