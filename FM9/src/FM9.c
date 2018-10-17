@@ -63,6 +63,7 @@ int fm9_initialize(){
 				fm9_dir_logica_a_fisica = &_fm9_dir_logica_a_fisica_seg_pura;
 				fm9_dump_pid = &_fm9_dump_pid_seg_pura;
 				fm9_close = &_fm9_close_seg_pura;
+				fm9_liberar_memoria_proceso = &_fm9_liberar_memoria_proceso_seg_pura;
 			break;
 
 			case TPI:
@@ -273,6 +274,12 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 					operacion_ok = ERROR_CLOSE_FALLO_SEGMENTO;
 				}
 				fm9_send(socket, RESULTADO_CLOSE, operacion_ok);
+			break;
+
+			case LIBERAR_MEMORIA_FM9:
+				id = (unsigned int) desempaquetar_int(msg);
+				log_info(logger, "CPU me pidio liberar la memoria usada por el proceso %d", id);
+				fm9_liberar_memoria_proceso(id);
 			break;
 
 			default:
@@ -718,6 +725,26 @@ void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
 	list_remove_and_destroy_by_condition(proceso->lista_tabla_segmentos, _mismo_nro_seg, free);
 
 	//pthread_mutex_unlock(&sem_mutex_lista_procesos);
+}
+
+void _fm9_liberar_memoria_proceso_seg_pura(unsigned int pid){
+
+	bool _mismo_pid(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	void _liberar_memoria_segmento(void* _fila){
+		t_fila_tabla_segmento* fila = (t_fila_tabla_segmento*) _fila;
+		_fm9_nuevo_hueco_disponible_seg_pura(fila->base, fila->base + fila->limite);
+		free(_fila);
+	}
+
+	t_proceso* proceso = (t_proceso*) list_remove_by_condition(lista_procesos, _mismo_pid);
+	if(proceso == NULL) return;
+
+	list_iterate(proceso->lista_tabla_segmentos, _liberar_memoria_segmento);
+
+	free(proceso);
 }
 
 void fm9_exit(){

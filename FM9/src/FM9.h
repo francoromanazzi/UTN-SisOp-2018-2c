@@ -56,6 +56,7 @@
 		void _fm9_compactar_seg_pura();
 		void _fm9_lock_all_mutex_seg_pura(bool lock);
 		void _fm9_close_seg_pura(unsigned int id, int base, int* ok);
+		void _fm9_liberar_memoria_proceso_seg_pura(unsigned int id);
 
 	/* Variables globales */
 		t_config* config;
@@ -86,6 +87,7 @@
 	int fm9_storage_nuevo_archivo(unsigned int id, int* ok);
 	void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok);
 	void (*fm9_close)(unsigned int id, int base, int* ok);
+	void (*fm9_liberar_memoria_proceso)(unsigned int id);
 
 	void fm9_exit();
 

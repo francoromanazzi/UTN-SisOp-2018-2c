@@ -40,7 +40,7 @@
 
 	int cpu_send(int socket, e_tipo_msg tipo_msg, ...);
 
-	int cpu_esperar_dtb();
+	int cpu_esperar_orden_safa();
 	void cpu_ejecutar_dtb(t_dtb* dtb);
 
 	char* cpu_fetch(t_dtb* dtb, int base_escriptorio);

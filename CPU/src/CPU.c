@@ -6,7 +6,7 @@ int main(void) {
 	}
 
 	while(1){
-		if(cpu_esperar_dtb() == -1){
+		if(cpu_esperar_orden_safa() == -1){
 			cpu_exit();
 			return EXIT_FAILURE;
 		}
@@ -156,6 +156,11 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 			clock_gettime(CLOCK_MONOTONIC, &time);
 			mensaje_a_enviar = empaquetar_tiempo_respuesta(id, time);
 		break;
+
+		case LIBERAR_MEMORIA_FM9: // A FM9
+			id = va_arg(arguments, unsigned int);
+			mensaje_a_enviar = empaquetar_int((int) id);
+		break;
 	}
 	mensaje_a_enviar->header->emisor = CPU;
 	mensaje_a_enviar->header->tipo_mensaje = tipo_msg;
@@ -166,9 +171,10 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	return ret;
 }
 
-int cpu_esperar_dtb(){
+int cpu_esperar_orden_safa(){
 	t_msg* msg = malloc(sizeof(t_msg));
 	t_dtb* dtb;
+	unsigned int id;
 
 	if(msg_await(safa_socket, msg) == -1){
 		log_info(logger, "Se desconecto S-AFA");
@@ -192,6 +198,11 @@ int cpu_esperar_dtb(){
 			log_info(logger, "Se desconecto S-AFA");
 			msg_free(&msg);
 			return -1;
+		break;
+
+		case LIBERAR_MEMORIA_FM9:
+			id = (unsigned int) desempaquetar_int(msg);
+			cpu_send(fm9_socket, LIBERAR_MEMORIA_FM9, id);
 		break;
 
 		default:
@@ -228,6 +239,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
 			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
+				cpu_send(fm9_socket, LIBERAR_MEMORIA_FM9, dtb->gdt_id); // Le pido a FM9 que libere la memoria del proceso
 				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
 				return;
@@ -252,6 +264,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 				else{
 					log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
 					dtb->flags.error_nro = nro_error;
+					cpu_send(fm9_socket, LIBERAR_MEMORIA_FM9, dtb->gdt_id); // Le pido a FM9 que libere la memoria del proceso
 					cpu_send(safa_socket, EXIT, dtb);
 				}
 				operacion_free(&operacion);

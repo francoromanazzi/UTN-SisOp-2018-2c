@@ -93,7 +93,7 @@ void safa_iniciar_estado_operatorio(){
 
 int safa_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
-	int ret;
+	int ret, id;
  	t_dtb* dtb;
  	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -107,6 +107,11 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
 			dtb = va_arg(arguments, t_dtb*);
 			mensaje_a_enviar = empaquetar_dtb(dtb);
 		break;
+
+ 		case LIBERAR_MEMORIA_FM9: // A CPU
+ 			id = (int) va_arg(arguments, unsigned int);
+ 			mensaje_a_enviar = empaquetar_int(id);
+ 		break;
 	}
 
 	mensaje_a_enviar->header->emisor = SAFA;
@@ -217,6 +222,11 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			case EXIT:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, EXIT_DTB, desempaquetar_dtb(msg));
+			break;
+
+			case RESULTADO_LIBERAR_MEMORIA_FM9:
+				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, NUEVO_CPU_DISPONIBLE);
 			break;
 
 			default:

@@ -102,7 +102,7 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 
 				case RESULTADO_IO_DAM:
 					data = va_arg(arguments, void*);
-					msg->data = data;
+					msg->data = safa_protocol_empaquetar_resultado_io(data);
 				break;
 
 				case DESBLOQUEAR_DUMMY:

@@ -5,6 +5,7 @@ void pcp_iniciar(){
 	lista_procesos_a_finalizar_en_exec = list_create();
 	lista_procesos_a_actualizar_en_exec = list_create();
 	lista_procesos_a_finalizar_IO_en_exec = list_create();
+	lista_procesos_a_solicitar_liberacion_de_memoria = list_create();
 
 	/* Espero mensajes */
 	while(1){
@@ -38,10 +39,12 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					dtb = (t_dtb*) msg->data;
 
 					/* Me fijo si me habian pedido finalizar este DTB*/
-					if(list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2)){ // Me habian pedido finalizarlo
+					if((id = (unsigned int) list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2))){ // Me habian pedido finalizarlo
+						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
 						list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2);
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
+						pcp_intentar_solicitar_liberacion_memoria();
 					}
 					else{
 						log_info(logger, "[PCP] Muevo a READY el DTB con ID: %d", ((t_dtb*) (msg->data))->gdt_id);
@@ -56,10 +59,12 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					dtb = (t_dtb*) msg->data;
 
 					/* Me fijo si me habian pedido finalizar este DTB*/
-					if((id = (int) list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2)) && !dtb_es_dummy((void*) dtb)){ // Me habian pedido finalizarlo
+					if((id = (unsigned int) list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2)) && !dtb_es_dummy((void*) dtb)){ // Me habian pedido finalizarlo
+						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
 						list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2);
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
+						pcp_intentar_solicitar_liberacion_memoria();
 					}
 					else {
 						if(dtb_es_dummy((void*) dtb)){
@@ -138,7 +143,8 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 				break;
 
 				case NUEVO_CPU_DISPONIBLE:
-					pcp_intentar_ejecutar_dtb();
+					if(pcp_intentar_solicitar_liberacion_memoria() == false)
+						pcp_intentar_ejecutar_dtb();
 				break;
 			}
 		break;
@@ -231,7 +237,8 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 				break;
 
 				case NUEVO_CPU_DISPONIBLE:
-					pcp_intentar_ejecutar_dtb();
+					if(pcp_intentar_solicitar_liberacion_memoria() == false)
+						pcp_intentar_ejecutar_dtb();
 				break;
 			}
 		break;
@@ -242,6 +249,24 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 			}
 		break;
 	}
+}
+
+bool pcp_intentar_solicitar_liberacion_memoria(){
+	int cpu_socket;
+	unsigned int id;
+
+	if(list_is_empty(lista_procesos_a_solicitar_liberacion_de_memoria)) return false;
+	id = (unsigned int) list_remove(lista_procesos_a_solicitar_liberacion_de_memoria, 0);
+
+	if((cpu_socket = conexion_cpu_get_available()) == -1){ // Nunca deberia ocurrir de todas formas
+		log_error(logger, "[PCP] No encontre CPU al intentar solicitar liberacion de memoria");
+		list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
+		return false;
+	}
+
+	log_info(logger, "[PCP] Solicito liberar la memoria del DTB con ID: %d", id);
+	safa_send(cpu_socket, LIBERAR_MEMORIA_FM9, id);
+	return true;
 }
 
 void pcp_intentar_ejecutar_dtb(){
