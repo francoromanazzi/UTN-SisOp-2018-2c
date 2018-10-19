@@ -137,7 +137,8 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		printf("Segmento %d\n", fila_tabla->nro_seg);
 
 		for(i = 0; i <= fila_tabla->limite; i++){
-			linea = fm9_storage_leer(proceso->pid, fila_tabla->nro_seg, i, &ok, false);
+			int dir_logica = _fm9_dir_logica_create_seg_pura(fila_tabla->nro_seg, i);
+			linea = fm9_storage_leer(proceso->pid, dir_logica, &ok, false);
 			log_info(logger,"\t%d: %s", i, linea);
 			printf("\t%d: %s\n", i, linea);
 			free(linea);

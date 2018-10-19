@@ -14,10 +14,11 @@ t_dtb* dtb_create(char* path_escriptorio){
 		ret -> flags.inicializado = 0;
 	}
 	else{ // NO DUMMY
+		t_list* lista_direcciones = list_create();
 		ret -> ruta_escriptorio = strdup(path_escriptorio);
 		ret -> estado_actual = ESTADO_NEW;
 		ret -> flags.inicializado = 1;
-		dictionary_put(ret->archivos_abiertos, ret->ruta_escriptorio, (void*) -1);
+		dictionary_put(ret->archivos_abiertos, ret->ruta_escriptorio, (void*) lista_direcciones);
 	}
 
 	return ret;
@@ -44,7 +45,7 @@ int dtb_get_gdt_id_count(bool modify){
 void dtb_destroy(t_dtb* dtb){
 	if(dtb == NULL) return;
 
-	dictionary_destroy(dtb->archivos_abiertos);
+	dictionary_destroy_and_destroy_elements(dtb->archivos_abiertos, (void (*)(void*))list_destroy);
 	free(dtb->ruta_escriptorio);
 	free(dtb);
 }
@@ -55,7 +56,21 @@ void dtb_destroy_v2(void* dtb){
 
 void dtb_mostrar(t_dtb* dtb){
 	void dictionary_print_element(char* key, void* data){
-		printf("\t%s: %d\n", key, (int) data);
+		char* lista_direcciones_str = string_new();
+
+		void _agregar_a_lista_direcciones_str(void* entero){
+			char* aux = string_itoa((int) entero);
+			string_append(&lista_direcciones_str, aux);
+			string_append(&lista_direcciones_str, ", ");
+			free(aux);
+		}
+
+		t_list* lista_direcciones = (t_list*) data;
+		list_iterate(lista_direcciones, _agregar_a_lista_direcciones_str);
+		if(strlen(lista_direcciones_str) > 1)
+			lista_direcciones_str[strlen(lista_direcciones_str) - 2] = '\0';
+		printf("\t%s: [%s]\n", key, lista_direcciones_str);
+		free(lista_direcciones_str);
 	}
 
 	if(dtb->flags.inicializado == 0)
@@ -84,8 +99,9 @@ t_dtb* dtb_copiar(t_dtb* otro_dtb){
 	if(otro_dtb == NULL) return NULL;
 	t_dtb* ret_dtb = malloc(sizeof(t_dtb));
 
-	void dictionary_copy_element(char* key, void* data){
-		dictionary_put(ret_dtb->archivos_abiertos, key, data);
+	void dictionary_copy_element(char* key, void* _lista_direcciones){
+		t_list* lista_direcciones = list_duplicate((t_list*) _lista_direcciones);
+		dictionary_put(ret_dtb->archivos_abiertos, key, lista_direcciones); // TODO revisar que esto ande
 	}
 
 	ret_dtb -> gdt_id = otro_dtb -> gdt_id;

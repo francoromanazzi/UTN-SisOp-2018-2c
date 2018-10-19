@@ -14,7 +14,8 @@ void plp_iniciar(){
 }
 
 void plp_gestionar_msg(t_safa_msg* msg){
-	int ok, base;
+	int ok;
+	t_list* lista_direcciones;
 	unsigned int id;
 	char* path;
 	t_dtb* dtb;
@@ -29,7 +30,7 @@ void plp_gestionar_msg(t_safa_msg* msg){
 		case S_AFA:
 			switch(msg->tipo_msg){
 				case RESULTADO_ABRIR_DAM:
-					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &base);
+					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &lista_direcciones);
 
 					if((dtb = list_find(cola_new, _mismo_id)) == NULL){
 						safa_protocol_encolar_msg_y_avisar(PLP, PCP, RESULTADO_ABRIR_DAM, msg->data);
@@ -37,7 +38,7 @@ void plp_gestionar_msg(t_safa_msg* msg){
 					else{
 						if(ok == OK){
 							log_info(logger, "[PLP] Finalizo la op DUMMY del DTB con ID: %d. Lo muevo a READY", id);
-							plp_cargar_archivo(dtb, base);
+							plp_cargar_archivo(dtb, lista_direcciones);
 							plp_mover_dtb(id, ESTADO_READY);
 						}
 						else{
@@ -48,6 +49,7 @@ void plp_gestionar_msg(t_safa_msg* msg){
 						}
 					}
 					free(path);
+					list_destroy(lista_direcciones);
 				break;
 
 				case GRADO_MULTIPROGRAMACION_AUMENTADO:
@@ -152,9 +154,9 @@ void plp_intentar_iniciar_op_dummy(){
 	safa_protocol_encolar_msg_y_avisar(PLP, PCP, DESBLOQUEAR_DUMMY, dtb_elegido->gdt_id, dtb_elegido->ruta_escriptorio);
 }
 
-void plp_cargar_archivo(t_dtb* dtb_a_actualizar, int base){
-	dictionary_remove(dtb_a_actualizar->archivos_abiertos, dtb_a_actualizar->ruta_escriptorio);
-	dictionary_put(dtb_a_actualizar->archivos_abiertos, dtb_a_actualizar->ruta_escriptorio, (void*) base);
+void plp_cargar_archivo(t_dtb* dtb_a_actualizar, t_list* lista_direcciones){
+	dictionary_remove_and_destroy(dtb_a_actualizar->archivos_abiertos, dtb_a_actualizar->ruta_escriptorio, (void (*)(void*))list_destroy);
+	dictionary_put(dtb_a_actualizar->archivos_abiertos, dtb_a_actualizar->ruta_escriptorio, (void*) list_duplicate(lista_direcciones));
 }
 
 t_status* plp_empaquetar_status(){

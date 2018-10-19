@@ -127,7 +127,7 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 				return -1;
 			break;
 
-			case VALIDAR: // Puede ser por ABRIR o por FLUSH
+			case VALIDAR: // Puede ser por ABRIR o por FLUSH o por CREAR
 				path = desempaquetar_string(msg);
 				log_info(logger, "Recibi ordenes de DAM de validar el archivo %s", path);
 

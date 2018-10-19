@@ -18,7 +18,7 @@
 	void pcp_intentar_ejecutar_dtb();
 	bool pcp_intentar_solicitar_liberacion_memoria();
 	void pcp_actualizar_dtb(t_dtb* dtb);
-	void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, int base);
+	void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, t_list* lista_direcciones);
 	t_dtb* pcp_encontrar_dtb(unsigned int id);
 	t_status* pcp_empaquetar_status(t_status* status);
 	void pcp_mover_dtb(unsigned int id, e_estado inicio, e_estado fin);

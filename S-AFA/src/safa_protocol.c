@@ -102,7 +102,7 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 
 				case RESULTADO_IO_DAM:
 					data = va_arg(arguments, void*);
-					msg->data = safa_protocol_empaquetar_resultado_io(data);
+					msg->data = data;
 				break;
 
 				case DESBLOQUEAR_DUMMY:
@@ -209,21 +209,23 @@ void* safa_protocol_empaquetar_resultado_abrir(void* data){
 	int ok, base;
 	unsigned int id;
 	char* path;
+	t_list* lista_direcciones;
 	void* ret;
 
-	safa_protocol_desempaquetar_resultado_abrir(data, &ok, &id, &path, &base);
-	t_msg* msg = empaquetar_resultado_abrir(ok, id, path, base);
+	safa_protocol_desempaquetar_resultado_abrir(data, &ok, &id, &path, &lista_direcciones);
+	t_msg* msg = empaquetar_resultado_abrir(ok, id, path, lista_direcciones);
 	ret = malloc(msg->header->payload_size);
 	memcpy(ret, msg->payload, msg->header->payload_size);
 	msg_free(&msg);
 	free(path);
+	list_destroy(lista_direcciones);
 	return ret;
 }
 
-void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, int* base){
+void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, t_list** lista_direcciones){
 	t_msg* msg = malloc(sizeof(t_msg));
 	msg->payload = data;
-	desempaquetar_resultado_abrir(msg, ok, id, path, base);
+	desempaquetar_resultado_abrir(msg, ok, id, path, lista_direcciones);
 	free(msg);
 }
 

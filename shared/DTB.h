@@ -4,8 +4,10 @@
 	#include <stdlib.h>
 	#include <stdio.h>
 	#include <commons/collections/dictionary.h>
-	
-#include "_common_includes.h"
+	#include <commons/collections/list.h>
+	#include <commons/string.h>
+
+	#include "_common_includes.h"
 
 	typedef enum {ESTADO_NEW, ESTADO_READY, ESTADO_EXEC, ESTADO_BLOCK, ESTADO_EXIT} e_estado;
 
@@ -27,7 +29,7 @@
 		int quantum_restante;
 		e_estado estado_actual;
 		struct dtb_flags flags;
-		t_dictionary* archivos_abiertos;
+		t_dictionary* archivos_abiertos; // KEY->ruta, VALUE->lista de direcciones logicas
 	} t_dtb ;
 
 

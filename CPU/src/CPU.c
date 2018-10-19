@@ -74,9 +74,10 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	char* datos;
 	char* recurso;
 	unsigned int id;
-	int base, offset, cant_lineas;
+	int base, offset, cant_lineas, direccion_logica;
 	t_dtb* dtb;
 	struct timespec time;
+	t_list* lista_direcciones;
 
 	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -94,30 +95,28 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 
 		case GET_FM9: // A FM9
 			id = va_arg(arguments, unsigned int);
-			base = va_arg(arguments, int);
-			offset = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_get_fm9(id, base, offset);
+			direccion_logica = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_get_fm9(id, direccion_logica);
 		break;
 
 		case ESCRIBIR_FM9: // A FM9 (asignar)
 			id = va_arg(arguments, unsigned int);
-			base = va_arg(arguments, int);
-			offset = va_arg(arguments, int);
+			direccion_logica = va_arg(arguments, int);
 			datos = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_escribir_fm9(id, base, offset, datos);
+			mensaje_a_enviar = empaquetar_escribir_fm9(id, direccion_logica, datos);
 		break;
 
 		case FLUSH: // A DAM
 			id = va_arg(arguments, unsigned int);
 			path = va_arg(arguments, char*);
-			base = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_flush(id, path, base);
+			lista_direcciones = va_arg(arguments, t_list*);
+			mensaje_a_enviar = empaquetar_flush(id, path, lista_direcciones);
 		break;
 
 		case CLOSE: // A FM9
 			id = va_arg(arguments, unsigned int);
-			base = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_close(id, base);
+			lista_direcciones = va_arg(arguments, t_list*);
+			mensaje_a_enviar = empaquetar_close(id, lista_direcciones);
 		break;
 
 		case WAIT: // A SAFA
@@ -227,7 +226,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 		bool primera_vez_en_ejecutarse = dtb->pc == 0;
 		int operaciones_realizadas = 0;
 		int nro_error;
-		int base_escriptorio = (int) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
+		t_list* lista_direcciones_escriptorio = (t_list*) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
 
 		while(dtb->quantum_restante > 0){
 			usleep(retardo_ejecucion);
@@ -235,7 +234,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			/* ------------------------- 1RA FASE: FETCH ------------------------- */
 			char* instruccion;
 			do
-				instruccion = cpu_fetch(dtb, base_escriptorio);
+				instruccion = cpu_fetch(dtb);
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
 			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
@@ -277,12 +276,13 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 	}
 }
 
-char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
+char* cpu_fetch(t_dtb* dtb){
 	char* ret;
 	int ok;
 
 	/* Le pido a FM9 la proxima instruccion */
-	cpu_send(fm9_socket, GET_FM9, dtb->gdt_id, base_escriptorio, dtb->pc);
+	int direccion_prox_instruccion = (int) list_get((t_list*) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio), dtb->pc);
+	cpu_send(fm9_socket, GET_FM9, dtb->gdt_id, direccion_prox_instruccion);
 
 	/* Espero de FM9 la proxima instruccion */
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
@@ -315,7 +315,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
 			/* 1. Verificar que el archivo no se encuentre abierto, (puede ser el escriptorio) */
-			if(dictionary_has_key(dtb->archivos_abiertos, path) && (int) dictionary_get(dtb->archivos_abiertos, path) != -1)
+			if(dictionary_has_key(dtb->archivos_abiertos, path) && list_size((t_list*) dictionary_get(dtb->archivos_abiertos, path)) > 0)
 				return OK;
 
 			/* 2. Pedir a DAM que abra el archivo */
@@ -334,11 +334,15 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			datos = (char*) dictionary_get(operacion->operandos, "datos");
 
 			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
-			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || list_size((t_list*) dictionary_get(dtb->archivos_abiertos, path)) <= 0)
 				return ERROR_ASIGNAR_ARCHIVO_NO_ABIERTO;
 
+			/* Verifico que la linea este dentro del limite de direcciones que tengo */
+			if(linea >= list_size((t_list*) dictionary_get(dtb->archivos_abiertos, path)))
+				return ERROR_ASIGNAR_FALLO_SEGMENTO;
+
 			/* 2. Le pido a FM9 que actualize los datos */
-			cpu_send(fm9_socket, ESCRIBIR_FM9, dtb->gdt_id, (int) dictionary_get(dtb->archivos_abiertos, path), linea, datos);
+			cpu_send(fm9_socket, ESCRIBIR_FM9, dtb->gdt_id, (int) list_get((t_list*) dictionary_get(dtb->archivos_abiertos, path), linea), datos);
 
 			/* Recibo de FM9 el resultado de escribir */
 			msg_recibido = malloc(sizeof(t_msg));
@@ -391,11 +395,11 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
 			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
-			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || list_size((t_list*) dictionary_get(dtb->archivos_abiertos, path)) <= 0)
 				return ERROR_FLUSH_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a DAM que haga flush */
-			cpu_send(dam_socket, FLUSH, dtb->gdt_id, path, (int) dictionary_get(dtb->archivos_abiertos, path));
+			cpu_send(dam_socket, FLUSH, dtb->gdt_id, path, (t_list*) dictionary_get(dtb->archivos_abiertos, path));
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -405,11 +409,11 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			path = (char*) dictionary_get(operacion->operandos, "path");
 
 			/* 1. Verificar que el archivo se encuentre abierto, y que no sea el escriptorio */
-			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || (int) dictionary_get(dtb->archivos_abiertos, path) == -1)
+			if(!dictionary_has_key(dtb->archivos_abiertos, path) || !strcmp(path, dtb->ruta_escriptorio) || list_size((t_list*) dictionary_get(dtb->archivos_abiertos, path)) <= 0)
 				return ERROR_CLOSE_ARCHIVO_NO_ABIERTO;
 
 			/* 2. Pedir a FM9 que libere el archivo */
-			cpu_send(fm9_socket, CLOSE, dtb->gdt_id, (int) dictionary_get(dtb->archivos_abiertos, path));
+			cpu_send(fm9_socket, CLOSE, dtb->gdt_id, (t_list*) dictionary_get(dtb->archivos_abiertos, path));
 
 			/* 3. Saco el archivo del DTB */
 			dictionary_remove(dtb->archivos_abiertos, path);

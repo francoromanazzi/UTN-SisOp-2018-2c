@@ -111,7 +111,7 @@ int fm9_initialize(){
 
 int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
-	int ret, ok;
+	int ret, ok, direccion_logica;
 	char* str;
 	bool str_free = false;
 
@@ -121,7 +121,8 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 	switch(tipo_msg){
 		case RESULTADO_CREAR_FM9:
 			ok = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_int(ok);
+			direccion_logica = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_resultado_crear_fm9(ok, direccion_logica);
 		break;
 
 		case RESULTADO_GET_FM9:
@@ -138,6 +139,12 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 		case RESULTADO_ESCRIBIR_FM9:
 			ok = va_arg(arguments, int);
 			mensaje_a_enviar = empaquetar_int(ok);
+		break;
+
+		case RESULTADO_RESERVAR_LINEA_FM9:
+			ok = va_arg(arguments, int);
+			direccion_logica = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_resultado_reservar_linea_fm9(ok, direccion_logica);
 		break;
 
 		case RESULTADO_CLOSE:
@@ -180,7 +187,8 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	unsigned int id;
-	int base, offset, operacion_ok = OK;
+	int direccion_logica, nueva_direccion_logica, operacion_ok = OK;
+	t_list* lista_direcciones;
 	char* datos;
 
 	if(msg->header->emisor == DAM){
@@ -198,26 +206,25 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				id = desempaquetar_int(msg);
 				log_info(logger,"DAM me pidio reservar memoria para un nuevo archivo del ID: %d", id);
 
-				base = fm9_storage_nuevo_archivo(id, &operacion_ok);
-				if(operacion_ok != OK){
-					if(operacion_ok == FM9_ERROR_INSUFICIENTE_ESPACIO)
-						operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
-					fm9_send(socket, RESULTADO_CREAR_FM9, operacion_ok);
-				}
-				else
-					fm9_send(socket, RESULTADO_CREAR_FM9, base);
+				direccion_logica = fm9_storage_nuevo_archivo(id, &operacion_ok);
+
+				if(operacion_ok == FM9_ERROR_INSUFICIENTE_ESPACIO)
+					operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
+
+				fm9_send(socket, RESULTADO_CREAR_FM9, operacion_ok, direccion_logica);
+
 			break;
 
 			case ESCRIBIR_FM9:
-				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
-				log_info(logger,"DAM me pidio la operacion ESCRIBIR %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
+				desempaquetar_escribir_fm9(msg, &id, &direccion_logica, &datos);
+				log_info(logger,"DAM me pidio la operacion ESCRIBIR %s del ID: %d en la dir logica: %d", datos, id, direccion_logica);
 
-				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, true);
+				fm9_storage_escribir(id, direccion_logica, datos, &operacion_ok, true);
 
 				if(operacion_ok != OK){ // Intento realocar el segmento a otro lugar mas grande
-					fm9_storage_realocar(id, base, offset, &operacion_ok);
+					fm9_storage_realocar(id, direccion_logica, &operacion_ok);
 					if(operacion_ok){
-						fm9_storage_escribir(id, base, offset, datos, &operacion_ok, true);
+						fm9_storage_escribir(id, direccion_logica, datos, &operacion_ok, true);
 					}
 				}
 				free(datos);
@@ -225,13 +232,22 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case GET_FM9:
-				desempaquetar_get_fm9(msg, &id, &base, &offset);
-				log_info(logger,"DAM me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
+				desempaquetar_get_fm9(msg, &id, &direccion_logica);
+				log_info(logger,"DAM me pidio la operacion GET del ID: %d en la dir logica: %d", id, direccion_logica);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok, true);
+				datos = fm9_storage_leer(id, direccion_logica, &operacion_ok, true);
 
-				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
+				fm9_send(socket, RESULTADO_GET_FM9, operacion_ok, datos);
 				if(datos != NULL) free(datos);
+			break;
+
+			case RESERVAR_LINEA_FM9:
+				desempaquetar_reservar_linea_fm9(msg, &id, &direccion_logica);
+				log_info(logger,"DAM me pidio reservar una linea mas del ID: %d, la ultima dir logica es: %d", id, direccion_logica);
+
+				nueva_direccion_logica = fm9_storage_realocar(id, direccion_logica, &operacion_ok);
+
+				fm9_send(socket, RESULTADO_RESERVAR_LINEA_FM9, operacion_ok, nueva_direccion_logica);
 			break;
 
 			default:
@@ -251,10 +267,10 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case ESCRIBIR_FM9:
-				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
-				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar) %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
+				desempaquetar_escribir_fm9(msg, &id, &direccion_logica, &datos);
+				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar) %s del ID: %d en la dir logica: %d", datos, id, direccion_logica);
 
-				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, false);
+				fm9_storage_escribir(id, direccion_logica, datos, &operacion_ok, false);
 				free(datos);
 				if(operacion_ok == FM9_ERROR_SEG_FAULT){
 					operacion_ok = ERROR_ASIGNAR_FALLO_SEGMENTO;
@@ -263,19 +279,19 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			break;
 
 			case GET_FM9:
-				desempaquetar_get_fm9(msg, &id, &base, &offset);
-				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
+				desempaquetar_get_fm9(msg, &id, &direccion_logica);
+				log_info(logger,"CPU me pidio la operacion GET del ID: %d en la dir logica: %d", id, direccion_logica);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false); // No deberia fallar nunca esto
+				datos = fm9_storage_leer(id, direccion_logica, &operacion_ok, false); // No deberia fallar nunca esto
 				fm9_send(socket, RESULTADO_GET_FM9, (void*) operacion_ok, (void*) datos);
 				if(datos != NULL) free(datos);
 			break;
 
 			case CLOSE:
-				desempaquetar_close(msg, &id, &base);
-				log_info(logger,"CPU me pidio liberar el archivo de ID: %d con base: %d", id, base);
+				desempaquetar_close(msg, &id, &lista_direcciones);
+				log_info(logger,"CPU me pidio liberar un archivo de ID: %d", id);
 
-				fm9_close(id, base, &operacion_ok);
+				fm9_close(id, lista_direcciones, &operacion_ok);
 				if(operacion_ok == FM9_ERROR_SEG_FAULT){
 					operacion_ok = ERROR_CLOSE_FALLO_SEGMENTO;
 				}
@@ -305,7 +321,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	}
 
 
-	int base, nro_linea;
+	int nro_linea, ret_direccion_logica;
 	bool linea_disponible = false;
 	*ok = OK;
 
@@ -349,7 +365,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			nueva_fila_tabla->limite = 0;
 			list_add(proceso->lista_tabla_segmentos, nueva_fila_tabla);
 
-			base = nueva_fila_tabla->nro_seg;
+			ret_direccion_logica = _fm9_dir_logica_create_seg_pura(nueva_fila_tabla->nro_seg, 0);
 
 			log_info(logger, "Agrego el segmento %d del PID: %d, Base: %d, Limite: %d",
 					nueva_fila_tabla->nro_seg, proceso->pid, nueva_fila_tabla->base, nueva_fila_tabla->limite);
@@ -390,44 +406,48 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 
 
 	*ok = OK;
-	return base;
+	return ret_direccion_logica;
 }
 
-void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
-
-	bool _mismo_id(void* proceso){
-		return ((t_proceso*) proceso)->pid == id;
-	}
-
-	bool _mismo_nro_seg(void* fila_tabla){
-		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == base;
-	}
+int fm9_storage_realocar(unsigned int id, int dir_logica, int* ok){
 
 	*ok = OK;
 	t_proceso* proceso;
 	t_fila_tabla_segmento* fila_tabla;
-	t_list* backup_lineas;
-	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0;
+	t_list* backup_lineas, *backup_dir_logicas;
+	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0, ret_dir_logica, dir_logica_aux;
+	unsigned int nro_seg, offset;
 	char* linea;
 
 	switch(modo){
 		case SEG:
+			nro_seg = dir_logica >> 16;
+			offset = dir_logica - (nro_seg << 16) + 1; // +1 por ser la siguente linea
+
+			bool _mismo_nro_seg(void* fila_tabla){
+				return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
+			}
+
+			bool _mismo_id(void* proceso){
+				return ((t_proceso*) proceso)->pid == id;
+			}
+
 			//pthread_mutex_lock(&sem_mutex_lista_procesos);
 			proceso = list_find(lista_procesos, _mismo_id);
-
 
 			if(proceso == NULL){
 				log_error(logger, "No se encontro el proceso al realocar");
 				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
-				return;
+				return -1;
 			}
 			fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
 			if(fila_tabla == NULL){
 				log_error(logger, "No se encontro el segmento al realocar");
 				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
-				return;
+				return -1;
 			}
 			log_info(logger, "Intento realocar el segmento %d del PID: %d con base %d, de %d a %d lineas", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite + 1, offset + 1);
+
 
 			//pthread_mutex_lock(&(fila_tabla->mutex));
 			//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
@@ -452,7 +472,7 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 					//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 					//pthread_mutex_unlock(&(fila_tabla->mutex));
 					//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
-					return;
+					return -1;
 				}
 			}
 			//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
@@ -463,16 +483,19 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			//pthread_mutex_unlock(&(fila_tabla->mutex));
 			//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 			for(i = 0; i <= fila_tabla->limite; i++){
-				list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) fila_tabla->nro_seg, i , ok, true));
+				dir_logica_aux = _fm9_dir_logica_create_seg_pura(fila_tabla->nro_seg, i);
+				list_add(backup_lineas, (void*) fm9_storage_leer(id, dir_logica_aux, ok, true));
 			}
 
 			/* Actualizo tabla de segmentos */
 			fila_tabla->base = base_nuevo_segmento;
 			fila_tabla->limite = offset;
+			ret_dir_logica = _fm9_dir_logica_create_seg_pura(fila_tabla->nro_seg, fila_tabla->limite);
 
 			/* Escribo las lineas guardadas */
 			for(i = 0; i<backup_lineas->elements_count; i++){
-				fm9_storage_escribir(id, (int) fila_tabla->nro_seg, i, (char*) list_get(backup_lineas, i), ok, true);
+				dir_logica_aux = _fm9_dir_logica_create_seg_pura(fila_tabla->nro_seg, i);
+				fm9_storage_escribir(id, dir_logica_aux, (char*) list_get(backup_lineas, i), ok, true);
 			}
 			list_destroy_and_destroy_elements(backup_lineas, free);
 
@@ -486,39 +509,46 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 		break;
 
 	} // Fin switch(modo)
+	return ret_dir_logica;
 }
 
-void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales){
-	int dir_fisica_lineas = fm9_dir_logica_a_fisica(id, base, offset, ok);
+void fm9_storage_escribir(unsigned int id, int dir_logica, char* str, int* ok, bool permisos_totales){
+	int dir_fisica = fm9_dir_logica_a_fisica(id, dir_logica, ok);
 	if(*ok != OK) {
 		if(!permisos_totales)
 			log_error(logger, "Seg fault al traducir una direccion");
 		return;
 	}
 
-	void* dir_fisica_bytes = (void*) (storage + (dir_fisica_lineas * max_linea));
+	void* dir_fisica_bytes = (void*) (storage + (dir_fisica * max_linea));
 
-	log_info(logger, "Escribo %s en %d", str, dir_fisica_lineas);
+	log_info(logger, "Escribo %s en %d", str, dir_fisica);
 
 	memcpy(dir_fisica_bytes, (void*) str, strlen(str) + 1);
 }
 
-char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales){
-	int dir_fisica_lineas = fm9_dir_logica_a_fisica(id, base, offset, ok);
+char* fm9_storage_leer(unsigned int id, int dir_logica, int* ok, bool permisos_totales){
+	int dir_fisica = fm9_dir_logica_a_fisica(id, dir_logica, ok);
 	if(*ok != OK) {
 		if(!permisos_totales)
 			log_error(logger, "Seg fault al traducir una direccion");
 		return NULL;
 	}
 
-	void* dir_fisica_bytes = (void*) (storage + (dir_fisica_lineas * max_linea));
+	void* dir_fisica_bytes = (void*) (storage + (dir_fisica * max_linea));
 
 	char* ret = malloc(max_linea);
 	memcpy((void*) ret, dir_fisica_bytes, max_linea);
 	return ret;
 }
 
-int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok){
+int _fm9_dir_logica_create_seg_pura(unsigned int nro_seg, unsigned int offset){
+	return (nro_seg << 16) + offset;
+}
+
+int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int dir_logica, int* ok){
+	unsigned int nro_seg = dir_logica >> 16;
+	unsigned int offset = dir_logica - (nro_seg << 16);
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -527,6 +557,7 @@ int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset,
 	bool _mismo_nro_seg(void* fila_tabla){
 		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
 	}
+
 
 	//pthread_mutex_lock(&sem_mutex_lista_procesos);
 	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
@@ -660,8 +691,10 @@ void _fm9_compactar_seg_pura(){
 
 		/* Me guardo las lineas que ya estaban desde antes */
 		t_list* backup_lineas = list_create();
+		int dir_logica;
 		for(i = 0; i <= segmento->limite; i++){
-			list_add(backup_lineas, (void*) fm9_storage_leer(id, (int) segmento->nro_seg, i , &ok, true));
+			dir_logica = _fm9_dir_logica_create_seg_pura(segmento->nro_seg, i);
+			list_add(backup_lineas, (void*) fm9_storage_leer(id, dir_logica, &ok, true));
 		}
 
 		/* Actualizo tabla de segmentos y lista de huecos*/
@@ -674,7 +707,8 @@ void _fm9_compactar_seg_pura(){
 
 		/* Escribo las lineas guardadas */
 		for(i = 0; i<backup_lineas->elements_count; i++){
-			fm9_storage_escribir(id, (int) segmento->nro_seg, i, (char*) list_get(backup_lineas, i), &ok, true);
+			dir_logica = _fm9_dir_logica_create_seg_pura(segmento->nro_seg, i);
+			fm9_storage_escribir(id, dir_logica, (char*) list_get(backup_lineas, i), &ok, true);
 		}
 		list_destroy_and_destroy_elements(backup_lineas, free);
 	}
@@ -722,7 +756,8 @@ void _fm9_lock_all_mutex_seg_pura(bool lock){
 	//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
-void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
+void _fm9_close_seg_pura(unsigned int pid, t_list* lista_dir_logicas, int* ok){
+	unsigned int nro_seg = ((int) list_get(lista_dir_logicas, 0)) >> 16;
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -777,7 +812,7 @@ void _fm9_liberar_memoria_proceso_seg_pura(unsigned int pid){
 	t_proceso* proceso = (t_proceso*) list_remove_by_condition(lista_procesos, _mismo_pid);
 	if(proceso == NULL) return;
 
-	list_iterate(proceso->lista_tabla_segmentos, _liberar_memoria_segmento);
+	list_destroy_and_destroy_elements(proceso->lista_tabla_segmentos, _liberar_memoria_segmento);
 
 	free(proceso);
 }

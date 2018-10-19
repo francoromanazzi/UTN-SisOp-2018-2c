@@ -17,12 +17,13 @@ void pcp_iniciar(){
 }
 
 void pcp_gestionar_msg(t_safa_msg* msg){
-	int ok, base, i;
+	int ok, i;
 	unsigned int id;
 	char* path;
 	t_dtb* dtb, *dtb_aux;
 	void* data;
 	t_status* status;
+	t_list* lista_direcciones;
 
 	bool _mismo_id(void* _dtb){
 		return ((t_dtb*) _dtb)->gdt_id == id;
@@ -89,7 +90,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							/* Me fijo si llego un fin de IO de DAM antes de que este proceso llegue a bloquearse */
 							for(i = 0; i<lista_procesos_a_finalizar_IO_en_exec->elements_count; i++){
 								data = list_remove(lista_procesos_a_finalizar_IO_en_exec, i);
-								safa_protocol_encolar_msg_y_avisar(S_AFA /* Trampa */, PCP, RESULTADO_IO_DAM, data);
+								safa_protocol_encolar_msg_y_avisar(S_AFA /* Trampa */, PCP, RESULTADO_IO_DAM, safa_protocol_empaquetar_resultado_io(data));
 								free(data);
 							}
 						}
@@ -172,7 +173,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 				break;
 
 				case RESULTADO_ABRIR_DAM:
-					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &base);
+					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &lista_direcciones);
 
 					if((dtb = list_find(cola_block, _mismo_id)) == NULL){
 						/* Todavia no llego a BLOCK (sigue en EXEC) */
@@ -182,7 +183,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					else{
 						if(ok == OK){
 							log_info(logger, "[PCP] Cargo el archivo %s en el DTB con ID: %d y lo muevo a ready", path, id);
-							pcp_cargar_archivo(dtb, path, base);
+							pcp_cargar_archivo(dtb, path, lista_direcciones);
 							pcp_mover_dtb(id, ESTADO_BLOCK, ESTADO_READY);
 						}
 						else{
@@ -256,6 +257,7 @@ bool pcp_intentar_solicitar_liberacion_memoria(){
 	unsigned int id;
 
 	if(list_is_empty(lista_procesos_a_solicitar_liberacion_de_memoria)) return false;
+
 	id = (unsigned int) list_remove(lista_procesos_a_solicitar_liberacion_de_memoria, 0);
 
 	if((cpu_socket = conexion_cpu_get_available()) == -1){ // Nunca deberia ocurrir de todas formas
@@ -341,7 +343,7 @@ void pcp_actualizar_dtb(t_dtb* dtb_recibido){
 	t_dtb* dtb_a_actualizar;
 
 	void _actualizar_archivos_abiertos(char* key, void* data){
-		dictionary_put(dtb_a_actualizar->archivos_abiertos, key, data);
+		dictionary_put(dtb_a_actualizar->archivos_abiertos, key, (void*) list_duplicate((t_list*) data));
 	}
 
 	if(dtb_es_dummy(dtb_recibido)){
@@ -355,14 +357,14 @@ void pcp_actualizar_dtb(t_dtb* dtb_recibido){
 		dtb_a_actualizar->pc = dtb_recibido->pc;
 		dtb_a_actualizar->quantum_restante = dtb_recibido->quantum_restante;
 		dtb_a_actualizar->flags.error_nro = dtb_recibido->flags.error_nro;
-		dictionary_clean(dtb_a_actualizar->archivos_abiertos); // Borro los archivos abiertos
+		dictionary_clean_and_destroy_elements(dtb_a_actualizar->archivos_abiertos, (void(*)(void*)) list_destroy); // Borro los archivos abiertos
 		dictionary_iterator(dtb_recibido->archivos_abiertos, _actualizar_archivos_abiertos); // Los vuelvo a poner, uno por uno
 	}
 }
 
-void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, int base){
-	dictionary_remove(dtb_a_actualizar->archivos_abiertos, path);
-	dictionary_put(dtb_a_actualizar->archivos_abiertos, path, (void*) base);
+void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, t_list* lista_direcciones){
+	dictionary_remove_and_destroy(dtb_a_actualizar->archivos_abiertos, path, (void (*)(void*)) list_destroy);
+	dictionary_put(dtb_a_actualizar->archivos_abiertos, path, (void*) lista_direcciones);
 }
 
 t_dtb* pcp_encontrar_dtb(unsigned int id){
