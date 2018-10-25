@@ -158,19 +158,19 @@ void mdj_procesar_comando(char* linea){
 		if(access(pwd_copy, F_OK) != -1 ){ // El archivo existe
 			int contenido_size;
 			void* contenido = _obtener_contenido_archivo(pwd_copy, &contenido_size);
-			void* digest = malloc(MD5_DIGEST_LENGTH);
+			unsigned char digest[MD5_DIGEST_LENGTH];
 			MD5_CTX context;
 			MD5_Init(&context);
 			MD5_Update(&context, contenido, contenido_size);
 			MD5_Final(digest, &context);
 			free(contenido);
 
-			char* digest_str = malloc(MD5_DIGEST_LENGTH + 1);
-			memcpy((void*) digest_str, digest, MD5_DIGEST_LENGTH);
-			digest_str[MD5_DIGEST_LENGTH] = '\0';
-			printf("%s\n\n", digest_str);
-			free(digest_str);
-			free(digest);
+			char md5_string[MD5_DIGEST_LENGTH * 2 + 1];
+			int i;
+			for(i = 0; i < MD5_DIGEST_LENGTH; i++)
+			    sprintf(&md5_string[i*2], "%02x", (unsigned int)digest[i]);
+
+			printf("%s\n\n", md5_string);
 		}
 		else{ // El archivo no existe
 			printf("[ERROR] El archivo no existe\n\n");
