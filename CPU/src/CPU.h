@@ -43,7 +43,7 @@
 	int cpu_esperar_orden_safa();
 	void cpu_ejecutar_dtb(t_dtb* dtb);
 
-	char* cpu_fetch(t_dtb* dtb);
+	char* cpu_fetch(t_dtb* dtb, int base_escriptorio);
 	t_operacion* cpu_decodificar(char* instruccion);
 	int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion);
 

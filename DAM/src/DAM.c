@@ -52,11 +52,10 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
 	int ret;
 
-	int ok, offset_mdj, direccion_logica, size, cant_lineas;
+	int ok, offset_mdj, size, cant_lineas, base, offset;
 	unsigned int id;
 	char* path, *datos;
 	void* buffer;
-	t_list* lista_direcciones;
 
 	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -70,8 +69,8 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			ok = va_arg(arguments, int);
 			id = va_arg(arguments, unsigned int);
 			path = va_arg(arguments, char*);
-			lista_direcciones = va_arg(arguments, t_list*);
-			mensaje_a_enviar = empaquetar_resultado_abrir(ok, id, path, lista_direcciones);
+			base = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_resultado_abrir(ok, id, path, base);
 		break;
 
 		case VALIDAR:// A MDJ
@@ -110,23 +109,19 @@ int dam_send(int socket, e_tipo_msg tipo_msg, ...){
 			mensaje_a_enviar = empaquetar_int(id);
 		break;
 
-		case RESERVAR_LINEA_FM9: // A FM9
-			id = va_arg(arguments, unsigned int);
-			direccion_logica = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_reservar_linea_fm9(id, direccion_logica);
-		break;
-
 		case ESCRIBIR_FM9: // A FM9
 			id = va_arg(arguments, unsigned int);
-			direccion_logica = va_arg(arguments, int);
+			base = va_arg(arguments, int);
+			offset = va_arg(arguments, int);
 			datos = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_escribir_fm9(id, direccion_logica, datos);
+			mensaje_a_enviar = empaquetar_escribir_fm9(id, base, offset, datos);
 		break;
 
 		case GET_FM9: // A FM9
 			id = va_arg(arguments, unsigned int);
-			direccion_logica = va_arg(arguments, int);
-			mensaje_a_enviar = empaquetar_get_fm9(id, direccion_logica);
+			base = va_arg(arguments, int);
+			offset = va_arg(arguments, int);
+			mensaje_a_enviar = empaquetar_get_fm9(id, base, offset);
 		break;
 
 		case RESULTADO_FLUSH: // A SAFA
@@ -183,8 +178,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	log_info(logger, "EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	t_msg* msg_recibido;
-	int ok, cant_lineas, direccion, i;
-	t_list* lista_direcciones;
+	int ok, cant_lineas, direccion, i, base = -1;
 	int resultadoManejar = 1; // Valor de retorno. -1 si quiero cerrar el hilo que atendia a esa CPU
 	unsigned int id;
 	char* path;
@@ -203,7 +197,6 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 			break;
 
 			case ABRIR:
-				lista_direcciones = list_create();
 				desempaquetar_abrir(msg, &path, &id);
 				log_info(logger, "Ehhh, voy a buscar %s para %d", path, id);
 
@@ -214,10 +207,9 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				ok = desempaquetar_int(msg_recibido);
 				if(ok != OK){ // Fallo MDJ, le aviso a SAFA
 					ok = ERROR_ABRIR_PATH_INEXISTENTE;
-					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, lista_direcciones);
+					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 					msg_free(&msg_recibido);
 					free(path);
-					list_destroy(lista_direcciones);
 					return resultadoManejar;
 				}
 				msg_free(&msg_recibido);
@@ -227,33 +219,30 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				dam_send(fm9_socket, CREAR_FM9, id);
 				msg_recibido = malloc(sizeof(t_msg));
 				msg_await(fm9_socket, msg_recibido);
-				desempaquetar_resultado_crear_fm9(msg_recibido, &ok, &direccion);
+				desempaquetar_resultado_crear_fm9(msg_recibido, &ok, &base);
 				if(ok == ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9){ // Fallo FM9, le aviso a SAFA
-					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, lista_direcciones);
+					dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 					msg_free(&msg_recibido);
 					free(path);
-					list_destroy(lista_direcciones);
 					return resultadoManejar;
 				}
 				msg_free(&msg_recibido);
-				list_add(lista_direcciones, (void*) direccion);
 				ok = OK;
 
 				/* Transfiero de MDJ a FM9 */
 				while(dam_transferencia_mdj_a_fm9(
 						mdj_socket, &offset_mdj,
 						fm9_socket, &offset_fm9,
-						id, path, &lista_direcciones, &ok,
+						id, path, base, &ok,
 						&linea_incompleta_buffer_anterior));
 
 				/* Le mando a SAFA el resultado de abrir el archivo */
-				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, lista_direcciones);
+				dam_send(safa_socket, RESULTADO_ABRIR, ok, id, path, base);
 				free(path);
-				list_destroy(lista_direcciones);
 			break;
 
 			case FLUSH:
-				desempaquetar_flush(msg, &id, &path, &lista_direcciones);
+				desempaquetar_flush(msg, &id, &path, &base);
 				log_info(logger, "Iniciando operacion FLUSH del archivo %s para %d", path, id);
 
 				/* Le pregunto a MDJ si el archivo existe */
@@ -274,13 +263,12 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 				while(dam_transferencia_fm9_a_mdj(
 										mdj_socket, &offset_mdj,
 										fm9_socket, &offset_fm9,
-										id, path, lista_direcciones, &ok,
+										id, path, base, &ok,
 										&linea_incompleta_buffer_anterior));
 				free(path);
 
 				/* Le mando a SAFA el resultado del flush */
 				dam_send(safa_socket, RESULTADO_FLUSH, ok, id);
-				list_destroy(lista_direcciones);
 			break;
 
 			case CREAR_MDJ:
@@ -352,7 +340,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 
 // Return: 0-> Transferencia completada, 1-> Transferencia no completada
 int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket, int* fm9_offset,
-		unsigned int id, char* path, t_list** lista_direcciones, int* ok, char** linea_incompleta_buffer_anterior){
+		unsigned int id, char* path, int base, int* ok, char** linea_incompleta_buffer_anterior){
 
 	void* buffer;
 	char* buffer_str;
@@ -360,25 +348,10 @@ int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket,
 	t_msg* msg_recibido;
 
 	void _enviar_linea_a_fm9_y_liberarla(char* str){
-		int direccion_logica;
-		if(*fm9_offset > list_size(*lista_direcciones) - 1){ // Me quede sin direcciones
-			/* Le pido a FM9 que me reserve otra linea */
-			direccion_logica = (int) list_get(*lista_direcciones, *fm9_offset - 1); // La ultima direccion hasta ahora
-			dam_send(fm9_socket, RESERVAR_LINEA_FM9, id, direccion_logica);
+		if(*ok != OK) return;
 
-			msg_recibido = malloc(sizeof(t_msg));
-			msg_await(fm9_socket, msg_recibido);
-			desempaquetar_resultado_reservar_linea_fm9(msg_recibido, ok, &direccion_logica);
-			msg_free(&msg_recibido);
-			if(*ok != OK){
-				return;
-			}
-			list_add(*lista_direcciones, (void*) direccion_logica);
-		}
-
-		direccion_logica = (int) list_get(*lista_direcciones, *fm9_offset);
-		log_info(logger, "Le envio %s a FM9. Direccion logica: %d", str, direccion_logica);
-		dam_send(fm9_socket, ESCRIBIR_FM9, id , direccion_logica, str);
+		log_info(logger, "Le envio %s a FM9. Base: %d, offset: %d", str, base, *fm9_offset);
+		dam_send(fm9_socket, ESCRIBIR_FM9, id , base, *fm9_offset, str);
 		free(str);
 		(*fm9_offset)++;
 
@@ -475,10 +448,12 @@ int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket,
 
 // Return: 0-> Transferencia completada, 1-> Transferencia no completada
 int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket, int* fm9_offset,
-		unsigned int id, char* path, t_list* lista_direcciones, int* ok, char** linea_incompleta_buffer_anterior){
+		unsigned int id, char* path, int base, int* ok, char** linea_incompleta_buffer_anterior){
 	t_msg* msg_recibido;
 
 	void _enviar_buffer_a_mdj_y_liberarlo(void* buffer, int buffer_size){
+		if(*ok != OK) return;
+
 		char* buffer_str = malloc(buffer_size + 1);
 		memcpy((void*) buffer_str, buffer, buffer_size);
 		buffer_str[buffer_size] = '\0';
@@ -495,6 +470,7 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 		msg_free(&msg_recibido);
 	}
 
+	*ok = OK;
 
 	void* buffer;
 	int buffer_size;
@@ -502,8 +478,8 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 	int ok_get_fm9;
 
 	/* Le pido a FM9 obtener datos */
-	dam_send(fm9_socket, GET_FM9, id, (int) list_get(lista_direcciones, *fm9_offset));
-	(*fm9_offset) ++;
+	dam_send(fm9_socket, GET_FM9, id, base, *fm9_offset);
+	(*fm9_offset)++;
 	msg_recibido = malloc(sizeof(t_msg));
 	msg_await(fm9_socket, msg_recibido);
 	desempaquetar_resultado_get_fm9(msg_recibido, &ok_get_fm9, &linea); // Si ok != OK => Fin de archivo (return 0)
@@ -536,7 +512,7 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 	*linea_incompleta_buffer_anterior = strdup(linea);
 
 
-	if(*fm9_offset == lista_direcciones->elements_count || ok_get_fm9 != OK){ // Fin de archivo
+	if(ok_get_fm9 != OK){ // Fin de archivo
 		if(*linea_incompleta_buffer_anterior != NULL){ // Le mando a MDJ lo que me pudo haber quedado
 			while(strlen(*linea_incompleta_buffer_anterior) > 0){
 				int bytes_a_enviar = min(strlen(*linea_incompleta_buffer_anterior), config_get_int_value(config, "TRANSFER_SIZE"));

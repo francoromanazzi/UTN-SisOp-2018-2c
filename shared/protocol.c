@@ -67,16 +67,9 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	int i;
 
 	void incrementar_dictionary_len(char* key, void* data){
-
-		void _incrementar_nueva_direccion(void* data){
-			dictionary_len += sizeof(int); // direccion_logica
-		}
-
-		t_list* lista_direcciones = (t_list*) data;
 		dictionary_len += sizeof(unsigned int); // key_len
 		dictionary_len += strlen(key); // key
-		dictionary_len += sizeof(int); // list_len
-		list_iterate(lista_direcciones, _incrementar_nueva_direccion);
+		dictionary_len += sizeof(int); // base
 	}
 
 	dictionary_iterator(dtb->archivos_abiertos, incrementar_dictionary_len);
@@ -125,22 +118,13 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	offset += sizeof(int);
 
 	void copiar_memoria_elemento_diccionario(char* key, void* data){
-
-		void _copiar_memoria_direccion_logica(void* _direccion){
-			int direccion = (int) _direccion;
-			memcpy(ret->payload + offset, (void*) &direccion, sizeof(int));
-			offset += sizeof(int);
-		}
-
-		t_list* lista_direcciones = (t_list*) data;
 		int key_len = strlen(key);
 		memcpy(ret->payload + offset, (void*) &key_len, sizeof(unsigned int));
 		offset += sizeof(unsigned int);
 		memcpy(ret->payload + offset, (void*) key, key_len);
 		offset += key_len;
-		memcpy(ret->payload + offset, (void*) &(lista_direcciones->elements_count), sizeof(int));
+		memcpy(ret->payload + offset, (void*) &data, sizeof(int));
 		offset += sizeof(int);
-		list_iterate(lista_direcciones, _copiar_memoria_direccion_logica);
 	}
 
 	dictionary_iterator(dtb->archivos_abiertos, copiar_memoria_elemento_diccionario);
@@ -187,8 +171,8 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 
 	for(i = 0; i< elementos_diccionario; i++){
 		char* key;
-		int key_len, data, lista_direcciones_len, j;
-		t_list* lista_direcciones = list_create();
+		int key_len;
+		int data;
 
 		memcpy((void*) &key_len, msg->payload + offset, sizeof(unsigned int));
 		offset += sizeof(unsigned int);
@@ -198,25 +182,16 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 		offset += key_len;
 		key[key_len] = '\0';
 
-		memcpy((void*) &lista_direcciones_len, msg->payload + offset, sizeof(int));
+		memcpy((void*) &data, msg->payload + offset, sizeof(int));
 		offset += sizeof(int);
 
-		for(j = 0; j < lista_direcciones_len; j++){
-			int direccion;
-
-			memcpy((void*) &direccion, msg->payload + offset, sizeof(int));
-			offset += sizeof(int);
-
-			list_add(lista_direcciones, (void*) direccion);
-		}
-
-		dictionary_put(ret->archivos_abiertos, key, (void*) lista_direcciones);
+		dictionary_put(ret->archivos_abiertos, key, (void*) data);
 		free(key);
 	}
 	return ret;
 }
 
-t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, t_list* lista_direcciones){
+t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, int base){
 	int offset = 0;
 	t_msg* ret = malloc(sizeof(t_msg));
 
@@ -232,8 +207,7 @@ t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, t_list* l
 			sizeof(unsigned int) + // id
 			sizeof(unsigned int) + // path_len
 			strlen(path) + // path
-			sizeof(int) + // lista_direcciones_len
-			sizeof(int) * lista_direcciones->elements_count // direcciones
+			sizeof(int) // base
 			;
 	ret->payload = malloc(ret->header->payload_size);
 
@@ -250,17 +224,14 @@ t_msg* empaquetar_resultado_abrir(int ok, unsigned int id, char* path, t_list* l
 	memcpy(ret->payload + offset, (void*) path, path_len);
 	offset += path_len;
 
-	memcpy(ret->payload + offset, (void*) &(lista_direcciones->elements_count), sizeof(int));
+	memcpy(ret->payload + offset, (void*) &base, sizeof(int));
 	offset += sizeof(int);
-
-	list_iterate(lista_direcciones, _copiar_memoria_direccion_logica);
 
 	return ret;
 }
 
-void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char** path, t_list** lista_direcciones){
-	int i, offset = 0, lista_direcciones_len;
-	*lista_direcciones = list_create();
+void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char** path, int* base){
+	int offset = 0;
 
 	memcpy((void*) ok, msg->payload, sizeof(int));
 	offset += sizeof(int);
@@ -277,16 +248,7 @@ void desempaquetar_resultado_abrir(t_msg* msg, int* ok, unsigned int* id, char**
 	offset += path_len;
 	(*path)[path_len] = '\0';
 
-	memcpy((void*) &lista_direcciones_len, msg->payload + offset, sizeof(int));
-	offset += sizeof(int);
-
-	for(i = 0; i < lista_direcciones_len; i++){
-		int direccion;
-		memcpy((void*) &direccion, msg->payload + offset, sizeof(int));
-		offset += sizeof(int);
-		list_add(*lista_direcciones, (void*) direccion);
-	}
-
+	memcpy((void*) base,msg->payload + offset, sizeof(int));
 	return;
 }
 
@@ -328,23 +290,26 @@ void desempaquetar_abrir(t_msg* msg, char** path, unsigned int* id){
 	return;
 }
 
-t_msg* empaquetar_get_fm9(unsigned int id, int direccion_logica){
+t_msg* empaquetar_get_fm9(unsigned int id, int base, int offset){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));
 	ret->header->payload_size =
 		sizeof(unsigned int) + // id
-		sizeof(int) // direccion
+		sizeof(int) + // base
+		sizeof(int) // offset
 		;
 	ret->payload = malloc(ret->header->payload_size);
 
-	memcpy(ret->payload, (void*) &id, sizeof(unsigned int));
-	memcpy(ret->payload + sizeof(unsigned int), (void*) &direccion_logica, sizeof(int));
+	memcpy(ret->payload, (void*) &id, sizeof(int));
+	memcpy(ret->payload + sizeof(unsigned int), (void*) &base, sizeof(int));
+	memcpy(ret->payload + sizeof(unsigned int) + sizeof(int), (void*) &offset, sizeof(int));
 	return ret;
 }
 
-void desempaquetar_get_fm9(t_msg* msg, unsigned int* id, int* direccion_logica){
+void desempaquetar_get_fm9(t_msg* msg, unsigned int* id, int* base, int* offset){
 	memcpy((void*) id, msg->payload, sizeof(unsigned int));
-	memcpy((void*) direccion_logica, msg->payload + sizeof(unsigned int), sizeof(int));
+	memcpy((void*) base, msg->payload + sizeof(unsigned int), sizeof(int));
+	memcpy((void*) offset, msg->payload + sizeof(unsigned int) + sizeof(int), sizeof(int));
 }
 
 t_msg* empaquetar_resultado_get_fm9(int ok, char* datos){
@@ -396,52 +361,47 @@ void desempaquetar_tiempo_respuesta(t_msg* msg, unsigned int* id, struct timespe
 	memcpy((void*) &(time->tv_nsec), msg->payload + sizeof(unsigned int) + sizeof(time->tv_sec), sizeof(time->tv_nsec));
 }
 
-t_msg* empaquetar_reservar_linea_fm9(unsigned int id, int direccion_logica){
-	return empaquetar_get_fm9(id, direccion_logica);
+t_msg* empaquetar_reservar_linea_fm9(unsigned int id, int base, int offset){
+	return empaquetar_get_fm9(id, base, offset);
 }
 
-void desempaquetar_reservar_linea_fm9(t_msg* msg, unsigned int* id, int* direccion_logica){
-	desempaquetar_get_fm9(msg, id, direccion_logica);
+void desempaquetar_reservar_linea_fm9(t_msg* msg, unsigned int* id, int* base, int* offset){
+	desempaquetar_get_fm9(msg, id, base, offset);
 }
 
-t_msg* empaquetar_resultado_reservar_linea_fm9(int ok, int direccion_logica){
+t_msg* empaquetar_resultado_crear_fm9(int ok, int base){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));
 	ret->header->payload_size = sizeof(int) + sizeof(int);
 	ret->payload = malloc(ret->header->payload_size);
 
 	memcpy(ret->payload, (void*) &ok, sizeof(int));
-	memcpy(ret->payload + sizeof(int), (void*) &direccion_logica, sizeof(int));
+	memcpy(ret->payload + sizeof(int), (void*) &base, sizeof(int));
 	return ret;
 }
 
-void desempaquetar_resultado_reservar_linea_fm9(t_msg* msg, int* ok, int* direccion_logica){
+void desempaquetar_resultado_crear_fm9(t_msg* msg, int* ok, int* base){
 	memcpy((void*) ok, msg->payload, sizeof(int));
-	memcpy((void*) direccion_logica, msg->payload + sizeof(int), sizeof(int));
+	memcpy((void*) base, msg->payload + sizeof(int), sizeof(int));
 }
 
-t_msg* empaquetar_resultado_crear_fm9(int ok, int direccion_logica){
-	return empaquetar_resultado_reservar_linea_fm9(ok, direccion_logica);
-}
-
-void desempaquetar_resultado_crear_fm9(t_msg* msg, int* ok, int* direccion_logica){
-	desempaquetar_resultado_reservar_linea_fm9(msg, ok, direccion_logica);
-}
-
-t_msg* empaquetar_escribir_fm9(unsigned int id, int direccion_logica, char* datos){
+t_msg* empaquetar_escribir_fm9(unsigned int id, int base, int offset, char* datos){
 	t_msg* ret = malloc(sizeof(t_msg));
 	ret->header = malloc(sizeof(t_header));
 
 	int datos_len = strlen(datos);
 	int payload_offset = 0;
 
-	ret->header->payload_size = sizeof(unsigned int) + sizeof(int) + sizeof(int) + datos_len;
+	ret->header->payload_size = sizeof(unsigned int) + sizeof(int) + sizeof(int) + sizeof(int) + datos_len;
 	ret->payload = malloc(ret->header->payload_size);
 
 	memcpy(ret->payload, (void*) &id, sizeof(unsigned int));
 	payload_offset += sizeof(unsigned int);
 
-	memcpy(ret->payload + payload_offset, (void*) &direccion_logica, sizeof(int));
+	memcpy(ret->payload + payload_offset, (void*) &base, sizeof(int));
+	payload_offset += sizeof(int);
+
+	memcpy(ret->payload + payload_offset, (void*) &offset, sizeof(int));
 	payload_offset += sizeof(int);
 
 	memcpy(ret->payload + payload_offset, (void*) &datos_len, sizeof(int));
@@ -452,13 +412,15 @@ t_msg* empaquetar_escribir_fm9(unsigned int id, int direccion_logica, char* dato
 	return ret;
 }
 
-void desempaquetar_escribir_fm9(t_msg* msg, unsigned int* id, int* direccion_logica, char** datos){
+void desempaquetar_escribir_fm9(t_msg* msg, unsigned int* id, int* base, int* offset, char** datos){
 	int payload_offset = 0;
 	int datos_len;
 
 	memcpy((void*) id, msg->payload, sizeof(unsigned int));
 	payload_offset += sizeof(unsigned int);
-	memcpy((void*) direccion_logica, msg->payload + payload_offset, sizeof(int));
+	memcpy((void*) base, msg->payload + payload_offset, sizeof(int));
+	payload_offset += sizeof(int);
+	memcpy((void*) offset, msg->payload + payload_offset, sizeof(int));
 	payload_offset += sizeof(int);
 	memcpy((void*) &datos_len, msg->payload + payload_offset, sizeof(int));
 	payload_offset += sizeof(int);
@@ -469,60 +431,32 @@ void desempaquetar_escribir_fm9(t_msg* msg, unsigned int* id, int* direccion_log
 	(*datos)[datos_len] = '\0';
 }
 
-t_msg* empaquetar_flush(unsigned int id, char* path, t_list* lista_direcciones){
+t_msg* empaquetar_flush(unsigned int id, char* path, int base){
 	t_msg* ret = malloc(sizeof(t_msg));
-	int offset = 0;
-
-	void _copiar_memoria_direccion_logica(void* _direccion){
-		int direccion = (int) _direccion;
-		memcpy(ret->payload + offset, (void*) &direccion, sizeof(int));
-		offset += sizeof(int);
-	}
 	ret->header = malloc(sizeof(t_header));
 
 	int datos_len = strlen(path);
-	ret->header->payload_size = sizeof(unsigned int) + sizeof(int) + datos_len + sizeof(int) + sizeof(int)*lista_direcciones->elements_count;
+	ret->header->payload_size = sizeof(unsigned int) + sizeof(int) + datos_len + sizeof(int);
 	ret->payload = malloc(ret->header->payload_size);
 
 	memcpy(ret->payload, (void*) &id, sizeof(unsigned int));
-	offset += sizeof(unsigned int);
-	memcpy(ret->payload + offset, (void*) &datos_len, sizeof(int));
-	offset += sizeof(int);
-	memcpy(ret->payload + offset, (void*) path, datos_len);
-	offset += datos_len;
-	memcpy(ret->payload + offset, (void*) &(lista_direcciones->elements_count), sizeof(int));
-	offset += sizeof(int);
-
-	list_iterate(lista_direcciones, _copiar_memoria_direccion_logica);
-
+	memcpy(ret->payload + sizeof(unsigned int), (void*) &datos_len, sizeof(int));
+	memcpy(ret->payload + sizeof(unsigned int) + sizeof(int), (void*) path, datos_len);
+	memcpy(ret->payload + sizeof(unsigned int) + sizeof(int) + datos_len, (void*) &base, sizeof(int));
 	return ret;
 }
 
-void desempaquetar_flush(t_msg* msg, unsigned int* id, char** path, t_list** lista_direcciones){
-	int lista_direcciones_len, offset = 0, i;
-	*lista_direcciones = list_create();
-
+void desempaquetar_flush(t_msg* msg, unsigned int* id, char** path, int* base){
 	memcpy((void*) id, msg->payload, sizeof(unsigned int));
-	offset += sizeof(unsigned int);
 
 	int path_len;
-	memcpy((void*) &path_len, msg->payload + offset, sizeof(int));
-	offset += sizeof(int);
+	memcpy((void*) &path_len, msg->payload + sizeof(unsigned int), sizeof(int));
 
 	*path = malloc(path_len + 1);
-	memcpy((void*) *path, msg->payload + offset, path_len);
-	offset += path_len;
+	memcpy((void*) *path, msg->payload + sizeof(unsigned int) + sizeof(int), path_len);
 	(*path)[path_len] = '\0';
 
-	memcpy((void*) &lista_direcciones_len, msg->payload + offset, sizeof(int));
-	offset += sizeof(int);
-
-	for(i = 0; i < lista_direcciones_len; i++){
-		int direccion;
-		memcpy((void*) &direccion, msg->payload + offset, sizeof(int));
-		offset += sizeof(int);
-		list_add(*lista_direcciones, (void*) direccion);
-	}
+	memcpy((void*) base, msg->payload + sizeof(unsigned int) + sizeof(int) + path_len, sizeof(int));
 }
 
 t_msg* empaquetar_crear_mdj(unsigned int id, char* path, int cant_lineas){
@@ -630,55 +564,28 @@ void desempaquetar_borrar(t_msg* msg, unsigned int* id, char** path){
 }
 
 t_msg* empaquetar_resultado_io(int ok, unsigned int id){
-	return empaquetar_get_fm9(id, ok);
+	return empaquetar_resultado_crear_fm9(ok, (int) id);
 }
 
 void desempaquetar_resultado_io(t_msg* msg, int* ok, unsigned int* id){
-	desempaquetar_get_fm9(msg, id, ok);
+	desempaquetar_resultado_crear_fm9(msg, ok, (int*) id);
 }
 
-t_msg* empaquetar_close(unsigned int id, t_list* lista_direcciones){
-	int offset = 0;
+t_msg* empaquetar_close(unsigned int id, int base){
 	t_msg* ret = malloc(sizeof(t_msg));
-
-	void _copiar_memoria_direccion_logica(void* _direccion){
-		int direccion = (int) _direccion;
-		memcpy(ret->payload + offset, (void*) &direccion, sizeof(int));
-		offset += sizeof(int);
-	}
-
 	ret->header = malloc(sizeof(t_header));
 
-	ret->header->payload_size = sizeof(unsigned int) + sizeof(int) + sizeof(int)*lista_direcciones->elements_count;
+	ret->header->payload_size = sizeof(unsigned int) + sizeof(int);
 	ret->payload = malloc(ret->header->payload_size);
 
-	memcpy(ret->payload, (void*) &id, sizeof(unsigned int));
-	offset += sizeof(unsigned int);
-
-	memcpy(ret->payload + offset, (void*) &(lista_direcciones->elements_count), sizeof(int));
-	offset += sizeof(int);
-
-	list_iterate(lista_direcciones, _copiar_memoria_direccion_logica);
-
+	memcpy(ret->payload, (void*) &id, sizeof(int));
+	memcpy(ret->payload + sizeof(unsigned int), (void*) &base, sizeof(int));
 	return ret;
 }
 
-void desempaquetar_close(t_msg* msg, unsigned int* id, t_list** lista_direcciones){
-	*lista_direcciones = list_create();
-	int lista_direcciones_len, offset = 0, i;
-
+void desempaquetar_close(t_msg* msg, unsigned int* id, int* base){
 	memcpy((void*) id, msg->payload, sizeof(unsigned int));
-	offset += sizeof(unsigned int);
-
-	memcpy((void*) &lista_direcciones_len, msg->payload + offset, sizeof(int));
-	offset += sizeof(int);
-
-	for(i = 0; i < lista_direcciones_len; i++){
-		int direccion;
-		memcpy((void*) &direccion, msg->payload + offset, sizeof(int));
-		offset += sizeof(int);
-		list_add(*lista_direcciones, (void*) direccion);
-	}
+	memcpy((void*) base, msg->payload + sizeof(unsigned int), sizeof(int));
 }
 
 

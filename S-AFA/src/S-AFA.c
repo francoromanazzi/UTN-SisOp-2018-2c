@@ -39,17 +39,6 @@ int safa_initialize(){
 	cpu_conexiones = list_create();
 	pthread_mutex_init(&sem_mutex_cpu_conexiones, NULL);
 
-	/* Creo el hilo inotify, que se encarga de toodo lo relacionado al archivo de config */
-	/*
-	pthread_t thread_safa_config_inotify;
-	if(pthread_create( &thread_safa_config_inotify, NULL, (void*) safa_config_inotify_iniciar, NULL) ){
-		log_error(logger,"[S-AFA] No pude crear el hilo inotify");
-		return -1;
-	}
-	log_info(logger, "[S-AFA] Creo el hilo inotify");
-	pthread_detach(thread_safa_config_inotify);
-	*/
-
 	return 1;
 }
 

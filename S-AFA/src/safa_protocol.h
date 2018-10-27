@@ -73,7 +73,7 @@
 	void safa_protocol_desempaquetar_desbloquear_dummy(void* data, unsigned int* id, char** path);
 
 	void* safa_protocol_empaquetar_resultado_abrir(void* data);
-	void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, t_list** lista_direcciones);
+	void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, int* base);
 
 	void* safa_protocol_empaquetar_resultado_io(void* data);
 	void safa_protocol_desempaquetar_resultado_io(void* data, int* ok, unsigned int* id);

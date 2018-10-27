@@ -29,7 +29,7 @@
 		int quantum_restante;
 		e_estado estado_actual;
 		struct dtb_flags flags;
-		t_dictionary* archivos_abiertos; // KEY->ruta, VALUE->lista de direcciones logicas
+		t_dictionary* archivos_abiertos; // KEY->ruta, VALUE->base
 	} t_dtb ;
 
 

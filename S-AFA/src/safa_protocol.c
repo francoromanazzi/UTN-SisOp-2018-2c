@@ -209,23 +209,21 @@ void* safa_protocol_empaquetar_resultado_abrir(void* data){
 	int ok, base;
 	unsigned int id;
 	char* path;
-	t_list* lista_direcciones;
 	void* ret;
 
-	safa_protocol_desempaquetar_resultado_abrir(data, &ok, &id, &path, &lista_direcciones);
-	t_msg* msg = empaquetar_resultado_abrir(ok, id, path, lista_direcciones);
+	safa_protocol_desempaquetar_resultado_abrir(data, &ok, &id, &path, &base);
+	t_msg* msg = empaquetar_resultado_abrir(ok, id, path, base);
 	ret = malloc(msg->header->payload_size);
 	memcpy(ret, msg->payload, msg->header->payload_size);
 	msg_free(&msg);
 	free(path);
-	list_destroy(lista_direcciones);
 	return ret;
 }
 
-void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, t_list** lista_direcciones){
+void safa_protocol_desempaquetar_resultado_abrir(void* data, int* ok, unsigned int* id, char** path, int* base){
 	t_msg* msg = malloc(sizeof(t_msg));
 	msg->payload = data;
-	desempaquetar_resultado_abrir(msg, ok, id, path, lista_direcciones);
+	desempaquetar_resultado_abrir(msg, ok, id, path, base);
 	free(msg);
 }
 

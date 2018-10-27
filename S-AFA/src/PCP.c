@@ -17,13 +17,12 @@ void pcp_iniciar(){
 }
 
 void pcp_gestionar_msg(t_safa_msg* msg){
-	int ok, i;
+	int ok, i, base;
 	unsigned int id;
 	char* path;
 	t_dtb* dtb, *dtb_aux;
 	void* data;
 	t_status* status;
-	t_list* lista_direcciones;
 
 	bool _mismo_id(void* _dtb){
 		return ((t_dtb*) _dtb)->gdt_id == id;
@@ -40,9 +39,8 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					dtb = (t_dtb*) msg->data;
 
 					/* Me fijo si me habian pedido finalizar este DTB*/
-					if((id = (unsigned int) list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2))){ // Me habian pedido finalizarlo
-						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
-						list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2);
+					if(list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2) != NULL){ // Me habian pedido finalizarlo
+						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
 						pcp_intentar_solicitar_liberacion_memoria();
@@ -59,10 +57,9 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 				case BLOCK_DTB:
 					dtb = (t_dtb*) msg->data;
 
-					/* Me fijo si me habian pedido finalizar este DTB*/
-					if((id = (unsigned int) list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2)) && !dtb_es_dummy((void*) dtb)){ // Me habian pedido finalizarlo
-						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
-						list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2);
+					/* Me fijo si me habian pedido finalizar este DTB */
+					if(!dtb_es_dummy((void*) dtb) && list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2) != NULL){ // Me habian pedido finalizarlo
+						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
 						pcp_intentar_solicitar_liberacion_memoria();
@@ -103,8 +100,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					dtb = (t_dtb*) msg->data;
 
 					/* Me fijo si me habian pedido finalizar este DTB*/
-					if(list_find(lista_procesos_a_finalizar_en_exec, _mismo_id_v2)){ // Me habian pedido finalizarlo
-						list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2);
+					if(list_remove_by_condition(lista_procesos_a_finalizar_en_exec, _mismo_id_v2) != NULL){ // Me habian pedido finalizarlo
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 					}
 					else{
@@ -135,6 +131,9 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							log_error(logger, "[PCP] Error %d", dtb->flags.error_nro);
 							log_info(logger, "[PCP] Finalizo el DTB con ID: %d", dtb->gdt_id);
 							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_EXIT);
+
+							list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
+							pcp_intentar_solicitar_liberacion_memoria();
 						}
 						else{ // OK
 							log_info(logger, "[PCP] Fin de IO del DTB con ID: %d", dtb->gdt_id);
@@ -173,7 +172,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 				break;
 
 				case RESULTADO_ABRIR_DAM:
-					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &lista_direcciones);
+					safa_protocol_desempaquetar_resultado_abrir(msg->data, &ok, &id, &path, &base);
 
 					if((dtb = list_find(cola_block, _mismo_id)) == NULL){
 						/* Todavia no llego a BLOCK (sigue en EXEC) */
@@ -181,14 +180,19 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						list_add(lista_procesos_a_actualizar_en_exec, safa_protocol_empaquetar_resultado_abrir(msg->data));
 					}
 					else{
-						if(ok == OK){
-							log_info(logger, "[PCP] Cargo el archivo %s en el DTB con ID: %d y lo muevo a ready", path, id);
-							pcp_cargar_archivo(dtb, path, lista_direcciones);
-							pcp_mover_dtb(id, ESTADO_BLOCK, ESTADO_READY);
+						if(ok != OK){
+							dtb->flags.error_nro = ok;
+							log_error(logger, "[PCP] Error %d", dtb->flags.error_nro);
+							log_info(logger, "[PCP] Finalizo el DTB con ID: %d", dtb->gdt_id);
+							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_EXIT);
+
+							list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
+							pcp_intentar_solicitar_liberacion_memoria();
 						}
 						else{
-							log_error(logger, "[PCP] Error %d", ok);
-							pcp_mover_dtb(id, ESTADO_BLOCK, ESTADO_EXIT);
+							log_info(logger, "[PCP] Cargo el archivo %s en el DTB con ID: %d y lo muevo a ready", path, id);
+							pcp_cargar_archivo(dtb, path, base);
+							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_READY);
 						}
 					}
 					free(path);
@@ -206,6 +210,9 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						else if(dtb->estado_actual != ESTADO_EXEC){ // No esta en exec, lo puedo finalizar inmediatamente
 							safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, EXIT_DTB_CONSOLA, id, 1);
 							pcp_mover_dtb(id, dtb->estado_actual, ESTADO_EXIT);
+
+							list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
+							pcp_intentar_solicitar_liberacion_memoria();
 						}
 						else{ // Tengo que esperar que vuelva de EXEC
 							safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, EXIT_DTB_CONSOLA, id, 2);
@@ -343,7 +350,7 @@ void pcp_actualizar_dtb(t_dtb* dtb_recibido){
 	t_dtb* dtb_a_actualizar;
 
 	void _actualizar_archivos_abiertos(char* key, void* data){
-		dictionary_put(dtb_a_actualizar->archivos_abiertos, key, (void*) list_duplicate((t_list*) data));
+		dictionary_put(dtb_a_actualizar->archivos_abiertos, key, data);
 	}
 
 	if(dtb_es_dummy(dtb_recibido)){
@@ -357,14 +364,14 @@ void pcp_actualizar_dtb(t_dtb* dtb_recibido){
 		dtb_a_actualizar->pc = dtb_recibido->pc;
 		dtb_a_actualizar->quantum_restante = dtb_recibido->quantum_restante;
 		dtb_a_actualizar->flags.error_nro = dtb_recibido->flags.error_nro;
-		dictionary_clean_and_destroy_elements(dtb_a_actualizar->archivos_abiertos, (void(*)(void*)) list_destroy); // Borro los archivos abiertos
+		dictionary_clean(dtb_a_actualizar->archivos_abiertos); // Borro los archivos abiertos
 		dictionary_iterator(dtb_recibido->archivos_abiertos, _actualizar_archivos_abiertos); // Los vuelvo a poner, uno por uno
 	}
 }
 
-void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, t_list* lista_direcciones){
-	dictionary_remove_and_destroy(dtb_a_actualizar->archivos_abiertos, path, (void (*)(void*)) list_destroy);
-	dictionary_put(dtb_a_actualizar->archivos_abiertos, path, (void*) lista_direcciones);
+void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, int base){
+	dictionary_remove(dtb_a_actualizar->archivos_abiertos, path);
+	dictionary_put(dtb_a_actualizar->archivos_abiertos, path, (void*) base);
 }
 
 t_dtb* pcp_encontrar_dtb(unsigned int id){

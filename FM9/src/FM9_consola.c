@@ -8,15 +8,15 @@ void fm9_consola_init(){
 	printf("2. dump [pcb_id]\n");
 	printf("3. salir\n\n");
 	while(1) {
-			linea = readline("FM9> ");
-			if(linea)
-				add_history(linea);
-			if(!strncmp(linea, "salir", 5)) {
-				free(linea);
-				break;
-			}
-			fm9_procesar_comando(linea);
+		linea = readline("FM9> ");
+		if(linea)
+			add_history(linea);
+		if(!strncmp(linea, "salir", 5)) {
 			free(linea);
+			break;
+		}
+		fm9_procesar_comando(linea);
+		free(linea);
 	}
 	exit(EXIT_SUCCESS);
 }
@@ -24,14 +24,9 @@ void fm9_consola_init(){
 void fm9_procesar_comando(char* linea){
 	char** argv = string_split(linea, " ");
 	int argc = split_cant_elem(argv);
-	t_proceso* proceso;
 
-	bool _mismo_id(void* proceso){
-		if(atoi(argv[1]) == 0 && strcmp(argv[1], "0")) return false; // Por un error del atoi
-		return ((t_proceso*) proceso)->pid == atoi(argv[1]);
-	}
-
-	void _dump(){
+	/* Comando DUMP */
+	if(argc == 1 && !strcmp(argv[0], "dump")){ // Muestra su storage completo, sin estructuras administrativas
 		int i;
 		char* str;
 		log_info(logger, "~~~~~~~~~~ DUMP ~~~~~~~~~~");
@@ -43,18 +38,6 @@ void fm9_procesar_comando(char* linea){
 			free(str);
 		}
 		printf("\n");
-	}
-
-
-	/* Comando DUMP */
-	if(argc == 1 && !strcmp(argv[0], "dump")){ // Muestra su storage completo, sin estructuras administrativas
-		switch(modo){
-			case SEG:
-				_fm9_lock_all_mutex_seg_pura(true);
-				_dump();
-				_fm9_lock_all_mutex_seg_pura(false);
-			break;
-		}
 	}
 
 	/* Comando DUMP [pid]*/
@@ -77,7 +60,7 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		return ((t_proceso*) proceso)->pid == pid;
 	}
 
-	//pthread_mutex_lock(&sem_mutex_lista_procesos);
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
 	t_proceso* proceso = list_find(lista_procesos, _mismo_id);
 
 	int i = 0;
@@ -86,10 +69,8 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 
 		void _estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
 			t_fila_tabla_segmento* fila_tabla = (t_fila_tabla_segmento*) _fila_tabla;
-			//pthread_mutex_lock(&(fila_tabla->mutex));
-			log_info(logger, "\tNroSeg: %d Base: %d Limite: %d Mutex.", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
-			printf("\tNroSeg: %d Base: %d Limite: %d Mutex.\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
-			//pthread_mutex_unlock(&(fila_tabla->mutex));
+			log_info(logger, "\tNroSeg: %d Base: %d Limite: %d", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
+			printf("\tNroSeg: %d Base: %d Limite: %d\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
 		}
 
 		void _huecos_print_y_log(){
@@ -119,9 +100,9 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 			free(huecos_str);
 		}
 
-		//pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+		pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
 		_huecos_print_y_log();
-		//pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+		pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
 		log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
 		printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
@@ -137,8 +118,7 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		printf("Segmento %d\n", fila_tabla->nro_seg);
 
 		for(i = 0; i <= fila_tabla->limite; i++){
-			int dir_logica = _fm9_dir_logica_create_seg_pura(fila_tabla->nro_seg, i);
-			linea = fm9_storage_leer(proceso->pid, dir_logica, &ok, false);
+			linea = fm9_storage_leer(proceso->pid, fila_tabla->nro_seg, i, &ok, false);
 			log_info(logger,"\t%d: %s", i, linea);
 			printf("\t%d: %s\n", i, linea);
 			free(linea);
@@ -147,8 +127,8 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 
 
 	if(proceso == NULL){
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		printf("No se encontro dicho proceso\n\n");
-		//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return;
 	}
 
@@ -160,8 +140,9 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 		log_info(logger, "[PID: %d] No tiene datos asociados ", proceso->pid);
 		printf("[PID: %d] No tiene datos asociados\n\n", proceso->pid);
 	}
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
 	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
-	//pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
 
