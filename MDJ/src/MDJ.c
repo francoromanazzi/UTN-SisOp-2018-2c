@@ -285,15 +285,31 @@ void crearEstructuras(){
 }
 
 static void _hardcodear_archivos(){
-	char* buffer_str;
-	void* buffer;
-	int ok;
 
-	/* Escriptorio: test1.bin */
-	crearArchivo("/Escriptorios/test1.bin", 8, &ok);
-	if(ok != OK) log_error(logger, "test1.bin - crear - %d", ok);
-	ok = OK;
-	buffer_str = strdup(
+	void __nuevo_escriptorio(char* nombre, char* contenido){
+
+		int ___count_char_occurrences_in_string(const char* str, const char c){
+			int i, ret = 0;
+			for(i = 0; i<strlen(str); i++){
+				if(str[i] == c) ret++;
+			}
+			return ret;
+		}
+
+		int ok, cant_lineas = ___count_char_occurrences_in_string(contenido, '\n');
+
+		crearArchivo(nombre, cant_lineas, &ok);
+		if(ok != OK) log_error(logger, "%s - crear - %d", nombre, ok);
+
+		void* buffer = malloc(strlen(contenido));
+		memcpy(buffer, (void*) contenido, strlen(contenido));
+		guardarDatos(nombre, 0, strlen(contenido), buffer, &ok);
+		free(buffer);
+		if(ok != OK) log_error(logger, "%s - guardar - %d", nombre, ok);
+	}
+
+
+	__nuevo_escriptorio("/Escriptorios/test1.bin",
 			"crear /Equipos/Boca.txt 3\n"
 			"crear /Equipos/Racing.txt 3\n"
 			"crear /Equipos/SanLorenzo.txt 5\n"
@@ -302,20 +318,8 @@ static void _hardcodear_archivos(){
 			"close /Equipos/Boca.txt\n"
 			"abrir /Equipos/SanLorenzo.txt\n"
 			"\n");
-	buffer = malloc(strlen(buffer_str));
-	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
-	guardarDatos("/Escriptorios/test1.bin", 0, strlen(buffer_str), buffer, &ok);
-	free(buffer);
-	free(buffer_str);
-	if(ok != OK) log_error(logger, "test1.bin - guardar - %d", ok);
 
-	ok = OK;
-
-	/* Escriptorio: test2.bin */
-	crearArchivo("/Escriptorios/test2.bin", 7, &ok);
-	if(ok != OK) log_error(logger, "test2.bin - crear - %d", ok);
-	ok = OK;
-	buffer_str = strdup(
+	__nuevo_escriptorio("/Escriptorios/test2.bin",
 			"crear /Equipos/River.txt 3\n"
 			"abrir /Equipos/River.txt\n"
 			"asignar /Equipos/River.txt 0 Gallardo\n"
@@ -323,20 +327,8 @@ static void _hardcodear_archivos(){
 			"asignar /Equipos/River.txt 2 PityMartinez\n"
 			"flush /Equipos/River.txt\n"
 			"\n");
-	buffer = malloc(strlen(buffer_str));
-	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
-	guardarDatos("/Escriptorios/test2.bin", 0, strlen(buffer_str), buffer, &ok);
-	free(buffer);
-	free(buffer_str);
-	if(ok != OK) log_error(logger, "test2.bin - guardar - %d", ok);
 
-	ok = OK;
-
-	/* Escriptorio: test3.bin */
-	crearArchivo("/Escriptorios/test3.bin", 8, &ok);
-	if(ok != OK) log_error(logger, "test3.bin - crear - %d", ok);
-	ok = OK;
-	buffer_str = strdup(
+	__nuevo_escriptorio("/Escriptorios/test3.bin",
 			"crear /Equipos/EquiposChicos/Sacachispas.txt 2\n"
 			"abrir /Equipos/EquiposChicos/Sacachispas.txt\n"
 			"asignar /Equipos/EquiposChicos/Sacachispas.txt 0 SACA\n"
@@ -345,13 +337,17 @@ static void _hardcodear_archivos(){
 			"borrar /Equipos/EquiposChicos/Sacachispas.txt\n"
 			"close /Equipos/EquiposChicos/Sacachispas.txt\n"
 			"\n");
-	buffer = malloc(strlen(buffer_str));
-	memcpy(buffer, (void*) buffer_str, strlen(buffer_str));
-	guardarDatos("/Escriptorios/test3.bin", 0, strlen(buffer_str), buffer, &ok);
-	free(buffer);
-	free(buffer_str);
-	if(ok != OK) log_error(logger, "test3.bin - guardar - %d", ok);
 
+	__nuevo_escriptorio("/Escriptorios/testWait.bin",
+			"wait Conmebol\n"
+			"wait Conmebol\n"
+			"crear /Equipos/Huracan.txt 2\n"
+			"concentrar\n"
+			"\n");
+
+	__nuevo_escriptorio("/Escriptorios/testSignal.bin",
+			"signal Conmebol\n"
+			"\n");
 }
 
 t_bitarray* mdj_bitmap_abrir(){

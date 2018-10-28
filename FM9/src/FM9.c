@@ -129,10 +129,13 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 			ok = va_arg(arguments, int);
 			str = va_arg(arguments, char*);
 			if(str == NULL){
+				log_debug(logger, "fm9_send - resultado_get_fm9 str==NULL");
 				str = strdup("");
 				str_free = true;
 			}
+			log_debug(logger, "%d | %s", ok, str); //
 			mensaje_a_enviar = empaquetar_resultado_get_fm9(ok, str);
+
 			if(str_free) free(str);
 		break;
 
@@ -276,7 +279,10 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
 				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false); // No deberia fallar nunca esto
+				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false);
+				if(datos != NULL)
+					log_info(logger, "Le envio a CPU: %s", datos);
+
 				fm9_send(socket, RESULTADO_GET_FM9, operacion_ok, datos);
 				if(datos != NULL) free(datos);
 			break;

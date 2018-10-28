@@ -43,15 +43,25 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
+
+						safa_recursos_liberar_pid(dtb->gdt_id);
 						pcp_intentar_solicitar_liberacion_memoria();
 					}
 					else{
-						log_info(logger, "[PCP] Muevo a READY el DTB con ID: %d", ((t_dtb*) (msg->data))->gdt_id);
-						pcp_actualizar_dtb(dtb);
-						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_READY);
+						log_info(logger, "[PCP] Muevo a READY el DTB con ID: %d", dtb->gdt_id);
+						if(dtb->estado_actual == ESTADO_EXEC)
+							pcp_actualizar_dtb(dtb);
+						pcp_mover_dtb(dtb->gdt_id, dtb->estado_actual, ESTADO_READY);
 					}
 					dtb_destroy(dtb);
 					msg->data=NULL;
+				break;
+
+				case READY_DTB_ID:
+					id = (unsigned int) msg->data;
+					dtb = dtb_copiar(pcp_encontrar_dtb(id));
+					safa_protocol_encolar_msg_y_avisar(S_AFA /* Trampa*/, PCP, READY_DTB, dtb);
+					msg->data = NULL;
 				break;
 
 				case BLOCK_DTB:
@@ -62,6 +72,8 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 						log_info(logger, "[PCP] Finalizo el DTB con ID: %d (solicitado desde consola) (tuve que esperarlo a que vuelva de EXEC)", dtb->gdt_id);
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
+
+						safa_recursos_liberar_pid(dtb->gdt_id);
 						pcp_intentar_solicitar_liberacion_memoria();
 					}
 					else {
@@ -96,6 +108,13 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					msg->data=NULL;
 				break;
 
+				case BLOCK_DTB_ID:
+					id = (unsigned int) msg->data;
+					dtb = dtb_copiar(pcp_encontrar_dtb(id));
+					safa_protocol_encolar_msg_y_avisar(S_AFA /* Trampa*/, PCP, BLOCK_DTB, dtb);
+					msg->data = NULL;
+				break;
+
 				case EXIT_DTB:
 					dtb = (t_dtb*) msg->data;
 
@@ -113,6 +132,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 
 					}
 					pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
+					safa_recursos_liberar_pid(dtb->gdt_id);
 					dtb_destroy(dtb);
 					msg->data=NULL;
 				break;
@@ -132,6 +152,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							log_info(logger, "[PCP] Finalizo el DTB con ID: %d", dtb->gdt_id);
 							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_EXIT);
 
+							safa_recursos_liberar_pid(dtb->gdt_id);
 							list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 							pcp_intentar_solicitar_liberacion_memoria();
 						}
@@ -186,6 +207,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							log_info(logger, "[PCP] Finalizo el DTB con ID: %d", dtb->gdt_id);
 							pcp_mover_dtb(dtb->gdt_id, ESTADO_BLOCK, ESTADO_EXIT);
 
+							safa_recursos_liberar_pid(dtb->gdt_id);
 							list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 							pcp_intentar_solicitar_liberacion_memoria();
 						}
@@ -211,6 +233,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 							safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, EXIT_DTB_CONSOLA, id, 1);
 							pcp_mover_dtb(id, dtb->estado_actual, ESTADO_EXIT);
 
+							safa_recursos_liberar_pid(dtb->gdt_id);
 							list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) id);
 							pcp_intentar_solicitar_liberacion_memoria();
 						}

@@ -326,7 +326,7 @@ t_msg* empaquetar_resultado_get_fm9(int ok, char* datos){
 
 	memcpy(ret->payload, (void*) &ok, sizeof(int));
 	memcpy(ret->payload + sizeof(int), (void*) &datos_len, sizeof(int));
-	memcpy(ret->payload + sizeof(int) + sizeof(int), datos, datos_len);
+	memcpy(ret->payload + sizeof(int) + sizeof(int), (void*) datos, datos_len);
 
 	return ret;
 }
@@ -587,6 +587,15 @@ void desempaquetar_close(t_msg* msg, unsigned int* id, int* base){
 	memcpy((void*) id, msg->payload, sizeof(unsigned int));
 	memcpy((void*) base, msg->payload + sizeof(unsigned int), sizeof(int));
 }
+
+t_msg* empaquetar_wait_signal(unsigned int id, char* nombre_recurso){
+	return empaquetar_abrir(nombre_recurso, id);
+}
+
+void desempaquetar_wait_signal(t_msg* msg, unsigned int* id, char** nombre_recurso){
+	desempaquetar_abrir(msg, nombre_recurso, id);
+}
+
 
 
 

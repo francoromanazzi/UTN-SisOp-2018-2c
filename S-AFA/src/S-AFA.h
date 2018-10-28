@@ -54,6 +54,14 @@
 	t_list* cpu_conexiones;
 	pthread_mutex_t sem_mutex_cpu_conexiones;
 
+	t_dictionary* tabla_recursos; // Key->nombre_recurso, Value->t_safa_semaforo
+	pthread_mutex_t sem_mutex_tabla_recursos;
+
+	typedef struct{
+		int valor;
+		t_list* lista_pid_asignados; // Lista de t_vector2 (PID, cant_asignada)
+		t_list* lista_pid_bloqueados; // Lista de PID
+	} t_safa_semaforo;
 
 	int safa_initialize();
 	void inotify_config_iniciar();
@@ -63,6 +71,10 @@
 
 	int safa_manejador_de_eventos(int socket, t_msg* msg); 	// Devuelvo -1 si quiero cerrar esa conexion
 	void safa_manejar_inotify();
+
+	bool safa_recursos_wait(unsigned int id, char* nombre_recurso);
+	void safa_recursos_signal(unsigned int id, char* nombre_recurso);
+	void safa_recursos_liberar_pid(unsigned int id);
 
 	void safa_exit();
 

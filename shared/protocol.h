@@ -61,4 +61,7 @@
 	t_msg* empaquetar_close(unsigned int id, int base);
 	void desempaquetar_close(t_msg* msg, unsigned int* id, int* base);
 
+	t_msg* empaquetar_wait_signal(unsigned int id, char* nombre_recurso);
+	void desempaquetar_wait_signal(t_msg*, unsigned int* id, char** nombre_recurso);
+
 #endif /* SHARED_PROTOCOL_H_ */

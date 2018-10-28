@@ -16,7 +16,9 @@
 
 	typedef enum {
 		READY_DTB, // SAFA -> PCP
+		READY_DTB_ID, // SAFA -> PCP
 		BLOCK_DTB, // SAFA -> PCP
+		BLOCK_DTB_ID, // SAFA -> PCP
 		EXIT_DTB, // SAFA -> PCP
 		EXIT_DTB_CONSOLA, // CONSOLA -> PLP || PLP -> PCP
 		CREAR_DTB, // CONSOLA -> PLP

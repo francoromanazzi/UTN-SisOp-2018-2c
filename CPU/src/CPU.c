@@ -121,14 +121,15 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 		break;
 
 		case WAIT: // A SAFA
-			//id = va_arg(arguments, unsigned int); ?????
+			id = va_arg(arguments, unsigned int);
 			recurso = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_string(recurso);
+			mensaje_a_enviar = empaquetar_wait_signal(id, recurso);
 		break;
 
 		case SIGNAL: // A SAFA
+			id = va_arg(arguments, unsigned int);
 			recurso = va_arg(arguments, char*);
-			mensaje_a_enviar = empaquetar_string(recurso);
+			mensaje_a_enviar = empaquetar_wait_signal(id, recurso);
 		break;
 
 		case CREAR_MDJ: // A DAM
@@ -292,23 +293,28 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 }
 
 char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
-	char* ret;
-	int ok;
+	char* ret, *buffer = calloc(256, 1);
+	int ok, msg_await_ret;
 
 	/* Le pido a FM9 la proxima instruccion */
 	cpu_send(fm9_socket, GET_FM9, dtb->gdt_id, base_escriptorio, dtb->pc);
 
 	/* Espero de FM9 la proxima instruccion */
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));
-	msg_await(fm9_socket, msg_resultado_get);
+	if((msg_await_ret = msg_await(fm9_socket, msg_resultado_get)) <= -1){
+		strerror_r(errno, buffer, 256);
+		log_error(logger, "Error fetch - msg_await: %d errno %d: %s", msg_await_ret, errno, buffer);
+	}
 	desempaquetar_resultado_get_fm9(msg_resultado_get, &ok, &ret);
 	msg_free(&msg_resultado_get);
 
-	if(ok != OK){
-		// TODO: Fin de archivo, o es un error? Creo que igual nunca va a ser != OK
+	if(ok != OK){ // Nunca es != OK, pero por las dudas...
+		log_error(logger, "Error fetch - resultado_get_fm9");
 	}
+	log_debug(logger, "%d | %s", ok, ret);
 
 	dtb->pc++;
+	free(buffer);
 	return ret;
 }
 
@@ -368,7 +374,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 		break;
 
 		case OP_WAIT:
-			cpu_send(safa_socket, WAIT, (char*) dictionary_get(operacion->operandos, "recurso"));
+			cpu_send(safa_socket, WAIT, dtb->gdt_id, (char*) dictionary_get(operacion->operandos, "recurso"));
 
 			/* Recibo de SAFA el resultado del wait */
 			msg_recibido = malloc(sizeof(t_msg));
@@ -379,16 +385,16 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 				exit(EXIT_FAILURE);
 			}
 			ok = desempaquetar_int(msg_recibido);
+			msg_free(&msg_recibido);
+
 			if(ok == NO_OK){
-				msg_free(&msg_recibido);
 				/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 				return BLOCK;
 			}
-			msg_free(&msg_recibido);
 		break;
 
 		case OP_SIGNAL:
-			cpu_send(safa_socket, SIGNAL, (char*) dictionary_get(operacion->operandos, "recurso"));
+			cpu_send(safa_socket, SIGNAL, dtb->gdt_id, (char*) dictionary_get(operacion->operandos, "recurso"));
 
 			/* Espero a que SAFA me deje seguir ejecutando */
 			msg_recibido = malloc(sizeof(t_msg));

@@ -1,5 +1,8 @@
  #include "S-AFA.h"
 
+static t_safa_semaforo* _safa_recursos_encontrar_o_crear(char* nombre_recurso, int valor_iniciar_recurso);
+static void _safa_recursos_asignar(t_safa_semaforo* sem, unsigned int id);
+
 int main(void){
 	if(safa_initialize() == -1){
 		exit(EXIT_FAILURE);
@@ -38,6 +41,9 @@ int safa_initialize(){
 
 	cpu_conexiones = list_create();
 	pthread_mutex_init(&sem_mutex_cpu_conexiones, NULL);
+
+	tabla_recursos = dictionary_create();
+	pthread_mutex_init(&sem_mutex_tabla_recursos, NULL);
 
 	return 1;
 }
@@ -82,7 +88,7 @@ void safa_iniciar_estado_operatorio(){
 
 int safa_send(int socket, e_tipo_msg tipo_msg, ...){
 	t_msg* mensaje_a_enviar;
-	int ret, id;
+	int ret, id, ok;
  	t_dtb* dtb;
  	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -101,6 +107,15 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
  			id = (int) va_arg(arguments, unsigned int);
  			mensaje_a_enviar = empaquetar_int(id);
  		break;
+
+ 		case RESULTADO_WAIT:
+ 			ok = va_arg(arguments, int);
+ 			mensaje_a_enviar = empaquetar_int(ok);
+ 		break;
+
+ 		case RESULTADO_SIGNAL:
+ 			mensaje_a_enviar = empaquetar_int(OK);
+ 		break;
 	}
 
 	mensaje_a_enviar->header->emisor = SAFA;
@@ -118,6 +133,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 	struct timespec time;
 	unsigned int id;
 	int ok;
+	char* nombre_recurso;
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
@@ -189,7 +205,6 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			case DESCONEXION:
 				log_info(logger, "[S-AFA] Se desconecto un CPU");
 				conexion_cpu_disconnect(socket);
-
 				return -1;
 			break;
 
@@ -211,6 +226,29 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			case EXIT:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, EXIT_DTB, desempaquetar_dtb(msg));
+			break;
+
+			case WAIT:
+				desempaquetar_wait_signal(msg, &id, &nombre_recurso);
+				log_info(logger, "[S-AFA] CPU me pidio WAIT de %s del PID: %d", nombre_recurso, id);
+
+				pthread_mutex_lock(&sem_mutex_tabla_recursos);
+				if(safa_recursos_wait(id, nombre_recurso)) // Pude asignarle el recurso
+					safa_send(socket, RESULTADO_WAIT, OK);
+				else 									   // No pude asignarle el recurso
+					safa_send(socket, RESULTADO_WAIT, NO_OK);
+				pthread_mutex_unlock(&sem_mutex_tabla_recursos);
+			break;
+
+			case SIGNAL:
+				desempaquetar_wait_signal(msg, &id, &nombre_recurso);
+				log_info(logger, "[S-AFA] CPU me pidio SIGNAL de %s del PID: %d", nombre_recurso, id);
+
+				pthread_mutex_lock(&sem_mutex_tabla_recursos);
+				safa_recursos_signal(id, nombre_recurso);
+				pthread_mutex_unlock(&sem_mutex_tabla_recursos);
+
+				safa_send(socket, RESULTADO_SIGNAL);
 			break;
 
 			case RESULTADO_LIBERAR_MEMORIA_FM9:
@@ -285,6 +323,131 @@ void safa_manejar_inotify(){
 			free(viejo_algoritmo);
         }
     }
+}
+
+static t_safa_semaforo* _safa_recursos_encontrar_o_crear(char* nombre_recurso, int valor_iniciar_recurso){
+	t_safa_semaforo* sem;
+	if((sem = (t_safa_semaforo*) dictionary_get(tabla_recursos, nombre_recurso)) == NULL){ // Este recurso no existia
+		sem = malloc(sizeof(t_safa_semaforo));
+		sem->valor = valor_iniciar_recurso;
+		sem->lista_pid_asignados = list_create();
+		sem->lista_pid_bloqueados = list_create();
+		dictionary_put(tabla_recursos, nombre_recurso, (void*) sem);
+	}
+	return sem;
+}
+
+static void _safa_recursos_asignar(t_safa_semaforo* sem, unsigned int id){
+
+	bool _mismo_id(void* v2){
+		return  (unsigned int) (((t_vector2*) v2)->x) == id;
+	}
+
+	t_vector2* v2_asignacion;
+	if((v2_asignacion = (t_vector2*) list_find(sem->lista_pid_asignados, _mismo_id)) == NULL){ // Este proceso no tenia asignado otro
+		v2_asignacion = malloc(sizeof(t_vector2));
+		v2_asignacion->x = (int) id;
+		v2_asignacion->y = 0;
+		list_add(sem->lista_pid_asignados, (void*) v2_asignacion);
+	}
+	v2_asignacion->y++;
+}
+
+
+bool safa_recursos_wait(unsigned int id, char* nombre_recurso){
+
+	bool _mismo_id(void* v2){
+		return  (unsigned int) (((t_vector2*) v2)->x) == id;
+	}
+
+	t_safa_semaforo* sem = _safa_recursos_encontrar_o_crear(nombre_recurso, 1);
+
+	if( --(sem->valor) < 0){ // No pude asignar el recurso. Bloqueo el DTB
+		list_add(sem->lista_pid_bloqueados, (void*) id);
+		//safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, BLOCK_DTB_ID, id);
+		return false;
+	}
+
+	/* Puedo asignar el recurso */
+	_safa_recursos_asignar(sem, id);
+
+	return true;
+}
+
+void safa_recursos_signal(unsigned int id_signal, char* nombre_recurso){
+	unsigned int id_a_desbloquear;
+
+	bool _mismo_id_a_desbloquear(void* _id){
+		return (unsigned int) _id == id_a_desbloquear;
+	}
+
+	bool _mismo_id_signal(void* v2){
+		return  (unsigned int) (((t_vector2*) v2)->x) == id_signal;
+	}
+
+
+	t_safa_semaforo* sem = _safa_recursos_encontrar_o_crear(nombre_recurso, 0);
+
+	/* Le desasigno una instancia del recurso a id_signal, si es que tenia */
+	t_vector2* asignacion;
+	if((asignacion = list_find(sem->lista_pid_asignados, _mismo_id_signal)) != NULL){
+		asignacion->y = max(0, --(asignacion->y));
+	}
+
+	if( ++(sem->valor) <= 0){ // Habian procesos esperando este recurso
+		unsigned int id_a_desbloquear = (unsigned int) list_remove(sem->lista_pid_bloqueados, 0); // FIFO
+		_safa_recursos_asignar(sem, id_a_desbloquear);
+
+		if((list_find(sem->lista_pid_bloqueados, _mismo_id_a_desbloquear)) == NULL){ // Verifico que no haya realizado otros wait
+			safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, READY_DTB_ID, id_a_desbloquear);
+		}
+	}
+}
+
+void safa_recursos_liberar_pid(unsigned int id){ // Esta funcion la invoca el hilo PCP
+
+	void _intentar_liberar_recurso(char* nombre_recurso, void* _sem){
+
+		bool __mismo_id_vector2(void* v2){
+			return  (unsigned int) (((t_vector2*) v2)->x) == id;
+		}
+		bool __mismo_id(void* _id){
+			return (unsigned int) _id == id;
+		}
+
+
+		t_safa_semaforo* sem = _sem;
+
+		while(list_remove_by_condition(sem->lista_pid_bloqueados, __mismo_id)); // Elimino todos los pedidos
+
+		/* Le saco las instancias del recurso, incremento el valor del semaforo y debloqueo */
+		t_vector2* asignacion;
+		if((asignacion = list_remove_by_condition(sem->lista_pid_asignados, __mismo_id_vector2)) != NULL){
+			sem->valor += asignacion->y;
+
+			/* Desbloqueo */
+			while(!list_is_empty(sem->lista_pid_bloqueados) && --(sem->valor) >= 0){
+				unsigned int id_a_desbloquear = (unsigned int) list_remove(sem->lista_pid_bloqueados, 0); // FIFO
+
+				bool _mismo_id_a_desbloquear(void* _id){
+					return (unsigned int) _id == id_a_desbloquear;
+				}
+
+
+				_safa_recursos_asignar(sem, id_a_desbloquear);
+
+				if((list_find(sem->lista_pid_bloqueados, _mismo_id_a_desbloquear)) == NULL){ // Verifico que no haya realizado otros wait
+					safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, READY_DTB_ID, id_a_desbloquear);
+				}
+			}
+
+			free(asignacion);
+		}
+	}
+
+	pthread_mutex_lock(&sem_mutex_tabla_recursos);
+	dictionary_iterator(tabla_recursos, _intentar_liberar_recurso);
+	pthread_mutex_unlock(&sem_mutex_tabla_recursos);
 }
 
 void safa_exit(){

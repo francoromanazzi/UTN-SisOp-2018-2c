@@ -90,6 +90,12 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					msg->data = (void*) dtb;
 				break;
 
+				case BLOCK_DTB_ID:
+				case READY_DTB_ID:
+					id = va_arg(arguments, unsigned int);
+					msg->data = (void*) id;
+				break;
+
 				case EXIT_DTB_CONSOLA:
 					id = va_arg(arguments, unsigned int);
 					msg->data = (void*) id;
