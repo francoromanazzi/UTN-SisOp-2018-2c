@@ -8,6 +8,7 @@
 	#include <unistd.h>
 	#include <sys/socket.h>
 	#include <pthread.h>
+	#include <math.h>
 
 	#include <commons/config.h>
 	#include <commons/bitarray.h>
@@ -56,7 +57,8 @@
 		void _fm9_liberar_memoria_proceso_seg_pura(unsigned int id);
 
 //-----------Paginacion---------------
-		char* bitMap;
+		char* bitMap1;
+		t_bitarray* bitmapPaginacion;
 
 		typedef struct {
 		unsigned int nro_marco;
@@ -66,7 +68,7 @@
 
 		t_list* tablaPaginasInvertida;
 		int obtener_Marco_Libre();
-		int cantidad_paginas_del_archivo(int id);
+		int cantidad_paginas_del_archivo(int tamArchivo);
 		int marcos_disponibles();
 //-----------------------------
 /* Variables globales */
@@ -96,7 +98,7 @@
 	int (*fm9_dir_logica_a_fisica)(unsigned int id, int base, int offset, int* ok);
 	void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales);
 	char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales);
-	int fm9_storage_nuevo_archivo(unsigned int id, int* ok);
+	int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok);
 	void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok);
 	void (*fm9_close)(unsigned int id, int base, int* ok);
 	void (*fm9_liberar_memoria_proceso)(unsigned int id);
