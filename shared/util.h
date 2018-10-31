@@ -17,6 +17,8 @@
 		__typeof__ (b) _b = (b); \
 		_a < _b ? _a : _b; })
 
+	#define ceiling(x,y) (((x) + (y) - 1) / (y))
+
 
 	typedef struct {
 		int x;

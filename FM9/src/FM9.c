@@ -47,6 +47,8 @@ int main(void) {
 int fm9_initialize(){
 
 	void _modo_y_estr_administrativas_init(){
+		char* bitMapStr;
+
 		switch(modo){
 			case SEG:
 				lista_procesos = list_create();
@@ -67,9 +69,9 @@ int fm9_initialize(){
 			break;
 
 			case TPI:
-				bitMap1=calloc(cant_marcos,1);
+				bitMapStr = calloc(ceiling(cant_marcos, 8), 1);
 
-				bitmapPaginacion= bitarray_create_with_mode(bitMap1,cant_marcos,MSB_FIRST);
+				bitmapPaginacion= bitarray_create_with_mode(bitMapStr, ceiling(cant_marcos, 8), MSB_FIRST);
 
 				tablaPaginasInvertida=calloc(cant_marcos,sizeof(t_fila_tabla_paginas_invertida));
 			break;
@@ -89,6 +91,7 @@ int fm9_initialize(){
 	max_linea = config_get_int_value(config, "MAX_LINEA");
 	storage_cant_lineas = tamanio / max_linea;
 	tam_pagina = config_get_int_value(config, "TAM_PAGINA");
+	cant_marcos = tamanio / tam_pagina;
 	log_info(logger,"Se realiza la inicializacion del storage y de las estructuras administrativas");
 	storage = calloc(1, tamanio);
 	_modo_y_estr_administrativas_init();

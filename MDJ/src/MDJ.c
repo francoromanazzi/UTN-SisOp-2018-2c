@@ -258,8 +258,8 @@ void crearEstructuras(){
 	string_append(&bin_bitmap, "/Bitmap.bin");
 	if((f_bitmap = fopen(bin_bitmap, "r")) == NULL){ // Si no existe el archivo bitmap
 		f_bitmap = fopen(bin_bitmap, "wb+");
-		char* bitarray_limpio_temp = calloc(1, config_get_int_value(config_metadata, "CANTIDAD_BLOQUES") / 8);
-		fwrite((void*) bitarray_limpio_temp, config_get_int_value(config_metadata, "CANTIDAD_BLOQUES") / 8, 1, f_bitmap);
+		char* bitarray_limpio_temp = calloc(1, ceiling(config_get_int_value(config_metadata, "CANTIDAD_BLOQUES"), 8));
+		fwrite((void*) bitarray_limpio_temp, ceiling(config_get_int_value(config_metadata, "CANTIDAD_BLOQUES"), 8), 1, f_bitmap);
 		fflush(f_bitmap);
 		free(bitarray_limpio_temp);
 	}

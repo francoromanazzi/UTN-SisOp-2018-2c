@@ -57,7 +57,6 @@
 		void _fm9_liberar_memoria_proceso_seg_pura(unsigned int id);
 
 //-----------Paginacion---------------
-		char* bitMap1;
 		t_bitarray* bitmapPaginacion;
 
 		typedef struct {
@@ -83,7 +82,6 @@
 		int storage_cant_lineas;
 		int tam_pagina;
 		int cant_marcos;
-		int transfer_size;
 		char* storage;
 
 
