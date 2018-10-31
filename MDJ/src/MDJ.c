@@ -212,22 +212,15 @@ int mdj_manejador_de_eventos(int socket, t_msg* msg){
 }
 
 void crearEstructuras(){
-	cant_bloques = 32;
-	char* cantidad_bloques_str = string_itoa(cant_bloques);
-	tam_bloques = 64;
-	char* tamanio_bloques_str = string_itoa(tam_bloques);
 	char* dir_metadata = string_new();
 	char* dir_archivos = string_new();
 	char* dir_bloques = string_new();
 	char* bin_metadata = string_new();
 	char* bin_bitmap = string_new();
-	char* data_inicial_bin_metadata = string_new();
-	char* bitarray_str = calloc(cant_bloques / 8, sizeof(char));
-	t_bitarray* bitarray_bin_bitmap = bitarray_create_with_mode(bitarray_str, cant_bloques / 8, MSB_FIRST);
 	FILE* f_metadata;
 
 	if(_mkpath(config_get_string_value(config, "PUNTO_MONTAJE"), 0755) == -1){
-		log_info(logger, "AAA");
+		log_error(logger, "_mkpath");
 	}
 
 	string_append(&dir_metadata, config_get_string_value(config, "PUNTO_MONTAJE"));
@@ -250,8 +243,8 @@ void crearEstructuras(){
 	if((f_metadata = fopen(bin_metadata, "r")) == NULL){ // Si no existe el archivo metadata
 		f_metadata = fopen(bin_metadata, "wb+");
 		config_metadata = config_create(bin_metadata);
-		config_set_value(config_metadata, "TAMANIO_BLOQUES", tamanio_bloques_str);
-		config_set_value(config_metadata, "CANTIDAD_BLOQUES", cantidad_bloques_str);
+		config_set_value(config_metadata, "TAMANIO_BLOQUES", config_get_string_value(config, "TAMANIO_BLOQUES"));
+		config_set_value(config_metadata, "CANTIDAD_BLOQUES", config_get_string_value(config, "CANTIDAD_BLOQUES"));
 		config_set_value(config_metadata, "MAGIC_NUMBER", "FIFA");
 		config_save(config_metadata);
 	}
@@ -263,30 +256,33 @@ void crearEstructuras(){
 
 	string_append(&bin_bitmap, dir_metadata);
 	string_append(&bin_bitmap, "/Bitmap.bin");
-	f_bitmap = fopen(bin_bitmap, "wb+");
-	/* Serializo la estructura bitarray y la escribo */
-	fwrite((void*) &(bitarray_bin_bitmap->size), sizeof(size_t), 1, f_bitmap);
-	fwrite((void*) bitarray_bin_bitmap->bitarray, sizeof(char), bitarray_bin_bitmap->size, f_bitmap);
-	fwrite((void*) &(bitarray_bin_bitmap->mode), sizeof(bit_numbering_t), 1, f_bitmap);
-	fflush(f_bitmap);
+	if((f_bitmap = fopen(bin_bitmap, "r")) == NULL){ // Si no existe el archivo bitmap
+		f_bitmap = fopen(bin_bitmap, "wb+");
+		char* bitarray_limpio_temp = calloc(1, config_get_int_value(config_metadata, "CANTIDAD_BLOQUES") / 8);
+		fwrite((void*) bitarray_limpio_temp, config_get_int_value(config_metadata, "CANTIDAD_BLOQUES") / 8, 1, f_bitmap);
+		fflush(f_bitmap);
+		free(bitarray_limpio_temp);
+	}
+	fseek(f_bitmap, 0, SEEK_END);
+	int file_size = ftell(f_bitmap);
+	fseek(f_bitmap, 0, SEEK_SET);
+	log_debug(logger, "%d", file_size);
+	char* bitarray_str = bitarray_str = malloc(file_size);
+	fread((void*) bitarray_str, sizeof(char), file_size, f_bitmap);
+	bitmap = bitarray_create_with_mode(bitarray_str, file_size, MSB_FIRST);
 	log_info(logger, "Creado el archivo Bitmap.bin");
 
 	paths_estructuras[METADATA] = dir_metadata;
 	paths_estructuras[ARCHIVOS] = dir_archivos;
 	paths_estructuras[BLOQUES] = dir_bloques;
 
-	bitarray_destroy(bitarray_bin_bitmap);
-	free(cantidad_bloques_str);
-	free(tamanio_bloques_str);
 	free(bin_metadata);
 	free(bin_bitmap);
-	free(data_inicial_bin_metadata);
-	free(bitarray_str);
 }
 
 static void _hardcodear_archivos(){
 
-	void __nuevo_escriptorio(char* nombre, char* contenido){
+	void __nuevo_escriptorio(char* ruta, char* contenido){
 
 		int ___count_char_occurrences_in_string(const char* str, const char c){
 			int i, ret = 0;
@@ -296,16 +292,28 @@ static void _hardcodear_archivos(){
 			return ret;
 		}
 
-		int ok, cant_lineas = ___count_char_occurrences_in_string(contenido, '\n');
+		int ok, ok_validar, cant_lineas = ___count_char_occurrences_in_string(contenido, '\n');
 
-		crearArchivo(nombre, cant_lineas, &ok);
-		if(ok != OK) log_error(logger, "%s - crear - %d", nombre, ok);
+		validarArchivo(ruta, &ok_validar);
+		if(ok_validar == OK){
+			log_error(logger, "%s - validar - %d", ruta, ok_validar);
+			return;
+		}
+
+		crearArchivo(ruta, cant_lineas, &ok);
+		if(ok != OK) {
+			log_error(logger, "%s - crear - %d", ruta, ok);
+			return;
+		}
 
 		void* buffer = malloc(strlen(contenido));
 		memcpy(buffer, (void*) contenido, strlen(contenido));
-		guardarDatos(nombre, 0, strlen(contenido), buffer, &ok);
+		guardarDatos(ruta, 0, strlen(contenido), buffer, &ok);
 		free(buffer);
-		if(ok != OK) log_error(logger, "%s - guardar - %d", nombre, ok);
+		if(ok != OK) {
+			log_error(logger, "%s - guardar - %d", ruta, ok);
+			return;
+		}
 	}
 
 
@@ -350,27 +358,53 @@ static void _hardcodear_archivos(){
 			"\n");
 }
 
-t_bitarray* mdj_bitmap_abrir(){
-	t_bitarray* ret;
-	size_t size;
-	char* bitarray_str;
-	bit_numbering_t mode;
+void mdj_bitmap_save(){
+
+	char* stringToBinary(char* s) {
+	    if(s == NULL) return 0; /* no input string */
+	    size_t len = strlen(s);
+	    char *binary = malloc(len*9 + 1); // each char is one byte (8 bits) + white space and + 1 at the end for null terminator
+	    binary[0] = '\0';
+	    for(size_t i = 0; i < len; ++i) {
+	        char ch = s[i];
+	        for(int j = 7; j >= 0; --j){
+	            if(ch & (1 << j)) {
+	                strcat(binary,"1");
+	            } else {
+	                strcat(binary,"0");
+	            }
+	        }
+	        strcat(binary," ");
+	    }
+	    return binary;
+	}
+	log_debug(logger, "[BITMAP] Actualice el bitmap.");
+
+	char* str = malloc(bitmap->size + 1);
 
 	fseek(f_bitmap, 0, SEEK_SET);
-	fread((void*) &size, sizeof(size_t), 1, f_bitmap);
-	bitarray_str = malloc(size);
-	fread((void*) bitarray_str, sizeof(char), size, f_bitmap);
-	fread((void*) &mode, sizeof(bit_numbering_t), 1, f_bitmap);
-	ret = bitarray_create_with_mode(bitarray_str, size, mode);
-	return ret;
-}
+	fread((void*) str, sizeof(char), bitmap->size, f_bitmap);
+	str[bitmap->size] = '\0';
+	char* str_binario = stringToBinary(str);
+	log_debug(logger, "[BITMAP] ANTES: %s", str_binario);
+	free(str_binario);
 
-void mdj_bitmap_save(t_bitarray* bitarray){
 	fseek(f_bitmap, 0, SEEK_SET);
-	fwrite((void*) &(bitarray->size), sizeof(size_t), 1, f_bitmap);
-	fwrite((void*) bitarray->bitarray, sizeof(char), bitarray->size, f_bitmap);
-	fwrite((void*) &(bitarray->mode), sizeof(bit_numbering_t), 1, f_bitmap);
+	fwrite((void*) bitmap->bitarray, sizeof(char), bitmap->size, f_bitmap);
 	fflush(f_bitmap);
+
+	fseek(f_bitmap, 0, SEEK_SET);
+	fread((void*) str, sizeof(char), bitmap->size, f_bitmap);
+	str[bitmap->size] = '\0';
+	str_binario = stringToBinary(str);
+	log_debug(logger, "[BITMAP] DESPUES: %s", str_binario);
+	free(str_binario);
+	free(str);
+
+	/* Si no se quiere debuggear, dejar solo lo de abajo */
+	//fseek(f_bitmap, 0, SEEK_SET);
+	//fwrite((void*) bitmap->bitarray, sizeof(char), bitmap->size, f_bitmap);
+	//fflush(f_bitmap);
 }
 
 void validarArchivo(char* path, int* ok){
@@ -385,7 +419,7 @@ void validarArchivo(char* path, int* ok){
 		*ok = OK;
 	}
 	else{
-		log_error(logger, "No encontre el archivo %s", rutaFinal);
+		log_info(logger, "No encontre el archivo %s", rutaFinal);
 		*ok = MDJ_ERROR_PATH_INEXISTENTE;
 	}
 	free(rutaFinal);
@@ -418,30 +452,29 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 	string_append(&rutaFinal, path);
 
 	/* Busco en el bitmap la cantidad de bloques necesarios */
-	t_bitarray* bitmap = mdj_bitmap_abrir();
 	for(i = 0; i < bitmap->size * 8 && lista_nro_bloques->elements_count < bloques_necesarios; i++){
 		if(!bitarray_test_bit(bitmap, i)){ // Bloque disponible
 			list_add(lista_nro_bloques, (void*) i);
 			bitarray_set_bit(bitmap, i);
 		}
 	}
+	mdj_bitmap_save();
 
 	if(lista_nro_bloques->elements_count < bloques_necesarios){ // Espacio insuficiente
 		*ok = MDJ_ERROR_ESPACIO_INSUFICIENTE;
 		free(rutaFinal);
+		/* Limpio del bitmap los bloques que reserve */
+		for(i = 0; i < list_size(lista_nro_bloques); i++){
+			bitarray_clean_bit(bitmap, (int) list_get(lista_nro_bloques, i));
+		}
 		list_destroy(lista_nro_bloques);
-		free(bitmap->bitarray);
-		bitarray_destroy(bitmap);
+		mdj_bitmap_save();
 		return;
 	}
 
 	/* OK, puedo crear el archivo */
 	*ok = OK;
 	_mkpath(rutaFinal, 0777); // Creo todos los directorios necesarios del path
-
-	mdj_bitmap_save(bitmap); // Actualizo archivo bitmap
-	free(bitmap->bitarray);
-	bitarray_destroy(bitmap);
 
 	/* Creo el archivo */
 	archivo = fopen(rutaFinal, "wb+");
@@ -579,20 +612,18 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 		char* nro_bloque_str;
 		int nro_bloque;
 		bool bloque_disponible;
-		t_bitarray* bitarray = mdj_bitmap_abrir();
 
 		for(nro_bloque = 0;
-			nro_bloque < bitarray->size * 8 && !(bloque_disponible = !(bitarray_test_bit(bitarray, nro_bloque)));
+			nro_bloque < bitmap->size * 8 && !(bloque_disponible = !(bitarray_test_bit(bitmap, nro_bloque)));
 			nro_bloque++);
 
 		if(!bloque_disponible){
 			*ok = MDJ_ERROR_ESPACIO_INSUFICIENTE;
+			free(ruta_bloque);
 			return NULL;
 		}
-		bitarray_set_bit(bitarray, nro_bloque);
-		mdj_bitmap_save(bitarray);
-		free(bitarray->bitarray);
-		bitarray_destroy(bitarray);
+		bitarray_set_bit(bitmap, nro_bloque);
+		mdj_bitmap_save();
 		nro_bloque_str = string_itoa(nro_bloque);
 
 		string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
@@ -611,13 +642,33 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 		return nro_bloque_str;
 	}
 
+	void _borrar_bloques(char* bloques_str){
+
+		void __borrar_bloque_de_fifa(char* nro_bloque){
+			char* ruta_bloque = string_new();
+			string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
+			string_append(&ruta_bloque, nro_bloque);
+			string_append(&ruta_bloque, ".bin");
+			remove(ruta_bloque);
+
+			bitarray_clean_bit(bitmap, atoi(nro_bloque));
+
+			free(ruta_bloque);
+		}
+
+		char** nros_bloques = string_get_string_as_array(bloques_str);
+		string_iterate_lines(nros_bloques, __borrar_bloque_de_fifa);
+		mdj_bitmap_save();
+		split_liberar(nros_bloques);
+	}
+
 	*ok = OK;
 
 	char* rutaFinal = string_new();
 	string_append(&rutaFinal, paths_estructuras[ARCHIVOS]);
 	string_append(&rutaFinal, path);
 	t_config* config_archivo = config_create(rutaFinal);
-	free(rutaFinal);
+
 
 	tamanio_total = config_get_int_value(config_archivo, "TAMANIO");
 	char** bloques_arr_strings = config_get_array_value(config_archivo, "BLOQUES");
@@ -628,7 +679,6 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 
 	if(bytes_restantes == 0){ // DAM me aviso que en este offset finaliza el archivo
 		int i;
-		t_bitarray* bitarray = mdj_bitmap_abrir();
 
 		/* Elimino los bloques sobrantes y actualizo el bitmap */
 		for(i = bloques_arr_strings_len - 1; i > 0 && i > indice_bloque_inicial; i--){
@@ -641,14 +691,13 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			remove(ruta_bloque);
 			free(ruta_bloque);
 
-			bitarray_clean_bit(bitarray, atoi(nro_bloque));
+			bitarray_clean_bit(bitmap, atoi(nro_bloque));
 
 			free(bloques_arr_strings[i]);
 			bloques_arr_strings[i] = NULL;
 		}
-		mdj_bitmap_save(bitarray);
-		free(bitarray->bitarray);
-		bitarray_destroy(bitarray);
+		mdj_bitmap_save();
+
 		bloques_arr_strings_len = split_cant_elem(bloques_arr_strings);
 
 		/* Actualizo config */
@@ -671,6 +720,7 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 
 		split_liberar(bloques_arr_strings);
 		config_destroy(config_archivo);
+		free(rutaFinal);
 		return;
 	}
 
@@ -691,8 +741,12 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 
 		if(nuevo_indice_bloque > bloques_arr_strings_len - 1){
 			char* nro_bloque = _crear_bloque();
-			if(*ok != OK){
+			if(*ok != OK){ // No hay espacio
+				_borrar_bloques(bloques_string);
+				remove(rutaFinal);
+
 				free(bloques_string);
+				free(rutaFinal);
 				config_destroy(config_archivo);
 				split_liberar(bloques_arr_strings);
 				return;
@@ -715,12 +769,12 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 	config_save(config_archivo);
 	free(tamanio_str);
 
+	free(rutaFinal);
 	split_liberar(bloques_arr_strings);
 	config_destroy(config_archivo);
 }
 
 void borrarArchivo(char* path, int* ok){
-	t_bitarray* bitmap = mdj_bitmap_abrir();
 
 	void _borrar_bloque(char* nro_bloque){
 		char* ruta_bloque = string_new();
@@ -744,13 +798,10 @@ void borrarArchivo(char* path, int* ok){
 
 	char** bloques_strings = config_get_array_value(config_archivo, "BLOQUES");
 	string_iterate_lines(bloques_strings, _borrar_bloque);
+	mdj_bitmap_save();
 
 	remove(rutaFinal);
 	free(rutaFinal);
-
-	mdj_bitmap_save(bitmap);
-	free(bitmap->bitarray);
-	bitarray_destroy(bitmap);
 
 	config_destroy(config_archivo);
 	split_liberar(bloques_strings);
@@ -759,6 +810,8 @@ void borrarArchivo(char* path, int* ok){
 void mdj_exit(){
 	log_destroy(logger);
 	config_destroy(config);
+	free(bitmap->bitarray);
+	bitarray_destroy(bitmap);
 }
 
 

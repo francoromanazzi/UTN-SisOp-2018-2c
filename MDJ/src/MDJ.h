@@ -38,7 +38,8 @@
 		t_config* config_metadata;
 		t_log* logger;
 		int listenning_socket;
-		FILE* f_bitmap; // Usado por mdj_bitmap_abrir y mdj_bitmap_save
+		t_bitarray* bitmap;
+		FILE* f_bitmap; // Usado por mdj_bitmap_save
 		char* paths_estructuras[3]; // e_key_path_estructura
 		int cant_bloques;
 		int tam_bloques;
@@ -48,8 +49,7 @@
 	int mdj_send(int socket, e_tipo_msg tipo_msg, ...);
 	int mdj_manejador_de_eventos(int socket, t_msg* msg);
 
-	t_bitarray* mdj_bitmap_abrir();
-	void mdj_bitmap_save(t_bitarray* bitarray);
+	void mdj_bitmap_save();
 
 	void validarArchivo(char* path, int* ok);
 	void crearArchivo(char* path, int cant_lineas, int* ok);
