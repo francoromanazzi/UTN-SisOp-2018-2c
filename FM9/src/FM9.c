@@ -67,12 +67,11 @@ int fm9_initialize(){
 			break;
 
 			case TPI:
-				bitMap=calloc(1,cant_marcos);
-				int i;
-				for(i=0;i<cant_marcos;i++){
-					bitMap[i]=0;
-				}
-				tablaPaginasInvertida=calloc(sizeof(t_fila_tabla_paginas_invertida),cant_marcos);
+				bitMap1=calloc(cant_marcos,1);
+
+				bitmapPaginacion= bitarray_create_with_mode(bitMap1,cant_marcos,MSB_FIRST);
+
+				tablaPaginasInvertida=calloc(cant_marcos,sizeof(t_fila_tabla_paginas_invertida));
 			break;
 
 			case SPA:
@@ -210,8 +209,8 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			case CREAR_FM9:
 				id = desempaquetar_int(msg);
 				log_info(logger,"DAM me pidio reservar memoria para un nuevo archivo del ID: %d", id);
-
-				base = fm9_storage_nuevo_archivo(id, &operacion_ok);
+				int tamArchivo=msg->header->payload_size;
+				base = fm9_storage_nuevo_archivo(id,tamArchivo ,&operacion_ok);
 
 				if(operacion_ok == FM9_ERROR_INSUFICIENTE_ESPACIO)
 					operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
@@ -315,7 +314,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 	return 1;
 }
 
-int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
+int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == id;
@@ -373,7 +372,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 		case TPI:
 
 			nueva_fila_tablaDePaginas = malloc(sizeof(t_fila_tabla_paginas_invertida));
-			int cantPaginas=cantidad_paginas_del_archivo(id);
+			int cantPaginas=cantidad_paginas_del_archivo(tamArchivo);
 			int marco_libre;
 			int j=0;
 			if(cantPaginas<marcos_disponibles()){
@@ -384,7 +383,8 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 					nueva_fila_tablaDePaginas->pid=id;
 					nueva_fila_tablaDePaginas->nro_pagina=j;
 					list_add(tablaPaginasInvertida,nueva_fila_tablaDePaginas);
-					bitMap[marco_libre]=1;
+
+					bitarray_set_bit(bitmapPaginacion,marco_libre);
 					//mutex unlock
 					log_info(logger, "Agrego la pagina %d del PID: %d, al Marco: %d",
 										nueva_fila_tablaDePaginas->nro_pagina, nueva_fila_tablaDePaginas->pid, nueva_fila_tablaDePaginas->nro_marco);
@@ -703,7 +703,7 @@ int obtener_Marco_Libre(){
 	int i=0;
 	int bit_no_encontrado=1;
 	while(i < cant_marcos  && bit_no_encontrado){
-		if(bitMap[i]==0){
+		if(bitarray_test_bit(bitmapPaginacion,i)==0){
 			bit_no_encontrado=0;
 		}else{
 			i++;
@@ -716,21 +716,22 @@ int obtener_Marco_Libre(){
 
 }
 int marcos_disponibles(){
+
 	int i,j=0;
 	for(i=0;i<cant_marcos;i++){
-		if(bitMap[i]==0){
+		if(bitarray_test_bit(bitmapPaginacion,i)==0){
 			j++;
 		}
 	}
 	return j;
 }
-int cantidad_paginas_del_archivo(int pid){
+int cantidad_paginas_del_archivo(int tamArchivo){
 	int x=0;
-
-	//
-
-	//
-
+	if(tamArchivo%tam_pagina!=0){
+		x=tamArchivo/tam_pagina+1;
+	}else{
+		x=tamArchivo/tam_pagina;
+	}
 	return x;
 }
 //--------------------------------
