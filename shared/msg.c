@@ -40,7 +40,7 @@ int msg_await(int socket, t_msg* msg){
 		return -1;
 	}
 
-	void* payload = malloc(header->payload_size + 1);
+	void* payload = malloc(header->payload_size);
 	result_recv = recv(socket, payload, header->payload_size, MSG_WAITALL);
 	if(result_recv < 1){
 		free(header);

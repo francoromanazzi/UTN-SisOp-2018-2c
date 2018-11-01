@@ -9,13 +9,13 @@ int main(void) {
 		config = config_create(CONFIG_PATH);
 		util_config_fix_comillas(&config, "PUNTO_MONTAJE");
 
-
+		/* DEPRACATED:
 		char* punto_montaje_un_directorio_atras = string_new();
 		string_append(&punto_montaje_un_directorio_atras, "..");
 		string_append(&punto_montaje_un_directorio_atras, config_get_string_value(config, "PUNTO_MONTAJE"));
 		config_set_value(config, "PUNTO_MONTAJE", punto_montaje_un_directorio_atras);
 		free(punto_montaje_un_directorio_atras);
-
+		*/
 
 		char* retardo_microsegundos_str = string_itoa(1000 * config_get_int_value(config, "RETARDO"));
 		config_set_value(config, "RETARDO", retardo_microsegundos_str); // Milisegundos a microsegundos
@@ -28,7 +28,7 @@ int main(void) {
 	logger = log_create(LOG_PATH, "MDJ", false, LOG_LEVEL_TRACE);
 
 	crearEstructuras();
-	_hardcodear_archivos();
+	//_hardcodear_archivos();
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
@@ -553,7 +553,7 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 
 		void* data = malloc(cant_bytes_a_leer);
 		int bytes_leidos = fread(data, 1, cant_bytes_a_leer, bloque);
-		memcpy(*ret_buffer, data, bytes_leidos);
+		memcpy((char*) (*ret_buffer) + (*ret_buffer_size), data, bytes_leidos);
 		*ret_buffer_size += bytes_leidos;
 		free(data);
 		fclose(bloque);

@@ -252,7 +252,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			do
 				instruccion = cpu_fetch(dtb, base_escriptorio);
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
-			if(!strcmp(instruccion, "")){ // No hay mas instrucciones para leer
+			if(!strcmp(instruccion, " ")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
 				cpu_send(fm9_socket, LIBERAR_MEMORIA_FM9, dtb->gdt_id); // Le pido a FM9 que libere la memoria del proceso
 				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB

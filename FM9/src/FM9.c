@@ -132,10 +132,10 @@ int fm9_send(int socket, e_tipo_msg tipo_msg, ...){
 			str = va_arg(arguments, char*);
 			if(str == NULL){
 				log_debug(logger, "fm9_send - resultado_get_fm9 str==NULL");
-				str = strdup("");
+				str = strdup(" ");
 				str_free = true;
 			}
-			log_debug(logger, "%d | %s", ok, str); //
+			log_debug(logger, "%d | [%s] len: %d", ok, str, strlen(str)); //
 			mensaje_a_enviar = empaquetar_resultado_get_fm9(ok, str);
 
 			if(str_free) free(str);
@@ -525,6 +525,13 @@ char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool perm
 
 	char* ret = malloc(max_linea);
 	memcpy((void*) ret, dir_fisica_bytes, max_linea);
+
+	if(!strcmp(ret, "")){
+		log_debug(logger, "fm9_storage_leer - Linea vacia");
+		free(ret);
+		ret = strdup(" ");
+	}
+
 	return ret;
 }
 

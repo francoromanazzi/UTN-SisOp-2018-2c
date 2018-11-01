@@ -41,11 +41,11 @@ void mdj_procesar_comando(char* linea){
 			string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
 			string_append(&ruta_bloque, bloques_strings[i]);
 			string_append(&ruta_bloque, ".bin");
+			log_debug(logger, "[CONSOLA] Abro bloque %s", ruta_bloque);
 			f_bloque = fopen(ruta_bloque, "rb");
 			free(ruta_bloque);
 			void* data = malloc(config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
-			int bytes_a_leer = bytes_restantes < config_get_int_value(config_metadata, "TAMANIO_BLOQUES")
-					? bytes_restantes : config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
+			int bytes_a_leer = min(bytes_restantes, config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
 			int bytes_leidos = fread(data, 1, bytes_a_leer, f_bloque);
 
 			ret = realloc(ret, *ret_size + bytes_leidos);
@@ -53,7 +53,7 @@ void mdj_procesar_comando(char* linea){
 			*ret_size += bytes_leidos;
 			free(data);
 
-			bytes_restantes -= config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
+			bytes_restantes -= bytes_leidos;
 			i++;
 		}
 		split_liberar(bloques_strings);
