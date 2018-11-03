@@ -45,6 +45,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
 
 						safa_recursos_liberar_pid(dtb->gdt_id);
+						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 						pcp_intentar_solicitar_liberacion_memoria();
 					}
 					else{
@@ -74,6 +75,7 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 						pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
 
 						safa_recursos_liberar_pid(dtb->gdt_id);
+						list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
 						pcp_intentar_solicitar_liberacion_memoria();
 					}
 					else {
@@ -132,7 +134,11 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 
 					}
 					pcp_mover_dtb(dtb->gdt_id, ESTADO_EXEC, ESTADO_EXIT);
+
 					safa_recursos_liberar_pid(dtb->gdt_id);
+					list_add(lista_procesos_a_solicitar_liberacion_de_memoria, (void*) dtb->gdt_id);
+					pcp_intentar_solicitar_liberacion_memoria();
+
 					dtb_destroy(dtb);
 					msg->data=NULL;
 				break;

@@ -28,7 +28,7 @@ int main(void) {
 	logger = log_create(LOG_PATH, "MDJ", false, LOG_LEVEL_TRACE);
 
 	crearEstructuras();
-	//_hardcodear_archivos();
+	_hardcodear_archivos();
 
 	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
