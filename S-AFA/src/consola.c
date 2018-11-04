@@ -2,6 +2,18 @@
 
 void consola_iniciar(){
 	char * linea;
+
+	/* Cosas para el autocompletar: */
+	rl_attempted_completion_function = (CPPFunction *) consola_autocompletar;
+	t_config* config_mdj = config_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/MDJ.txt");
+	util_config_fix_comillas(&config_mdj, "PUNTO_MONTAJE");
+	ruta_fs_archivos = strdup(config_get_string_value(config_mdj, "PUNTO_MONTAJE"));
+	string_append(&ruta_fs_archivos, "Archivos");
+	config_destroy(config_mdj);
+	chdir(ruta_fs_archivos);
+	free(ruta_fs_archivos);
+
+
 	printf("Bienvenido! Ingrese \"ayuda\" para ver una lista con todos los comandos disponibles \n");
 	while(1) {
 		linea = readline("S-AFA> ");
@@ -31,20 +43,23 @@ void consola_procesar_comando(char* linea){
 
 
 	/* Comando ayuda */
-	if(!strcmp(linea, "ayuda")){
+	if(argc == 1 && !strcmp(argv[0], "ayuda")){
 		printf("\nejecutar [ruta]:\tEjecuta el escriptorio ubicado en la ruta\n");
 		printf("status:\t\t\tMuestra el estado de cada cola\n");
 		printf("status [pcb_id]:\tMuestra todos los datos del DTB especificado\n");
 		printf("finalizar [pcb_id]:\tFinaliza la ejecucion de un GDT especificado\n");
 		printf("metricas:\t\tMuestra distintas metricas del sistema\n");
 		printf("metricas [pcb_id]:\tMuestra distintas metricas del sistema y del DTB especificado\n");
+		printf("clear:\t\tLimpia la pantalla\n");
 		printf("salir:\t\t\tCierra la consola\n\n");
 	}
+
 	/* Comando ejecutar [ruta] */
 	else if(argc == 2 && !strcmp(argv[0],"ejecutar")){
 		metricas_tiempo_add_start((unsigned) dtb_get_gdt_id_count(false));
 		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, CREAR_DTB, strdup(argv[1]));
 	}
+
 	/* Comando status */
 	else if(argc == 1 && !strcmp(argv[0], "status")){
 
@@ -91,6 +106,7 @@ void consola_procesar_comando(char* linea){
 		msg_recibido->data = NULL;
 		safa_protocol_msg_free(msg_recibido);
 	}
+
 	/* Comando status [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "status")){
 		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, STATUS_PCB, atoi(argv[1]) );
@@ -108,6 +124,7 @@ void consola_procesar_comando(char* linea){
 			safa_protocol_msg_free(msg_recibido);
 		}
 	}
+
 	/* Comando finalizar [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "finalizar")){
 		if(!strcmp(argv[1], "0"))
@@ -140,14 +157,22 @@ void consola_procesar_comando(char* linea){
 			safa_protocol_msg_free(msg_recibido);
 		}
 	}
+
 	/* Comando metricas */
 	else if(argc == 1 && !strcmp(argv[0], "metricas")){
 		printf("Tiempo de respuesta promedio: %.5f\n\n", metricas_tiempo_get_promedio());
 	}
+
 	/* Comando metricas [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "metricas")){
 		printf("Tiempo de respuesta promedio: %.5f\n\n", metricas_tiempo_get_promedio());
 	}
+
+	/* Comando clear */
+	else if(argc == 1 && !strcmp(argv[0], "clear")){
+		system("clear");
+	}
+
 	/* Error al ingresar comando */
 	else{
 		printf("No se pudo reconocer el comando\n\n");
@@ -180,6 +205,57 @@ t_safa_msg* consola_esperar_msg(e_safa_tipo_msg tipo_msg){
 	}
 }
 
+
+/* Attempt to complete on the contents of TEXT.  START and END show the
+   region of TEXT that contains the word to complete.  We can use the
+   entire line in case we want to do some simple parsing.  Return the
+   array of matches, or NULL if there aren't any. */
+char** consola_autocompletar (text, start, end)
+     char *text;
+     int start, end;
+{
+  char **matches;
+
+  matches = (char **)NULL;
+
+  /* If this word is at the start of the line, then it is a command
+     to complete.  Otherwise it is the name of a file in the current
+     directory. */
+  if (start == 0)
+    matches = completion_matches (text, consola_autocompletar_command_generator);
+
+  return (matches);
+}
+
+/* Generator function for command completion.  STATE lets us know whether to start
+   from scratch; without any state (i.e. STATE == 0), then we start at the top of the list. */
+char* consola_autocompletar_command_generator (text, state)
+     char *text;
+     int state;
+{
+	static int list_index, len;
+	char *name;
+	static char* commands[] = {"ayuda", "ejecutar", "status", "finalizar", "metricas", "clear", "salir", (char*) NULL};
+
+	/* If this is a new word to complete, initialize now.  This includes
+	 saving the length of TEXT for efficiency, and initializing the index
+	 variable to 0. */
+	if(!state){
+	  list_index = 0;
+	  len = strlen (text);
+	}
+
+	/* Return the next name which partially matches from the command list. */
+	while ((name = commands[list_index]) != NULL){
+	  list_index++;
+
+	  if (strncmp (name, text, len) == 0)
+		return (strdup(name));
+	}
+
+	/* If no names matched, then return NULL. */
+	return ((char *)NULL);
+}
 
 
 

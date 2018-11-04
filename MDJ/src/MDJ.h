@@ -18,6 +18,7 @@
 	#include <shared/util.h>
 	#include "MDJ_consola.h"
 
+
 	/* Constantes */
 	#define IP "127.0.0.1"
 

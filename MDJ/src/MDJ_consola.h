@@ -13,9 +13,14 @@
 	#include <shared/util.h>
 	#include "MDJ.h"
 
+
 	char* pwd;
 
 	void mdj_consola_init();
-	void mdj_procesar_comando(char* linea);
+	void mdj_consola_procesar_comando(char* linea);
+
+	char** mdj_consola_autocompletar();
+	char* mdj_consola_autocompletar_command_generator();
+	extern char** completion_matches(char *, rl_compentry_func_t *);
 
 #endif /* MDJ_CONSOLA_H_ */

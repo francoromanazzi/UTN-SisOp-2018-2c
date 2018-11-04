@@ -2,11 +2,14 @@
 
 void mdj_consola_init(){
 	pwd = strdup(paths_estructuras[ARCHIVOS]);
+	chdir(pwd);
+
 	char* linea, *pwd_prompt;
+
+	rl_attempted_completion_function = (CPPFunction *) mdj_consola_autocompletar;
 
 	printf("Bienvenido! Ingrese \"ayuda\" para ver una lista con todos los comandos disponibles \n");
 	while(1) {
-		//pwd_prompt = strstr(strstr(pwd, "Archivos/"), "/");
 		pwd_prompt = string_substring_from(strstr(pwd, "Archivos/"), strlen("Archivos"));
 		string_append(&pwd_prompt, "> ");
 		linea = readline(pwd_prompt);
@@ -16,14 +19,14 @@ void mdj_consola_init(){
 			free(linea);
 			break;
 		}
-		mdj_procesar_comando(linea);
+		mdj_consola_procesar_comando(linea);
 		free(linea);
 		free(pwd_prompt);
 	}
 	exit(EXIT_SUCCESS);
 }
 
-void mdj_procesar_comando(char* linea){
+void mdj_consola_procesar_comando(char* linea){
 	char** argv = string_split(linea, " ");
 	int argc = split_cant_elem(argv);
 
@@ -62,7 +65,7 @@ void mdj_procesar_comando(char* linea){
 	}
 
 	/* Comando ayuda */
-	if(!strcmp(linea, "ayuda")){
+	if(argc == 1 && !strcmp(argv[0], "ayuda")){
 		printf("\nls:\t\tLista los directorios y archivos del directorio actual\n");
 		printf("ls [path]:\tLista los directorios y archivos del directorio [path]\n");
 		printf("cd [path]:\tSe cambia el directorio actual por [path]\n");
@@ -123,6 +126,7 @@ void mdj_procesar_comando(char* linea){
 				for(i = strlen(pwd) - 2 ; i >= 0; i--){
 					if(pwd[i] == '/'){
 						pwd[i + 1] = '\0';
+						chdir(pwd);
 						break;
 					}
 				}
@@ -138,6 +142,7 @@ void mdj_procesar_comando(char* linea){
 			if(dir){ // Existe el directorio
 			    free(pwd);
 			    pwd = strdup(pwd_copy);
+			    chdir(pwd);
 			    closedir(dir);
 			}
 			else if (ENOENT == errno) {// No existe el directorio
@@ -212,3 +217,58 @@ void mdj_procesar_comando(char* linea){
 	}
 	split_liberar(argv);
 }
+
+
+/* Attempt to complete on the contents of TEXT.  START and END show the
+   region of TEXT that contains the word to complete.  We can use the
+   entire line in case we want to do some simple parsing.  Return the
+   array of matches, or NULL if there aren't any. */
+char** mdj_consola_autocompletar (text, start, end)
+     char *text;
+     int start, end;
+{
+  char **matches;
+
+  matches = (char **)NULL;
+
+  /* If this word is at the start of the line, then it is a command
+     to complete.  Otherwise it is the name of a file in the current
+     directory. */
+  if (start == 0)
+	  matches = completion_matches (text, mdj_consola_autocompletar_command_generator);
+  //else
+  //    matches = completion_matches (text, mdj_consola_autocompletar_filename_generator);
+
+  return (matches);
+}
+
+/* Generator function for command completion.  STATE lets us know whether to start
+   from scratch; without any state (i.e. STATE == 0), then we start at the top of the list. */
+char* mdj_consola_autocompletar_command_generator (text, state)
+     char *text;
+     int state;
+{
+	static int list_index, len;
+	char *name;
+	static char* commands[] = {"ayuda", "ls", "cd", "md5", "cat", "clear", "salir", (char*) NULL};
+
+	/* If this is a new word to complete, initialize now.  This includes
+	 saving the length of TEXT for efficiency, and initializing the index
+	 variable to 0. */
+	if(!state){
+	  list_index = 0;
+	  len = strlen (text);
+	}
+
+	/* Return the next name which partially matches from the command list. */
+	while ((name = commands[list_index]) != NULL){
+	  list_index++;
+
+	  if (strncmp (name, text, len) == 0)
+		return (strdup(name));
+	}
+
+	/* If no names matched, then return NULL. */
+	return ((char *)NULL);
+}
+

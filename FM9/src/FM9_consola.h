@@ -17,4 +17,8 @@
 	void (*fm9_dump_pid)(unsigned int);
 	void _fm9_dump_pid_seg_pura(unsigned int id);
 
+	char** fm9_consola_autocompletar();
+	char* fm9_consola_autocompletar_command_generator();
+	extern char** completion_matches(char *, rl_compentry_func_t *);
+
 #endif /* FM9_CONSOLA_H_ */

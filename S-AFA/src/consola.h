@@ -6,6 +6,7 @@
 	#include <readline/readline.h>
 	#include <readline/history.h>
 	#include <pthread.h>
+	#include <dirent.h>
 
 	#include <commons/collections/list.h>
 	#include <commons/config.h>
@@ -20,9 +21,14 @@
 	#include "safa_util.h"
 	#include "metricas.h"
 
+	char* ruta_fs_archivos;
+
 	void consola_iniciar();
 	void consola_procesar_comando(char* linea);
 	t_safa_msg* consola_esperar_msg(e_safa_tipo_msg tipo_msg);
-	void consola_status_free(t_status* status);
+
+	char** consola_autocompletar();
+	char* consola_autocompletar_command_generator();
+	extern char** completion_matches(char *, rl_compentry_func_t *);
 
 #endif /* CONSOLA_H_ */

@@ -3,6 +3,7 @@
 static void _hardcodear_archivos();
 static int _mkpath(char* file_path, mode_t mode);
 
+
 int main(void) {
 
 	void config_create_fixed(){
