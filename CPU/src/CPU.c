@@ -278,7 +278,6 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 				else{
 					log_error(logger, "Error %d al ejecutar el DTB con ID:%d", nro_error, dtb->gdt_id);
 					dtb->flags.error_nro = nro_error;
-					cpu_send(fm9_socket, LIBERAR_MEMORIA_FM9, dtb->gdt_id); // Le pido a FM9 que libere la memoria del proceso
 					cpu_send(safa_socket, EXIT, dtb);
 				}
 				operacion_free(&operacion);
@@ -296,7 +295,7 @@ char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
 	int ok, msg_await_ret;
 
 	/* Le pido a FM9 la proxima instruccion */
-	cpu_send(fm9_socket, GET_FM9, dtb->gdt_id, base_escriptorio, dtb->pc);
+	cpu_send(fm9_socket, GET_FM9, dtb->gdt_id, base_escriptorio, dtb->pc + 1); // [IMPORTANTE] Le sumo 1 al PC ya que las lineas comienzan en 1 (v1.5)
 
 	/* Espero de FM9 la proxima instruccion */
 	t_msg* msg_resultado_get = malloc(sizeof(t_msg));

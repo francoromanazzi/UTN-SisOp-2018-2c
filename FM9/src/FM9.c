@@ -224,6 +224,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case ESCRIBIR_FM9:
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
 				log_info(logger,"DAM me pidio la operacion ESCRIBIR %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, true);
@@ -235,12 +236,15 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 					}
 				}
 				free(datos);
-				if(operacion_ok != OK) operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
+				if(operacion_ok != OK)
+					operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
+
 				fm9_send(socket, RESULTADO_ESCRIBIR_FM9, operacion_ok);
 			break;
 
 			case GET_FM9:
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
 				log_info(logger,"DAM me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
 				datos = fm9_storage_leer(id, base, offset, &operacion_ok, true);
@@ -267,6 +271,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case ESCRIBIR_FM9:
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
 				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar) %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, false);
@@ -279,6 +284,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case GET_FM9:
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
 				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
 				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false);
@@ -499,6 +505,7 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 }
 
 void fm9_storage_escribir(unsigned int id, int base,  int offset, char* str, int* ok, bool permisos_totales){
+
 	int dir_fisica = fm9_dir_logica_a_fisica(id, base, offset, ok);
 	if(*ok != OK) {
 		if(!permisos_totales)
@@ -514,12 +521,14 @@ void fm9_storage_escribir(unsigned int id, int base,  int offset, char* str, int
 }
 
 char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales){
+
 	int dir_fisica = fm9_dir_logica_a_fisica(id, base, offset, ok);
-	if(*ok != OK) {
+	if(*ok != OK || offset < 0) {
 		if(!permisos_totales)
 			log_error(logger, "Seg fault al traducir una direccion");
 		return NULL;
 	}
+
 
 	void* dir_fisica_bytes = (void*) (storage + (dir_fisica * max_linea));
 
@@ -562,7 +571,7 @@ int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset,
 		return -1;
 	}
 
-	if(offset > fila_tabla->limite) {
+	if(offset > fila_tabla->limite || offset < 0) {
 		*ok = FM9_ERROR_SEG_FAULT;
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return -1;
@@ -698,7 +707,10 @@ void _fm9_liberar_memoria_proceso_seg_pura(unsigned int pid){
 
 	pthread_mutex_lock(&sem_mutex_lista_procesos);
 	t_proceso* proceso = (t_proceso*) list_remove_by_condition(lista_procesos, _mismo_pid);
-	if(proceso == NULL) return;
+	if(proceso == NULL) {
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return;
+	}
 
 	pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
 	list_destroy_and_destroy_elements(proceso->lista_tabla_segmentos, _liberar_memoria_segmento);

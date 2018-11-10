@@ -409,12 +409,21 @@ void mdj_bitmap_save(){
 }
 
 void validarArchivo(char* path, int* ok){
+
+	int isDirectory(const char *path) {
+	   struct stat statbuf;
+	   if (stat(path, &statbuf) != 0)
+	       return 0;
+	   return S_ISDIR(statbuf.st_mode);
+	}
+
+
 	FILE* f;
 	char* rutaFinal = string_new();
 	string_append(&rutaFinal, paths_estructuras[ARCHIVOS]);
 	string_append(&rutaFinal, path);
 
-	if((f = fopen(rutaFinal, "rb")) != NULL){ // Encontro el archivo
+	if((f = fopen(rutaFinal, "rb")) != NULL && !isDirectory(rutaFinal)){ // Encontro el archivo, y no es un directorio
 		log_info(logger, "Encontre el archivo %s", rutaFinal);
 		fclose(f);
 		*ok = OK;
@@ -535,7 +544,10 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 	char** bloques_strings;
 	t_config* config_archivo;
 
-	void _agregar_bloque_a_buffer(char* nro_bloque, int offset, int indice_bloque){
+	// Retorna si el archivo se ha terminado
+	bool _agregar_bloque_a_buffer(char* nro_bloque, int offset, int indice_bloque){
+		bool ret_eof = false;
+
 		char* ruta_bloque = string_new();
 		string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
 		string_append(&ruta_bloque, nro_bloque);
@@ -549,6 +561,7 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 		if(split_cant_elem(bloques_strings) - 1 == indice_bloque){
 			int tam_ultimo_bloque = config_get_int_value(config_archivo, "TAMANIO") -
 					((indice_bloque_inicial + i) * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
+			ret_eof = tam_ultimo_bloque - offset < cant_bytes_a_leer; // Llegue al EOF
 			cant_bytes_a_leer = min(tam_ultimo_bloque - offset, cant_bytes_a_leer);
 		}
 
@@ -558,6 +571,7 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 		*ret_buffer_size += bytes_leidos;
 		free(data);
 		fclose(bloque);
+		return ret_eof;
 	}
 
 	char* rutaFinal = string_new();
@@ -570,13 +584,17 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 	// Agrego el bloque inicial:
 	indice_bloque_inicial = offset/config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
 	int offset_bloque_inicial = offset - (indice_bloque_inicial * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
-	_agregar_bloque_a_buffer(bloques_strings[indice_bloque_inicial],  offset_bloque_inicial, indice_bloque_inicial);
-	bytes_restantes -= (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset_bloque_inicial);
+	bool eof = _agregar_bloque_a_buffer(bloques_strings[indice_bloque_inicial],  offset_bloque_inicial, indice_bloque_inicial);
+	if(eof) // No tengo que ir a leer mas bloques
+		bytes_restantes = 0;
+	else
+		bytes_restantes -= (config_get_int_value(config_metadata, "TAMANIO_BLOQUES") - offset_bloque_inicial);
 
 	// Agrego el resto de bloques a abrir
-	while(bytes_restantes > 0){
+	while(bytes_restantes > 0 && !eof){
 		int indice = indice_bloque_inicial + ++i;
-		_agregar_bloque_a_buffer(bloques_strings[indice], 0, indice);
+		log_debug(logger, "AGREGO BLOQUE INDICE: %d, NRO: %s | BYTES_RESTANTES: %d", indice, bloques_strings[indice], bytes_restantes);
+		eof = _agregar_bloque_a_buffer(bloques_strings[indice], 0, indice);
 		bytes_restantes -= config_get_int_value(config_metadata, "TAMANIO_BLOQUES");
 	}
 

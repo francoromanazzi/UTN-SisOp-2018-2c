@@ -183,7 +183,7 @@ int dam_manejar_nuevo_mensaje(int socket, t_msg* msg, int mdj_socket, int fm9_so
 	unsigned int id;
 	char* path;
 	char* linea_incompleta_buffer_anterior = NULL;
-	int offset_mdj = 0, offset_fm9 = 0;
+	int offset_mdj = 0, offset_fm9 = 1; // [IMPORTANTE] El offset de FM9 comienza en 1 ya que las lineas comienzan en 1 (v1.5)
 
 	if(msg->header->emisor == CPU){
 		switch(msg->header->tipo_mensaje){
@@ -440,7 +440,7 @@ int dam_transferencia_mdj_a_fm9(int mdj_socket, int* mdj_offset, int fm9_socket,
 			*linea_incompleta_buffer_anterior = NULL;
 		}
 		*mdj_offset = 0;
-		*fm9_offset = 0;
+		*fm9_offset = 1;
 		return 0;
 	}
 	return 1;
@@ -533,7 +533,7 @@ int dam_transferencia_fm9_a_mdj(int mdj_socket, int* mdj_offset, int fm9_socket,
 
 		free(linea);
 		*mdj_offset = 0;
-		*fm9_offset = 0;
+		*fm9_offset = 1;
 		return 0;
 	}
 	free(linea);
