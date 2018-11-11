@@ -66,7 +66,7 @@ void fm9_procesar_comando(char* linea){
 }
 
 
-void _fm9_dump_pid_seg_pura(unsigned int pid){
+void _SEG_dump_pid(unsigned int pid){
 
 	bool _mismo_id(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -80,7 +80,7 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 	void _estr_adm_proceso_print_y_log(){
 
 		void _estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
-			t_fila_tabla_segmento* fila_tabla = (t_fila_tabla_segmento*) _fila_tabla;
+			t_fila_tabla_segmento_SEG* fila_tabla = (t_fila_tabla_segmento_SEG*) _fila_tabla;
 			log_info(logger, "\tNroSeg: %d Base: %d Limite: %d", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
 			printf("\tNroSeg: %d Base: %d Limite: %d\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
 		}
@@ -105,7 +105,7 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 				string_append(&huecos_str, ")");
 				string_append(&huecos_str, ",");
 			}
-			if(i > 0) huecos_str[strlen(huecos_str) - 1] = '\0';
+			if(i > 0) huecos_str[strlen(huecos_str) - 1] = '\0'; // Saco la ultima coma
 
 			log_info(logger, "\t[%s]", huecos_str);
 			printf("\t[%s]\n", huecos_str);
@@ -122,7 +122,7 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 	}
 
 	void _fila_tabla_segmento_print_y_log(void* _fila_tabla){
-		t_fila_tabla_segmento* fila_tabla = ((t_fila_tabla_segmento*) _fila_tabla);
+		t_fila_tabla_segmento_SEG* fila_tabla = ((t_fila_tabla_segmento_SEG*) _fila_tabla);
 		int i, ok;
 		char* linea;
 
@@ -141,21 +141,140 @@ void _fm9_dump_pid_seg_pura(unsigned int pid){
 	if(proceso == NULL){
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		printf("No se encontro dicho proceso\n\n");
+		log_info(logger, "No se encontro dicho proceso");
 		return;
 	}
 
 	/* Imprimo estructuras administrativas */
+	log_info(logger, "~~~~~~~~~~ ESTR ADM ~~~~~~~~~~");
+	printf("~~~~~~~~~~ ESTR ADM ~~~~~~~~~~\n");
 	_estr_adm_proceso_print_y_log();
 
 	/* Imprimo lineas de los segmentos del proceso */
+	log_info(logger, "~~~~~~~~~~ LINEAS ~~~~~~~~~~");
+	printf("\n~~~~~~~~~~ LINEAS ~~~~~~~~~~\n");
+
 	if(proceso->lista_tabla_segmentos->elements_count <= 0){
-		log_info(logger, "[PID: %d] No tiene datos asociados ", proceso->pid);
-		printf("[PID: %d] No tiene datos asociados\n\n", proceso->pid);
+		log_info(logger, "No tiene datos asociados");
+		printf("No tiene datos asociados\n\n");
 	}
+
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 
 	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
 }
+
+void _SPA_fm9_dump_pid(unsigned int pid){
+
+	bool _mismo_id(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	t_proceso* proceso = list_find(lista_procesos, _mismo_id);
+
+
+	void _estr_adm_proceso_print_y_log(){
+
+		void __estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
+
+			void ___estr_adm_fila_tabla_paginas_print_y_log(void* _fila_tabla_pag){
+				t_fila_tabla_paginas_SPA* fila_tabla_pag = (t_fila_tabla_paginas_SPA*) _fila_tabla_pag;
+				log_info(logger, "\t\tNro pag: %d, Nro frame: %d", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
+				printf("\t\tNro pag: %d, Nro frame: %d\n", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
+			}
+
+
+			t_fila_tabla_segmento_SPA* fila_tabla = (t_fila_tabla_segmento_SPA*) _fila_tabla;
+			log_info(logger, "\tSegmento: %d", fila_tabla->nro_seg);
+			printf("\tSegmento: %d\n", fila_tabla->nro_seg);
+
+			list_iterate(fila_tabla->lista_tabla_paginas, ___estr_adm_fila_tabla_paginas_print_y_log);
+		}
+
+		void __bitmap_frames_print_y_log(){
+			char* bitmap_str = string_new();
+			int i;
+
+			for(i = 0; i < cant_frames; i++){
+				string_append(&bitmap_str, bitarray_test_bit(bitmap_frames, i) ? "1" : "0");
+				string_append(&bitmap_str, ", ");
+			}
+
+			if(i > 0) bitmap_str[strlen(bitmap_str) - 2] = '\0'; // Saco la ultima coma
+
+			log_info(logger, "Bitmap de frames:");
+			printf("Bitmap de frames:\n");
+			log_info(logger, "\t[%s]", bitmap_str);
+			printf("\t[%s]\n", bitmap_str);
+			free(bitmap_str);
+		}
+
+
+		pthread_mutex_lock(&sem_mutex_bitmap_frames);
+		__bitmap_frames_print_y_log();
+		pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+		log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
+		printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
+		list_iterate(proceso->lista_tabla_segmentos, __estr_adm_fila_tabla_segmento_print_y_log);
+	}
+
+	void _fila_tabla_segmento_print_y_log(void* _fila_tabla){
+		t_fila_tabla_segmento_SPA* fila_tabla = ((t_fila_tabla_segmento_SPA*) _fila_tabla);
+
+
+		void __fila_tabla_paginas_print_y_log(void* _fila_tabla_pag){
+			int i, ok;
+			char* linea;
+
+			t_fila_tabla_paginas_SPA* fila_tabla_pag = (t_fila_tabla_paginas_SPA*) _fila_tabla_pag;
+			log_info(logger, "\tNro pag: %d, Nro frame: %d", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
+			printf("\tNro pag: %d, Nro frame: %d\n", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
+
+			for(i = 0; i < tam_frame_lineas; i++){
+				linea = fm9_storage_leer(proceso->pid, fila_tabla->nro_seg, i + (fila_tabla_pag->nro_pagina * tam_frame_lineas), &ok, false);
+				log_info(logger,"\t\t%d: %s", i, linea);
+				printf("\t\t%d: %s\n", i, linea);
+				free(linea);
+			}
+		}
+
+
+		log_info(logger, "Segmento: %d", fila_tabla->nro_seg);
+		printf("Segmento: %d\n", fila_tabla->nro_seg);
+
+		list_iterate(fila_tabla->lista_tabla_paginas, __fila_tabla_paginas_print_y_log);
+	}
+
+
+	if(proceso == NULL){
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		printf("No se encontro dicho proceso\n\n");
+		log_info(logger, "No se encontro dicho proceso");
+		return;
+	}
+
+	/* Imprimo estructuras administrativas */
+	log_info(logger, "~~~~~~~~~~ ESTR ADM ~~~~~~~~~~");
+	printf("~~~~~~~~~~ ESTR ADM ~~~~~~~~~~\n");
+	_estr_adm_proceso_print_y_log();
+
+	/* Imprimo lineas de los segmentos del proceso */
+	log_info(logger, "~~~~~~~~~~ LINEAS ~~~~~~~~~~");
+	printf("\n~~~~~~~~~~ LINEAS ~~~~~~~~~~\n");
+	if(proceso->lista_tabla_segmentos->elements_count <= 0){
+		log_info(logger, "No tiene datos asociados");
+		printf("No tiene datos asociados\n\n");
+	}
+
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+
+	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
+}
+
+
+// AUTOCOMPLETAR:
 
 /* Attempt to complete on the contents of TEXT.  START and END show the
    region of TEXT that contains the word to complete.  We can use the

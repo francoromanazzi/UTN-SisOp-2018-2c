@@ -62,21 +62,33 @@ int fm9_initialize(){
 				__huecos_print_y_log();
 				pthread_mutex_init(&sem_mutex_lista_huecos_storage, NULL);
 
-				fm9_dir_logica_a_fisica = &_fm9_dir_logica_a_fisica_seg_pura;
-				fm9_dump_pid = &_fm9_dump_pid_seg_pura;
-				fm9_close = &_fm9_close_seg_pura;
-				fm9_liberar_memoria_proceso = &_fm9_liberar_memoria_proceso_seg_pura;
+				fm9_dir_logica_a_fisica = &_SEG_dir_logica_a_fisica;
+				fm9_dump_pid = &_SEG_dump_pid;
+				fm9_close = &_SEG_close;
+				fm9_liberar_memoria_proceso = &_SEG_liberar_memoria_proceso;
 			break;
 
 			case TPI:
-				bitMapStr = calloc(ceiling(cant_marcos, 8), 1);
+				bitMapStr = calloc(ceiling(cant_frames, 8), 1);
+				bitmap_frames= bitarray_create_with_mode(bitMapStr, ceiling(cant_frames, 8), MSB_FIRST);
+				pthread_mutex_init(&sem_mutex_bitmap_frames, NULL);
 
-				bitmapPaginacion= bitarray_create_with_mode(bitMapStr, ceiling(cant_marcos, 8), MSB_FIRST);
 
-				tablaPaginasInvertida=calloc(cant_marcos,sizeof(t_fila_tabla_paginas_invertida));
+				tablaPaginasInvertida=calloc(cant_frames,sizeof(t_fila_tabla_paginas_invertida));
 			break;
 
 			case SPA:
+				lista_procesos = list_create();
+				pthread_mutex_init(&sem_mutex_lista_procesos, NULL);
+
+				bitMapStr = calloc(ceiling(cant_frames, 8), 1);
+				bitmap_frames= bitarray_create_with_mode(bitMapStr, ceiling(cant_frames, 8), MSB_FIRST);
+				pthread_mutex_init(&sem_mutex_bitmap_frames, NULL);
+
+				fm9_dir_logica_a_fisica = &_SPA_dir_logica_a_fisica;
+				fm9_dump_pid = &_SPA_fm9_dump_pid;
+				fm9_close = &_SPA_fm9_close;
+				fm9_liberar_memoria_proceso = &_SPA_fm9_liberar_memoria_proceso;
 			break;
 		}
 	}
@@ -90,8 +102,9 @@ int fm9_initialize(){
 	tamanio = config_get_int_value(config, "TAMANIO");
 	max_linea = config_get_int_value(config, "MAX_LINEA");
 	storage_cant_lineas = tamanio / max_linea;
-	tam_pagina = config_get_int_value(config, "TAM_PAGINA");
-	cant_marcos = tamanio / tam_pagina;
+	tam_frame_bytes = config_get_int_value(config, "TAM_PAGINA");
+	tam_frame_lineas = tam_frame_bytes / max_linea;
+	cant_frames = tamanio / tam_frame_bytes;
 	log_info(logger,"Se realiza la inicializacion del storage y de las estructuras administrativas");
 	storage = calloc(1, tamanio);
 	_modo_y_estr_administrativas_init();
@@ -212,8 +225,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 			case CREAR_FM9:
 				id = desempaquetar_int(msg);
 				log_info(logger,"DAM me pidio reservar memoria para un nuevo archivo del ID: %d", id);
-				int tamArchivo=msg->header->payload_size;
-				base = fm9_storage_nuevo_archivo(id,tamArchivo ,&operacion_ok);
+				base = fm9_storage_nuevo_archivo(id, &operacion_ok);
 
 				if(operacion_ok == FM9_ERROR_INSUFICIENTE_ESPACIO)
 					operacion_ok = ERROR_ABRIR_ESPACIO_INSUFICIENTE_FM9;
@@ -224,7 +236,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case ESCRIBIR_FM9:
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
-				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 y yo quiero que empiecen en 0 (v1.5)
 				log_info(logger,"DAM me pidio la operacion ESCRIBIR %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, true);
@@ -244,7 +256,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case GET_FM9:
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
-				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 y yo quiero que empiecen en 0 (v1.5)
 				log_info(logger,"DAM me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
 				datos = fm9_storage_leer(id, base, offset, &operacion_ok, true);
@@ -271,7 +283,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case ESCRIBIR_FM9:
 				desempaquetar_escribir_fm9(msg, &id, &base, &offset, &datos);
-				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 y yo quiero que empiecen en 0 (v1.5)
 				log_info(logger,"CPU me pidio la operacion ESCRIBIR (asignar) %s del ID: %d con base: %d y offset: %d", datos, id, base, offset);
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, false);
@@ -284,7 +296,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 			case GET_FM9:
 				desempaquetar_get_fm9(msg, &id, &base, &offset);
-				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 (v1.5)
+				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 y yo quiero que empiecen en 0 (v1.5)
 				log_info(logger,"CPU me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
 				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false);
@@ -323,7 +335,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 	return 1;
 }
 
-int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok){
+int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == id;
@@ -331,17 +343,20 @@ int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok){
 
 	*ok = OK;
 
-	int nro_linea, ret_base;
+	int ret_base;
 
 	t_proceso* proceso;
-	t_fila_tabla_segmento* nueva_fila_tabla;
+	t_fila_tabla_segmento_SEG* nueva_fila_tabla_SEG;
 
 	t_fila_tabla_paginas_invertida* nueva_fila_tablaDePaginas;
+
+	t_fila_tabla_segmento_SPA* nueva_fila_tabla_segmentos_SPA;
+	t_fila_tabla_paginas_SPA* nueva_fila_tabla_paginas_SPA;
 
 	switch(modo){
 		case SEG:
 			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
-			nro_linea = _fm9_best_fit_seg_pura(1);
+			int nro_linea = _SEG_best_fit(1);
 			__huecos_print_y_log();
 			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
@@ -359,44 +374,45 @@ int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok){
 			}
 
 
-			nueva_fila_tabla = malloc(sizeof(t_fila_tabla_segmento));
+			nueva_fila_tabla_SEG = malloc(sizeof(t_fila_tabla_segmento_SEG));
 
+			/* Obtengo el nro de segmento */
 			if(proceso->lista_tabla_segmentos->elements_count >= 1){
-				nueva_fila_tabla->nro_seg = ((t_fila_tabla_segmento*) list_get(proceso->lista_tabla_segmentos, proceso->lista_tabla_segmentos->elements_count - 1))->nro_seg + 1;
+				nueva_fila_tabla_SEG->nro_seg = ((t_fila_tabla_segmento_SEG*) list_get(proceso->lista_tabla_segmentos, proceso->lista_tabla_segmentos->elements_count - 1))->nro_seg + 1;
 			}else{
-				nueva_fila_tabla->nro_seg = 0;
+				nueva_fila_tabla_SEG->nro_seg = 0;
 			}
 
-			nueva_fila_tabla->base = nro_linea;
-			nueva_fila_tabla->limite = 0;
-			list_add(proceso->lista_tabla_segmentos, nueva_fila_tabla);
+			nueva_fila_tabla_SEG->base = nro_linea;
+			nueva_fila_tabla_SEG->limite = 0;
+			list_add(proceso->lista_tabla_segmentos, nueva_fila_tabla_SEG);
 
-			ret_base = nueva_fila_tabla->nro_seg;
+			ret_base = nueva_fila_tabla_SEG->nro_seg;
 
 			log_info(logger, "Agrego el segmento %d del PID: %d, Base: %d, Limite: %d",
-					nueva_fila_tabla->nro_seg, proceso->pid, nueva_fila_tabla->base, nueva_fila_tabla->limite);
+					nueva_fila_tabla_SEG->nro_seg, proceso->pid, nueva_fila_tabla_SEG->base, nueva_fila_tabla_SEG->limite);
 			pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		break;
 
 		case TPI:
 
 			nueva_fila_tablaDePaginas = malloc(sizeof(t_fila_tabla_paginas_invertida));
-			int cantPaginas=cantidad_paginas_del_archivo(tamArchivo);
-			int marco_libre;
+			int cantPaginas; //=cantidad_paginas_del_archivo(tamArchivo);
+			int frame_libre;
 			int j=0;
-			if(cantPaginas<marcos_disponibles()){
+			if(cantPaginas<_TPI_nro_frames_disponibles()){
 				while(j<cantPaginas){
 					//mutex lock
-					marco_libre=obtener_Marco_Libre();
-					nueva_fila_tablaDePaginas->nro_marco=marco_libre;
+					frame_libre=_TPI_SPA_obtener_frame_libre();
+					nueva_fila_tablaDePaginas->nro_frame=frame_libre;
 					nueva_fila_tablaDePaginas->pid=id;
 					nueva_fila_tablaDePaginas->nro_pagina=j;
 					list_add(tablaPaginasInvertida,nueva_fila_tablaDePaginas);
 
-					bitarray_set_bit(bitmapPaginacion,marco_libre);
+					bitarray_set_bit(bitmap_frames,frame_libre);
 					//mutex unlock
-					log_info(logger, "Agrego la pagina %d del PID: %d, al Marco: %d",
-										nueva_fila_tablaDePaginas->nro_pagina, nueva_fila_tablaDePaginas->pid, nueva_fila_tablaDePaginas->nro_marco);
+					log_info(logger, "Agrego la pagina %d del PID: %d, al frame: %d",
+										nueva_fila_tablaDePaginas->nro_pagina, nueva_fila_tablaDePaginas->pid, nueva_fila_tablaDePaginas->nro_frame);
 					j++;
 				}
 
@@ -408,6 +424,45 @@ int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok){
 		break;
 
 		case SPA:
+			pthread_mutex_lock(&sem_mutex_bitmap_frames);
+			int nro_frame = _TPI_SPA_obtener_frame_libre();
+			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+			if(nro_frame == -1){
+				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+				return 0;
+			}
+
+			pthread_mutex_lock(&sem_mutex_lista_procesos);
+			if((proceso = list_find(lista_procesos, _mismo_pid)) == NULL){ // Este proceso no existia en la lista
+				proceso = malloc(sizeof(t_proceso));
+				proceso->pid = id;
+				proceso->lista_tabla_segmentos = list_create();
+				list_add(lista_procesos, proceso);
+			}
+
+			nueva_fila_tabla_segmentos_SPA = malloc(sizeof(t_fila_tabla_segmento_SPA));
+			nueva_fila_tabla_segmentos_SPA->lista_tabla_paginas = list_create();
+			nueva_fila_tabla_paginas_SPA = malloc(sizeof(t_fila_tabla_paginas_SPA));
+
+			/* Obtengo el nro de segmento */
+			if(proceso->lista_tabla_segmentos->elements_count >= 1){
+				nueva_fila_tabla_segmentos_SPA->nro_seg = ((t_fila_tabla_segmento_SPA*) list_get(proceso->lista_tabla_segmentos, proceso->lista_tabla_segmentos->elements_count - 1))->nro_seg + 1;
+			}else{
+				nueva_fila_tabla_segmentos_SPA->nro_seg = 0;
+			}
+
+			nueva_fila_tabla_paginas_SPA->nro_pagina = 0;
+			nueva_fila_tabla_paginas_SPA->nro_frame = nro_frame;
+
+			list_add(nueva_fila_tabla_segmentos_SPA->lista_tabla_paginas, nueva_fila_tabla_paginas_SPA);
+			list_add(proceso->lista_tabla_segmentos, nueva_fila_tabla_segmentos_SPA);
+
+			ret_base = nueva_fila_tabla_segmentos_SPA->nro_seg;
+
+			log_info(logger, "Agrego el segmento %d del PID: %d, 1ra pag: 0, 1er frame: %d",
+					nueva_fila_tabla_segmentos_SPA->nro_seg, proceso->pid, nro_frame);
+			pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		break;
 	}
 
@@ -418,17 +473,26 @@ int fm9_storage_nuevo_archivo(unsigned int id,int tamArchivo ,int* ok){
 
 void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 
-	bool _mismo_nro_seg(void* fila_tabla){
-		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == base;
-	}
-
 	bool _mismo_id(void* proceso){
 		return ((t_proceso*) proceso)->pid == id;
 	}
 
+	bool _mismo_nro_seg(void* fila_tabla){
+		return ((t_fila_tabla_segmento_SEG*) fila_tabla)->nro_seg == base;
+	}
+
+	bool _mismo_nro_seg_SPA(void* fila_tabla){
+		return ((t_fila_tabla_segmento_SPA*) fila_tabla)->nro_seg == base;
+	}
+
 	*ok = OK;
+
 	t_proceso* proceso;
-	t_fila_tabla_segmento* fila_tabla;
+	t_fila_tabla_segmento_SEG* fila_tabla;
+
+	t_fila_tabla_segmento_SPA* fila_tabla_segmento_SPA;
+	t_fila_tabla_paginas_SPA* nueva_fila_tabla_paginas_SPA;
+
 	t_list* backup_lineas, *backup_dir_logicas;
 	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0, ret_dir_logica, dir_logica_aux;
 	char* linea;
@@ -457,8 +521,8 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
 			log_info(logger, "Antes de liberar y best fit:"); // TODO Sacar
 			__huecos_print_y_log();// TODO Sacar
-			_fm9_nuevo_hueco_disponible_seg_pura(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
-			base_nuevo_segmento = _fm9_best_fit_seg_pura(offset + 1);
+			_SEG_nuevo_hueco_disponible(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
+			base_nuevo_segmento = _SEG_best_fit(offset + 1);
 			__huecos_print_y_log();
 			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
@@ -495,12 +559,53 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			log_info(logger, "Pude realocar el segmento %d del PID: %d. Nueva base: %d, nuevo limite: %d", fila_tabla->nro_seg, proceso->pid, fila_tabla->base, fila_tabla->limite);
 		break;
 
-		case SPA:
-		break;
-
 		case TPI:
+			/* Le agrego otra pagina */
 		break;
 
+		case SPA:
+			/* Le agrego otra pagina dentro del segmento al proceso */
+			pthread_mutex_lock(&sem_mutex_lista_procesos);
+			proceso = list_find(lista_procesos, _mismo_id);
+			if(proceso == NULL){
+				pthread_mutex_unlock(&sem_mutex_lista_procesos);
+				log_error(logger, "No se encontro el proceso al intentar agregar una pagina");
+				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+				return;
+			}
+
+			fila_tabla_segmento_SPA = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg_SPA);
+			if(fila_tabla_segmento_SPA == NULL){
+				pthread_mutex_unlock(&sem_mutex_lista_procesos);
+				log_error(logger, "No se encontro el segmento al intentar agregar una pagina");
+				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+				return;
+			}
+			log_info(logger, "Le intento dar otra pagina al segmento %d del PID: %d", fila_tabla_segmento_SPA->nro_seg, proceso->pid);
+
+			pthread_mutex_lock(&sem_mutex_bitmap_frames);
+			int nro_frame = _TPI_SPA_obtener_frame_libre();
+			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+			if(nro_frame == -1){
+				pthread_mutex_unlock(&sem_mutex_lista_procesos);
+				log_error(logger, "No hay frames disponibles");
+				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+				return;
+			}
+
+			nueva_fila_tabla_paginas_SPA = malloc(sizeof(t_fila_tabla_paginas_SPA));
+
+			nueva_fila_tabla_paginas_SPA->nro_pagina = list_size(fila_tabla_segmento_SPA->lista_tabla_paginas) < 1 ? 0 :
+					1 + ((t_fila_tabla_paginas_SPA*) list_get(fila_tabla_segmento_SPA->lista_tabla_paginas, list_size(fila_tabla_segmento_SPA->lista_tabla_paginas) - 1))->nro_pagina;
+			nueva_fila_tabla_paginas_SPA->nro_frame = nro_frame;
+
+			list_add(fila_tabla_segmento_SPA->lista_tabla_paginas, nueva_fila_tabla_paginas_SPA);
+			log_info(logger, "Agrego una pagina al segmento %d del PID: %d. Nro pag: %d, nro frame: %d",
+					fila_tabla_segmento_SPA->nro_seg, proceso->pid, nueva_fila_tabla_paginas_SPA->nro_pagina, nueva_fila_tabla_paginas_SPA->nro_frame);
+
+			pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		break;
 	} // Fin switch(modo)
 }
 
@@ -544,14 +649,14 @@ char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool perm
 	return ret;
 }
 
-int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset, int* ok){
+int _SEG_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
 	}
 
 	bool _mismo_nro_seg(void* fila_tabla){
-		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
+		return ((t_fila_tabla_segmento_SEG*) fila_tabla)->nro_seg == nro_seg;
 	}
 
 
@@ -559,14 +664,14 @@ int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset,
 	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
 
 	if(proceso == NULL) {
-		*ok = FM9_ERROR_SEG_FAULT;
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return -1;
 	}
 
-	t_fila_tabla_segmento* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+	t_fila_tabla_segmento_SEG* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
 	if(fila_tabla == NULL) {
-		*ok = FM9_ERROR_SEG_FAULT;
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return -1;
 	}
@@ -583,7 +688,7 @@ int _fm9_dir_logica_a_fisica_seg_pura(unsigned int pid, int nro_seg, int offset,
 	return ret;
 }
 
-int _fm9_best_fit_seg_pura(int cant_lineas){
+int _SEG_best_fit(int cant_lineas){
 	int tam_mejor_hueco, i, ret = -1, indice_ret;
 	bool algun_hueco_encontrado = false;
 
@@ -613,7 +718,7 @@ int _fm9_best_fit_seg_pura(int cant_lineas){
 	return ret;
 }
 
-void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin){
+void _SEG_nuevo_hueco_disponible(int linea_inicio, int linea_fin){
 
 	bool _criterio_orden_huecos(void* hueco1, void* hueco2){
 		return ((t_vector2*) hueco1)->x < ((t_vector2*) hueco2)->x;
@@ -654,14 +759,14 @@ void _fm9_nuevo_hueco_disponible_seg_pura(int linea_inicio, int linea_fin){
 	list_destroy(lista_indices_huecos_a_eliminar);
 }
 
-void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
+void _SEG_close(unsigned int pid, int nro_seg, int* ok){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
 	}
 
 	bool _mismo_nro_seg(void* fila_tabla){
-		return ((t_fila_tabla_segmento*) fila_tabla)->nro_seg == nro_seg;
+		return ((t_fila_tabla_segmento_SEG*) fila_tabla)->nro_seg == nro_seg;
 	}
 
 
@@ -669,15 +774,15 @@ void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
 	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
 
 	if(proceso == NULL){
-		*ok = FM9_ERROR_SEG_FAULT;
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return;
 	}
 
-	t_fila_tabla_segmento* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+	t_fila_tabla_segmento_SEG* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
 
 	if(fila_tabla == NULL){
-		*ok = FM9_ERROR_SEG_FAULT;
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return;
 	}
@@ -685,7 +790,7 @@ void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
 	*ok = OK;
 
 	pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
-	_fm9_nuevo_hueco_disponible_seg_pura(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
+	_SEG_nuevo_hueco_disponible(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
 	pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
 	list_remove_and_destroy_by_condition(proceso->lista_tabla_segmentos, _mismo_nro_seg, free);
@@ -693,15 +798,15 @@ void _fm9_close_seg_pura(unsigned int pid, int nro_seg, int* ok){
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
-void _fm9_liberar_memoria_proceso_seg_pura(unsigned int pid){
+void _SEG_liberar_memoria_proceso(unsigned int pid){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
 	}
 
 	void _liberar_memoria_segmento(void* _fila){
-		t_fila_tabla_segmento* fila = (t_fila_tabla_segmento*) _fila;
-		_fm9_nuevo_hueco_disponible_seg_pura(fila->base, fila->base + fila->limite);
+		t_fila_tabla_segmento_SEG* fila = (t_fila_tabla_segmento_SEG*) _fila;
+		_SEG_nuevo_hueco_disponible(fila->base, fila->base + fila->limite);
 		free(_fila);
 	}
 
@@ -720,43 +825,181 @@ void _fm9_liberar_memoria_proceso_seg_pura(unsigned int pid){
 
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
-//--------------paginacion---------------
-int obtener_Marco_Libre(){
-	int i=0;
-	int bit_no_encontrado=1;
-	while(i < cant_marcos  && bit_no_encontrado){
-		if(bitarray_test_bit(bitmapPaginacion,i)==0){
-			bit_no_encontrado=0;
-		}else{
-			i++;
-		}
 
-	}
-	if(bit_no_encontrado){
-		return -1;
-	}else{return i;}
 
-}
-int marcos_disponibles(){
+int _TPI_nro_frames_disponibles(){
 
 	int i,j=0;
-	for(i=0;i<cant_marcos;i++){
-		if(bitarray_test_bit(bitmapPaginacion,i)==0){
+	for(i=0;i<cant_frames;i++){
+		if(bitarray_test_bit(bitmap_frames,i)==0){
 			j++;
 		}
 	}
 	return j;
 }
-int cantidad_paginas_del_archivo(int tamArchivo){
+
+int _TPI_cantidad_paginas_del_archivo(int tamArchivo){
 	int x=0;
-	if(tamArchivo%tam_pagina!=0){
-		x=tamArchivo/tam_pagina+1;
+	/*
+	if(tamArchivo%tam_frame!=0){
+		x=tamArchivo/tam_frame+1;
 	}else{
-		x=tamArchivo/tam_pagina;
+		x=tamArchivo/tam_frame;
 	}
+	*/
 	return x;
 }
-//--------------------------------
+
+
+int _TPI_SPA_obtener_frame_libre(){
+	int i = 0;
+	bool frame_encontrado = false;
+
+	while(i < cant_frames  && !frame_encontrado){
+		if(bitarray_test_bit(bitmap_frames, i) == 0){ // Frame disponible
+			bitarray_set_bit(bitmap_frames, i); // Lo selecciono como no disponible
+			frame_encontrado = true;
+		}
+		else
+			i++;
+	}
+
+	return frame_encontrado ? i : -1;
+}
+
+
+int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok){
+
+	int nro_pagina_target = offset / tam_frame_lineas;
+	int offset_en_pagina = offset % tam_frame_lineas;
+
+	bool _mismo_pid(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	bool _mismo_nro_seg(void* fila_tabla){
+		return ((t_fila_tabla_segmento_SPA*) fila_tabla)->nro_seg == nro_seg;
+	}
+
+	bool _mismo_nro_pag(void* fila_tabla_paginas){
+		return ((t_fila_tabla_paginas_SPA*) fila_tabla_paginas)->nro_pagina == nro_pagina_target;
+	}
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
+
+	if(proceso == NULL) {
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return -1;
+	}
+
+	t_fila_tabla_segmento_SPA* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+	if(fila_tabla == NULL) {
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return -1;
+	}
+
+	t_fila_tabla_paginas_SPA* fila_tabla_paginas = list_find(fila_tabla->lista_tabla_paginas, _mismo_nro_pag);
+	if(fila_tabla_paginas == NULL) {
+		*ok = FM9_ERROR_SEG_FAULT;
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return -1;
+	}
+
+	*ok = OK;
+	int ret = (fila_tabla_paginas->nro_frame * tam_frame_lineas) + offset_en_pagina;
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+	return ret;
+}
+
+void _SPA_fm9_close(unsigned int pid, int nro_seg, int* ok){
+
+	bool _mismo_pid(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	bool _mismo_nro_seg(void* fila_tabla){
+		return ((t_fila_tabla_segmento_SPA*) fila_tabla)->nro_seg == nro_seg;
+	}
+
+	void _clean_bit_frame(void* _fila_tabla_pag){
+		t_fila_tabla_paginas_SPA* fila_tabla_pag = (t_fila_tabla_paginas_SPA*) _fila_tabla_pag;
+		bitarray_clean_bit(bitmap_frames, fila_tabla_pag->nro_frame);
+	}
+
+	void _free_segmento(void* _fila_tabla){
+		t_fila_tabla_segmento_SPA* fila_tabla = (t_fila_tabla_segmento_SPA*) _fila_tabla;
+		list_destroy_and_destroy_elements(fila_tabla->lista_tabla_paginas, free);
+		free(fila_tabla);
+	}
+
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	t_proceso* proceso = list_find(lista_procesos, _mismo_pid);
+
+	if(proceso == NULL){
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return;
+	}
+
+	t_fila_tabla_segmento_SPA* fila_tabla = list_find(proceso->lista_tabla_segmentos, _mismo_nro_seg);
+
+	if(fila_tabla == NULL){
+		*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return;
+	}
+
+	*ok = OK;
+
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	list_iterate(fila_tabla->lista_tabla_paginas, _clean_bit_frame);
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+	list_remove_and_destroy_by_condition(proceso->lista_tabla_segmentos, _mismo_nro_seg, _free_segmento);
+
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+}
+
+void _SPA_fm9_liberar_memoria_proceso(unsigned int pid){
+
+	bool _mismo_pid(void* proceso){
+		return ((t_proceso*) proceso)->pid == pid;
+	}
+
+	void _liberar_memoria_segmento(void* _fila){
+
+		void __liberar_memoria_pagina(void* _fila_tabla_pag){
+			t_fila_tabla_paginas_SPA* fila_tabla_pag = (t_fila_tabla_paginas_SPA*) _fila_tabla_pag;
+			bitarray_clean_bit(bitmap_frames, fila_tabla_pag->nro_frame);
+			free(_fila_tabla_pag);
+		}
+
+		t_fila_tabla_segmento_SPA* fila = (t_fila_tabla_segmento_SPA*) _fila;
+		list_destroy_and_destroy_elements(fila->lista_tabla_paginas, __liberar_memoria_pagina);
+		free(fila);
+	}
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	t_proceso* proceso = (t_proceso*) list_remove_by_condition(lista_procesos, _mismo_pid);
+	if(proceso == NULL) {
+		pthread_mutex_unlock(&sem_mutex_lista_procesos);
+		return;
+	}
+
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	list_destroy_and_destroy_elements(proceso->lista_tabla_segmentos, _liberar_memoria_segmento);
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+	free(proceso);
+
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+}
+
+
 void fm9_exit(){
 	free(storage);
 	close(listening_socket);

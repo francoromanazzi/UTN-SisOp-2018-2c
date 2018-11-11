@@ -15,7 +15,8 @@
 	void fm9_procesar_comando(char*);
 
 	void (*fm9_dump_pid)(unsigned int);
-	void _fm9_dump_pid_seg_pura(unsigned int id);
+	void _SEG_dump_pid(unsigned int id);
+	void _SPA_fm9_dump_pid(unsigned int id);
 
 	char** fm9_consola_autocompletar();
 	char* fm9_consola_autocompletar_command_generator();

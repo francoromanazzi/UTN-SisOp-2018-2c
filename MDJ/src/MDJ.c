@@ -257,7 +257,7 @@ void crearEstructuras(){
 
 	string_append(&bin_bitmap, dir_metadata);
 	string_append(&bin_bitmap, "/Bitmap.bin");
-	if((f_bitmap = fopen(bin_bitmap, "r")) == NULL){ // Si no existe el archivo bitmap
+	if((f_bitmap = fopen(bin_bitmap, "rb+")) == NULL){ // Si no existe el archivo bitmap
 		f_bitmap = fopen(bin_bitmap, "wb+");
 		char* bitarray_limpio_temp = calloc(1, ceiling(config_get_int_value(config_metadata, "CANTIDAD_BLOQUES"), 8));
 		fwrite((void*) bitarray_limpio_temp, ceiling(config_get_int_value(config_metadata, "CANTIDAD_BLOQUES"), 8), 1, f_bitmap);
@@ -331,17 +331,17 @@ static void _hardcodear_archivos(){
 	__nuevo_escriptorio("/Escriptorios/test2.bin",
 			"crear /Equipos/River.txt 3\n"
 			"abrir /Equipos/River.txt\n"
-			"asignar /Equipos/River.txt 0 Gallardo\n"
-			"asignar /Equipos/River.txt 1 Ponzio\n"
-			"asignar /Equipos/River.txt 2 PityMartinez\n"
+			"asignar /Equipos/River.txt 1 Gallardo\n"
+			"asignar /Equipos/River.txt 2 Ponzio\n"
+			"asignar /Equipos/River.txt 3 PityMartinez\n"
 			"flush /Equipos/River.txt\n"
 			"\n");
 
 	__nuevo_escriptorio("/Escriptorios/test3.bin",
 			"crear /Equipos/EquiposChicos/Sacachispas.txt 2\n"
 			"abrir /Equipos/EquiposChicos/Sacachispas.txt\n"
-			"asignar /Equipos/EquiposChicos/Sacachispas.txt 0 SACA\n"
-			"asignar /Equipos/EquiposChicos/Sacachispas.txt 1 CHISPAS\n"
+			"asignar /Equipos/EquiposChicos/Sacachispas.txt 1 SACA\n"
+			"asignar /Equipos/EquiposChicos/Sacachispas.txt 2 CHISPAS\n"
 			"flush /Equipos/EquiposChicos/Sacachispas.txt\n"
 			"borrar /Equipos/EquiposChicos/Sacachispas.txt\n"
 			"close /Equipos/EquiposChicos/Sacachispas.txt\n"
@@ -357,55 +357,22 @@ static void _hardcodear_archivos(){
 	__nuevo_escriptorio("/Escriptorios/testSignal.bin",
 			"signal Conmebol\n"
 			"\n");
+
+	__nuevo_escriptorio("/Escriptorios/testSPA.bin",
+			"crear /Equipos/River.txt 11\n"
+			"abrir /Equipos/River.txt\n"
+			"asignar /Equipos/River.txt 1 Gallardo\n"
+			"asignar /Equipos/River.txt 2 Ponzio\n"
+			"asignar /Equipos/River.txt 3 PityMartinez\n"
+			"asignar /Equipos/River.txt 5 Armani\n"
+			"flush /Equipos/River.txt\n"
+			"\n");
 }
 
 void mdj_bitmap_save(){
-
-	char* stringToBinary(char* s) {
-	    if(s == NULL) return 0; /* no input string */
-	    size_t len = strlen(s);
-	    char *binary = malloc(len*9 + 1); // each char is one byte (8 bits) + white space and + 1 at the end for null terminator
-	    binary[0] = '\0';
-	    for(size_t i = 0; i < len; ++i) {
-	        char ch = s[i];
-	        for(int j = 7; j >= 0; --j){
-	            if(ch & (1 << j)) {
-	                strcat(binary,"1");
-	            } else {
-	                strcat(binary,"0");
-	            }
-	        }
-	        strcat(binary," ");
-	    }
-	    return binary;
-	}
-	log_debug(logger, "[BITMAP] Actualice el bitmap.");
-
-	char* str = malloc(bitmap->size + 1);
-
-	fseek(f_bitmap, 0, SEEK_SET);
-	fread((void*) str, sizeof(char), bitmap->size, f_bitmap);
-	str[bitmap->size] = '\0';
-	char* str_binario = stringToBinary(str);
-	log_debug(logger, "[BITMAP] ANTES: %s", str_binario);
-	free(str_binario);
-
 	fseek(f_bitmap, 0, SEEK_SET);
 	fwrite((void*) bitmap->bitarray, sizeof(char), bitmap->size, f_bitmap);
 	fflush(f_bitmap);
-
-	fseek(f_bitmap, 0, SEEK_SET);
-	fread((void*) str, sizeof(char), bitmap->size, f_bitmap);
-	str[bitmap->size] = '\0';
-	str_binario = stringToBinary(str);
-	log_debug(logger, "[BITMAP] DESPUES: %s", str_binario);
-	free(str_binario);
-	free(str);
-
-	/* Si no se quiere debuggear, dejar solo lo de abajo */
-	//fseek(f_bitmap, 0, SEEK_SET);
-	//fwrite((void*) bitmap->bitarray, sizeof(char), bitmap->size, f_bitmap);
-	//fflush(f_bitmap);
 }
 
 void validarArchivo(char* path, int* ok){
@@ -561,7 +528,7 @@ void obtenerDatos(char* path, int offset, int bytes_restantes, void** ret_buffer
 		if(split_cant_elem(bloques_strings) - 1 == indice_bloque){
 			int tam_ultimo_bloque = config_get_int_value(config_archivo, "TAMANIO") -
 					((indice_bloque_inicial + i) * config_get_int_value(config_metadata, "TAMANIO_BLOQUES"));
-			ret_eof = tam_ultimo_bloque - offset < cant_bytes_a_leer; // Llegue al EOF
+			ret_eof = tam_ultimo_bloque - offset <= cant_bytes_a_leer; // Llegue al EOF
 			cant_bytes_a_leer = min(tam_ultimo_bloque - offset, cant_bytes_a_leer);
 		}
 
