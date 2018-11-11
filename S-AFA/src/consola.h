@@ -26,6 +26,7 @@
 	void consola_iniciar();
 	void consola_procesar_comando(char* linea);
 	t_safa_msg* consola_esperar_msg(e_safa_tipo_msg tipo_msg);
+	void consola_print_metricas();
 
 	char** consola_autocompletar();
 	char* consola_autocompletar_command_generator();

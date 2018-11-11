@@ -47,6 +47,8 @@
 	t_list* cola_block;
 	t_list* cola_exit; pthread_mutex_t sem_mutex_cola_exit;
 
+	sem_t sem_bin_crear_dtb_0, sem_bin_crear_dtb_1; // Sem binario entre consola y PLP
+
 	int listening_socket;
 	int dam_socket;
 	int fd_inotify;

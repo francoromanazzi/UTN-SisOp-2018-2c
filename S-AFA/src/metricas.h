@@ -19,8 +19,11 @@
 	pthread_mutex_t sem_mutex_tiempo_promedio;
 
 	void metricas_initialize();
+
 	double metricas_tiempo_get_promedio();
 	void metricas_tiempo_add_start(unsigned int id);
 	void metricas_tiempo_add_finish(unsigned int id, struct timespec time);
+
+	void metricas_nueva_sentencia_ejecutada(e_emisor modulo_destinatario);
 
 #endif /* METRICAS_H_ */

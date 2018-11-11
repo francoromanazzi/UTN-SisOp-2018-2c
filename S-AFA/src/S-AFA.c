@@ -57,6 +57,9 @@ void safa_iniciar_estado_operatorio(){
 	cola_block = list_create(); list_add(cola_block, dtb_create_dummy());
 	cola_exit = list_create(); pthread_mutex_init(&sem_mutex_cola_exit, NULL);
 
+	sem_init(&sem_bin_crear_dtb_1, 0, 1);
+	sem_init(&sem_bin_crear_dtb_0, 0, 0);
+
 	/* Creo el hilo consola */
 	pthread_t thread_consola;
 	if(pthread_create( &thread_consola, NULL, (void*) consola_iniciar, NULL) ){
@@ -134,6 +137,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 	unsigned int id;
 	int ok;
 	char* nombre_recurso;
+	e_emisor destinatario_sentencia_ejecutada;
 
 	if(msg->header->emisor == DAM){
 		switch(msg->header->tipo_mensaje){
@@ -211,6 +215,12 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 			case TIEMPO_RESPUESTA:
 				desempaquetar_tiempo_respuesta(msg, &id, &time);
 				metricas_tiempo_add_finish(id, time);
+			break;
+
+			case SENTENCIA_EJECUTADA:
+				destinatario_sentencia_ejecutada = (e_emisor) desempaquetar_int(msg);
+				log_info(logger, "[S-AFA] CPU me aviso que ejecuto una sentencia dirigida al modulo %d", destinatario_sentencia_ejecutada);
+				metricas_nueva_sentencia_ejecutada(destinatario_sentencia_ejecutada);
 			break;
 
 			case BLOCK:

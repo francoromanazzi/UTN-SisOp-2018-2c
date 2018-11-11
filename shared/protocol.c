@@ -85,6 +85,7 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 			sizeof(e_estado) + // ESTADO ACTUAL
 			sizeof(int) + // FLAG INICIALIZADO
 			sizeof(int) + // ERRNO
+			sizeof(int) + // CANT_SENTENCIAS_EJECUTADAS_EN_NEW
 			sizeof(int) + // ELEMENTS_AMOUNT
 			dictionary_len // LONGITUD TOTAL DE LOS DATOS DEL DICCIONARIO DE ARCHIVOS ABIERTOS
 			);
@@ -113,6 +114,9 @@ t_msg* empaquetar_dtb(t_dtb* dtb){
 	offset += sizeof(int);
 
 	memcpy(ret->payload + offset, (void*) &(dtb->flags.error_nro), sizeof(int));
+	offset += sizeof(int);
+
+	memcpy(ret->payload + offset, (void*) &(dtb->metricas.cant_sentencias_ejecutadas_en_new), sizeof(int));
 	offset += sizeof(int);
 
 	memcpy(ret->payload + offset, (void*) &(dtb->archivos_abiertos->elements_amount), sizeof(int));
@@ -163,6 +167,9 @@ t_dtb* desempaquetar_dtb(t_msg* msg){
 	offset += sizeof(int);
 
 	memcpy((void*) &(ret->flags.error_nro), msg->payload + offset, sizeof(int));
+	offset += sizeof(int);
+
+	memcpy((void*) &(ret->metricas.cant_sentencias_ejecutadas_en_new), msg->payload + offset, sizeof(int));
 	offset += sizeof(int);
 
 	int elementos_diccionario;

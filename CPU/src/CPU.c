@@ -77,6 +77,7 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	int base, offset, cant_lineas, direccion_logica;
 	t_dtb* dtb;
 	struct timespec time;
+	e_emisor destinatario_sentencia_ejecutada;
 
 	va_list arguments;
 	va_start(arguments, tipo_msg);
@@ -156,6 +157,11 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 			id = va_arg(arguments, unsigned int);
 			clock_gettime(CLOCK_MONOTONIC, &time);
 			mensaje_a_enviar = empaquetar_tiempo_respuesta(id, time);
+		break;
+
+		case SENTENCIA_EJECUTADA: // A SAFA
+			destinatario_sentencia_ejecutada = va_arg(arguments, e_emisor);
+			mensaje_a_enviar = empaquetar_int((int) destinatario_sentencia_ejecutada);
 		break;
 
 		case LIBERAR_MEMORIA_FM9: // A FM9
@@ -339,11 +345,16 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			/* 2. Pedir a DAM que abra el archivo */
 			cpu_send(dam_socket, ABRIR, path, dtb->gdt_id);
 
+			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
+
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
 		break;
 
 		case OP_CONCENTRAR:
+			/* Le aviso a SAFA que ejecute una sentencia que usa a CPU*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, CPU);
 		break;
 
 		case OP_ASIGNAR:
@@ -368,6 +379,10 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			}
 			ok = desempaquetar_int(msg_recibido);
 			msg_free(&msg_recibido);
+
+			/* Le aviso a SAFA que ejecute una sentencia que usa a FM9*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, FM9);
+
 			return ok;
 		break;
 
@@ -384,6 +399,9 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			}
 			ok = desempaquetar_int(msg_recibido);
 			msg_free(&msg_recibido);
+
+			/* Le aviso a SAFA que ejecute una sentencia que usa a SAFA*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, SAFA);
 
 			if(ok == NO_OK){
 				/* Le envio a SAFA el DTB, y le pido que lo bloquee */
@@ -403,6 +421,9 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 				exit(EXIT_FAILURE);
 			}
 			msg_free(&msg_recibido);
+
+			/* Le aviso a SAFA que ejecute una sentencia que usa a SAFA*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, SAFA);
 		break;
 
 		case OP_FLUSH:
@@ -414,6 +435,9 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* 2. Pedir a DAM que haga flush */
 			cpu_send(dam_socket, FLUSH, dtb->gdt_id, path, (int) dictionary_get(dtb->archivos_abiertos, path));
+
+			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -442,6 +466,10 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			}
 			ok = desempaquetar_int(msg_recibido);
 			msg_free(&msg_recibido);
+
+			/* Le aviso a SAFA que ejecute una sentencia que usa a FM9*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, FM9);
+
 			return ok;
 		break;
 
@@ -452,6 +480,9 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 			/* 1. Le envio a DAM el archivo a crear */
 			cpu_send(dam_socket, CREAR_MDJ, dtb->gdt_id, path, cant_lineas);
 
+			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
+
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
 		break;
@@ -461,6 +492,9 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* 1. Le envio a DAM el archivo a borrar */
 			cpu_send(dam_socket, BORRAR, dtb->gdt_id, path);
+
+			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
+			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;

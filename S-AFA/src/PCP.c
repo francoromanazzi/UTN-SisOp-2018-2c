@@ -257,13 +257,22 @@ void pcp_gestionar_msg(t_safa_msg* msg){
 					msg->data = NULL;
 				break;
 
-				case STATUS_PCB:
+				case STATUS_DTB:
 					id = (unsigned int) msg->data;
 					dtb = dtb_copiar(pcp_encontrar_dtb(id));
-					safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, STATUS_PCB, dtb);
+					safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, STATUS_DTB, dtb);
 					msg->data = NULL;
 				break;
 
+				case METRICAS_DTB:
+					id = (unsigned int) msg->data;
+					if((dtb = pcp_encontrar_dtb(id)) == NULL)
+						safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, METRICAS_DTB, -1);
+					else
+						safa_protocol_encolar_msg_y_avisar(PCP, CONSOLA, METRICAS_DTB, dtb->metricas.cant_sentencias_ejecutadas_en_new);
+
+					msg->data = NULL;
+				break;
 			}
 		break;
 

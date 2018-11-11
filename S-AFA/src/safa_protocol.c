@@ -25,11 +25,12 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 	va_start(arguments, tipo_msg);
 
 	unsigned int id;
-	int ok;
+	int ok, cant_sentencias;
 	char* path;
 	t_dtb* dtb;
 	void* data;
 	t_status* status;
+	e_emisor modulo;
 
 	switch(receptor){
 		case PLP:
@@ -64,7 +65,15 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 				case STATUS:
 				break;
 
-				case STATUS_PCB:
+				case STATUS_DTB:
+					id = va_arg(arguments, unsigned int);
+					msg->data = (void*) id;
+				break;
+
+				case SENTENCIA_EJECUTADA_:
+				break;
+
+				case METRICAS_DTB:
 					id = va_arg(arguments, unsigned int);
 					msg->data = (void*) id;
 				break;
@@ -122,7 +131,12 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					msg->data = (void*) status;
 				break;
 
-				case STATUS_PCB:
+				case STATUS_DTB:
+					id = va_arg(arguments, unsigned int);
+					msg->data = (void*) id;
+				break;
+
+				case METRICAS_DTB:
 					id = va_arg(arguments, unsigned int);
 					msg->data = (void*) id;
 				break;
@@ -140,7 +154,7 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					msg->data = (void*) status;
 				break;
 
-				case STATUS_PCB:
+				case STATUS_DTB:
 					dtb = va_arg(arguments, t_dtb*);
 					msg->data = (void*) dtb;
 				break;
@@ -153,6 +167,11 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					memcpy(data, (void*) &id, sizeof(unsigned int));
 					memcpy(data + sizeof(unsigned int), (void*) &ok, sizeof(int));
 					msg->data = data;
+				break;
+
+				case METRICAS_DTB:
+					cant_sentencias = va_arg(arguments, int);
+					msg->data = (void*) cant_sentencias;
 				break;
 			}
 			pthread_mutex_lock(&sem_mutex_cola_msg_consola);

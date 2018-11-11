@@ -7,6 +7,7 @@ t_dtb* dtb_create(char* path_escriptorio){
 	ret -> quantum_restante = 0;
 	ret -> archivos_abiertos = dictionary_create();
 	ret -> flags.error_nro = OK;
+	ret -> metricas.cant_sentencias_ejecutadas_en_new = 0;
 
 	if(path_escriptorio == NULL){ // DUMMY
 		ret -> ruta_escriptorio = strdup("");

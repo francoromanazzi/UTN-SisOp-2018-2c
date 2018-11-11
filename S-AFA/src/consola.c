@@ -60,6 +60,17 @@ void consola_procesar_comando(char* linea){
 		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, CREAR_DTB, strdup(argv[1]));
 	}
 
+	/* Comando ejecutar [ruta]+ */
+	else if(argc > 2 && !strcmp(argv[0],"ejecutar")){
+		int i;
+		for(i = 1; i < argc; i++){
+			sem_wait(&sem_bin_crear_dtb_1);
+			metricas_tiempo_add_start((unsigned) dtb_get_gdt_id_count(false));
+			sem_post(&sem_bin_crear_dtb_0);
+			safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, CREAR_DTB, strdup(argv[i]));
+		}
+	}
+
 	/* Comando status */
 	else if(argc == 1 && !strcmp(argv[0], "status")){
 
@@ -109,8 +120,8 @@ void consola_procesar_comando(char* linea){
 
 	/* Comando status [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "status")){
-		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, STATUS_PCB, atoi(argv[1]) );
-		msg_recibido = consola_esperar_msg(STATUS_PCB);
+		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, STATUS_DTB, atoi(argv[1]) );
+		msg_recibido = consola_esperar_msg(STATUS_DTB);
 		t_dtb* dtb = (t_dtb*) (msg_recibido->data);
 
 		if(dtb == NULL){
@@ -160,12 +171,31 @@ void consola_procesar_comando(char* linea){
 
 	/* Comando metricas */
 	else if(argc == 1 && !strcmp(argv[0], "metricas")){
-		printf("Tiempo de respuesta promedio: %.5f\n\n", metricas_tiempo_get_promedio());
+		consola_print_metricas();
 	}
 
 	/* Comando metricas [pcb_id] */
 	else if(argc == 2 && !strcmp(argv[0], "metricas")){
-		printf("Tiempo de respuesta promedio: %.5f\n\n", metricas_tiempo_get_promedio());
+		if(!strcmp(argv[1], "0"))
+			printf("No se puede seleccionar al proceso dummy\n\n");
+		else if(atoi(argv[1]) == 0)
+			printf("Se debe ingresar el numero de ID\n\n");
+		else {
+			safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, METRICAS_DTB, (unsigned) atoi(argv[1]));
+			msg_recibido = consola_esperar_msg(METRICAS_DTB);
+			ret = (int) msg_recibido->data;
+			msg_recibido->data = NULL;
+
+			if(ret == -1){
+				printf("No se ha encontrado el proceso con ID: %d\n", (unsigned) atoi(argv[1]));
+			}
+			else {
+				printf("Cant de sentencias ejecutadas que espero en NEW: %d\n", ret);
+			}
+			safa_protocol_msg_free(msg_recibido);
+
+			consola_print_metricas();
+		}
 	}
 
 	/* Comando clear */
@@ -179,6 +209,10 @@ void consola_procesar_comando(char* linea){
 
 	}
 	split_liberar(argv);
+}
+
+void consola_print_metricas(){
+	printf("Tiempo de respuesta promedio: %.2fs\n\n", metricas_tiempo_get_promedio());
 }
 
 t_safa_msg* consola_esperar_msg(e_safa_tipo_msg tipo_msg){

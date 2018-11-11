@@ -60,3 +60,16 @@ static double timespec_to_double(struct timespec time){
 }
 
 
+void metricas_nueva_sentencia_ejecutada(e_emisor modulo_destinatario){
+	safa_protocol_encolar_msg_y_avisar(S_AFA, PLP, SENTENCIA_EJECUTADA_);
+}
+
+
+
+
+
+
+
+
+
+

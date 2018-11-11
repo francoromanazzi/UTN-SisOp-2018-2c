@@ -29,6 +29,11 @@ void plp_gestionar_msg(t_safa_msg* msg){
 		return id == (unsigned int) _id;
 	}
 
+	void _aumentar_sentencias_ejecutadas(void* _dtb){
+		t_dtb* dtb = (t_dtb*) _dtb;
+		(dtb->metricas.cant_sentencias_ejecutadas_en_new)++;
+	}
+
 	switch(msg->emisor){
 		case S_AFA:
 			switch(msg->tipo_msg){
@@ -61,6 +66,10 @@ void plp_gestionar_msg(t_safa_msg* msg){
 
 				case GRADO_MULTIPROGRAMACION_AUMENTADO:
 					plp_intentar_iniciar_op_dummy();
+				break;
+
+				case SENTENCIA_EJECUTADA_:
+					list_iterate(cola_new, _aumentar_sentencias_ejecutadas);
 				break;
 			}
 		break;
@@ -121,14 +130,24 @@ void plp_gestionar_msg(t_safa_msg* msg){
 					safa_protocol_encolar_msg_y_avisar(PLP, PCP, STATUS, plp_empaquetar_status());
 				break;
 
-				case STATUS_PCB:
+				case STATUS_DTB:
 					id = (unsigned int) msg->data;
 					if((dtb = dtb_copiar(list_find(cola_new, _mismo_id))) == NULL){
-						safa_protocol_encolar_msg_y_avisar(PLP, PCP, STATUS_PCB, msg->data);
+						safa_protocol_encolar_msg_y_avisar(PLP, PCP, STATUS_DTB, msg->data);
 					}
 					else{
-						safa_protocol_encolar_msg_y_avisar(PLP, CONSOLA, STATUS_PCB, dtb);
+						safa_protocol_encolar_msg_y_avisar(PLP, CONSOLA, STATUS_DTB, dtb);
 					}
+					msg->data = NULL;
+				break;
+
+				case METRICAS_DTB:
+					id = (unsigned int) msg->data;
+					if((dtb = list_find(cola_new, _mismo_id)) == NULL)
+						safa_protocol_encolar_msg_y_avisar(PLP, PCP, METRICAS_DTB, msg->data);
+					else
+						safa_protocol_encolar_msg_y_avisar(PLP, CONSOLA, METRICAS_DTB, dtb->metricas.cant_sentencias_ejecutadas_en_new);
+
 					msg->data = NULL;
 				break;
 			}
@@ -146,7 +165,9 @@ t_dtb* plp_encontrar_dtb(unsigned int id){
 }
 
 void plp_crear_dtb_y_encolar(char* path_escriptorio){
+	sem_wait(&sem_bin_crear_dtb_0);
 	list_add(cola_new, dtb_create(path_escriptorio));
+	sem_post(&sem_bin_crear_dtb_1);
 }
 
 void plp_intentar_iniciar_op_dummy(){

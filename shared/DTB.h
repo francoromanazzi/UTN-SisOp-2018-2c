@@ -22,6 +22,10 @@
 		int error_nro;
 	} t_dtb_flags;
 
+	typedef struct dtb_metricas {
+		int cant_sentencias_ejecutadas_en_new;
+	} t_dtb_metricas;
+
 	typedef struct dtb {
 		unsigned int gdt_id;
 		char* ruta_escriptorio;
@@ -29,6 +33,7 @@
 		int quantum_restante;
 		e_estado estado_actual;
 		struct dtb_flags flags;
+		struct dtb_metricas metricas;
 		t_dictionary* archivos_abiertos; // KEY->ruta, VALUE->base
 	} t_dtb ;
 
