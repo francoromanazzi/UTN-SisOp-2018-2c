@@ -44,7 +44,7 @@ void consola_procesar_comando(char* linea){
 
 	/* Comando ayuda */
 	if(argc == 1 && !strcmp(argv[0], "ayuda")){
-		printf("\nejecutar [ruta]:\tEjecuta el escriptorio ubicado en la ruta\n");
+		printf("\nejecutar [ruta]+:\tEjecuta el o los escriptorios ubicados en las rutas\n");
 		printf("status:\t\t\tMuestra el estado de cada cola\n");
 		printf("status [pcb_id]:\tMuestra todos los datos del DTB especificado\n");
 		printf("finalizar [pcb_id]:\tFinaliza la ejecucion de un GDT especificado\n");

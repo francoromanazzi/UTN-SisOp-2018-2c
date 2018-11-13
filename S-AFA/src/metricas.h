@@ -18,6 +18,7 @@
 	pthread_mutex_t sem_mutex_tiempo_promedio;
 
 	t_dictionary* dict_sentencias_ejecutadas;
+	pthread_mutex_t sem_mutex_dict_sentencias_ejecutadas;
 
 	void metricas_initialize();
 

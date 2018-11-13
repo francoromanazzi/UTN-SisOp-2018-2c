@@ -1,5 +1,11 @@
 #include "FM9_consola.h"
 
+static void _SEG_estr_adm_huecos_print_y_log();
+static void _SEG_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso);
+
+static void _SPA_estr_adm_bitmap_frames_print_y_log();
+static void _SPA_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso);
+
 void fm9_consola_init(){
 	char* linea;
 
@@ -28,6 +34,7 @@ void fm9_procesar_comando(char* linea){
 	if(argc == 1 && !strcmp(argv[0], "ayuda")){
 		printf("\ndump:\t\tMuestra todas las lineas del storage, sin estructuras administrativas\n");
 		printf("dump [pcb_id]:\tMuestra las lineas usadas por un proceso, y sus estructuras administrativas\n");
+		printf("dump e:\tMuestra el estado de las estructuras administrativas\n");
 		printf("clear:\t\tLimpia la pantalla\n");
 		printf("salir:\t\tCierra la consola\n\n");
 	}
@@ -45,6 +52,12 @@ void fm9_procesar_comando(char* linea){
 			free(str);
 		}
 		printf("\n");
+	}
+
+	/* Comando DUMP e */ //TODO
+	else if(argc == 2 && !strcmp(argv[0], "dump") && !strcmp(argv[1], "e")){ // Muestra todas las estructuras administrativas
+		log_info(logger, "~~~~~~~~~~ DUMP e ~~~~~~~~~~", argv[1]);
+		fm9_dump_estructuras();
 	}
 
 	/* Comando DUMP [pid]*/
@@ -65,6 +78,47 @@ void fm9_procesar_comando(char* linea){
 	split_liberar(argv);
 }
 
+static void _SEG_estr_adm_huecos_print_y_log(){
+	char* huecos_str = string_new(), *aux;
+	int i;
+
+	log_info(logger, "Lista de huecos: ");
+	printf("Lista de huecos: \n");
+
+	for(i = 0; i < list_size(lista_huecos_storage); i++){
+		t_vector2* hueco = (t_vector2*) list_get(lista_huecos_storage, i);
+		string_append(&huecos_str, "(");
+		aux = string_itoa(hueco->x);
+		string_append(&huecos_str, aux);
+		free(aux);
+		string_append(&huecos_str, ",");
+		aux = string_itoa(hueco->y);
+		string_append(&huecos_str, aux);
+		free(aux);
+		string_append(&huecos_str, ")");
+		string_append(&huecos_str, ",");
+	}
+	if(i > 0) huecos_str[strlen(huecos_str) - 1] = '\0'; // Saco la ultima coma
+
+	log_info(logger, "\t[%s]", huecos_str);
+	printf("\t[%s]\n", huecos_str);
+	free(huecos_str);
+}
+
+static void _SEG_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso){
+
+	void __SEG_estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
+		t_fila_tabla_segmento_SEG* fila_tabla = (t_fila_tabla_segmento_SEG*) _fila_tabla;
+		log_info(logger, "\tNroSeg: %d Base: %d Limite: %d", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
+		printf("\tNroSeg: %d Base: %d Limite: %d\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
+	}
+
+
+	log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
+	printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
+	list_iterate(proceso->lista_tabla_segmentos, __SEG_estr_adm_fila_tabla_segmento_print_y_log);
+}
+
 
 void _SEG_dump_pid(unsigned int pid){
 
@@ -79,46 +133,11 @@ void _SEG_dump_pid(unsigned int pid){
 
 	void _estr_adm_proceso_print_y_log(){
 
-		void _estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
-			t_fila_tabla_segmento_SEG* fila_tabla = (t_fila_tabla_segmento_SEG*) _fila_tabla;
-			log_info(logger, "\tNroSeg: %d Base: %d Limite: %d", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
-			printf("\tNroSeg: %d Base: %d Limite: %d\n", fila_tabla->nro_seg, fila_tabla->base, fila_tabla->limite);
-		}
-
-		void _huecos_print_y_log(){
-			char* huecos_str = string_new(), *aux;
-			int i;
-
-			log_info(logger, "Lista de huecos: ");
-			printf("Lista de huecos: \n");
-
-			for(i = 0; i < list_size(lista_huecos_storage); i++){
-				t_vector2* hueco = (t_vector2*) list_get(lista_huecos_storage, i);
-				string_append(&huecos_str, "(");
-				aux = string_itoa(hueco->x);
-				string_append(&huecos_str, aux);
-				free(aux);
-				string_append(&huecos_str, ",");
-				aux = string_itoa(hueco->y);
-				string_append(&huecos_str, aux);
-				free(aux);
-				string_append(&huecos_str, ")");
-				string_append(&huecos_str, ",");
-			}
-			if(i > 0) huecos_str[strlen(huecos_str) - 1] = '\0'; // Saco la ultima coma
-
-			log_info(logger, "\t[%s]", huecos_str);
-			printf("\t[%s]\n", huecos_str);
-			free(huecos_str);
-		}
-
 		pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
-		_huecos_print_y_log();
+		_SEG_estr_adm_huecos_print_y_log();
 		pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
-		log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
-		printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
-		list_iterate(proceso->lista_tabla_segmentos, _estr_adm_fila_tabla_segmento_print_y_log);
+		_SEG_estr_adm_tabla_segmentos_proceso_print_y_log(proceso);
 	}
 
 	void _fila_tabla_segmento_print_y_log(void* _fila_tabla){
@@ -164,6 +183,58 @@ void _SEG_dump_pid(unsigned int pid){
 	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
 }
 
+void _SEG_dump_estructuras(){
+	pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
+	_SEG_estr_adm_huecos_print_y_log();
+	pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	list_iterate(lista_procesos, (void (*)(void*)) _SEG_estr_adm_tabla_segmentos_proceso_print_y_log);
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
+}
+
+static void _SPA_estr_adm_bitmap_frames_print_y_log(){
+	char* bitmap_str = string_new();
+	int i;
+
+	for(i = 0; i < cant_frames; i++){
+		string_append(&bitmap_str, bitarray_test_bit(bitmap_frames, i) ? "1" : "0");
+		string_append(&bitmap_str, ", ");
+	}
+
+	if(i > 0) bitmap_str[strlen(bitmap_str) - 2] = '\0'; // Saco la ultima coma
+
+	log_info(logger, "Bitmap de frames:");
+	printf("Bitmap de frames:\n");
+	log_info(logger, "\t[%s]", bitmap_str);
+	printf("\t[%s]\n", bitmap_str);
+	free(bitmap_str);
+}
+
+static void _SPA_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso){
+
+	void __SPA_estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
+
+		void ___SPA_estr_adm_fila_tabla_paginas_print_y_log(void* _fila_tabla_pag){
+			t_fila_tabla_paginas_SPA* fila_tabla_pag = (t_fila_tabla_paginas_SPA*) _fila_tabla_pag;
+			log_info(logger, "\t\tNro pag: %d, Nro frame: %d", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
+			printf("\t\tNro pag: %d, Nro frame: %d\n", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
+		}
+
+
+		t_fila_tabla_segmento_SPA* fila_tabla = (t_fila_tabla_segmento_SPA*) _fila_tabla;
+		log_info(logger, "\tSegmento: %d", fila_tabla->nro_seg);
+		printf("\tSegmento: %d\n", fila_tabla->nro_seg);
+
+		list_iterate(fila_tabla->lista_tabla_paginas, ___SPA_estr_adm_fila_tabla_paginas_print_y_log);
+	}
+
+
+	log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
+	printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
+	list_iterate(proceso->lista_tabla_segmentos, __SPA_estr_adm_fila_tabla_segmento_print_y_log);
+}
+
 void _SPA_fm9_dump_pid(unsigned int pid){
 
 	bool _mismo_id(void* proceso){
@@ -175,49 +246,11 @@ void _SPA_fm9_dump_pid(unsigned int pid){
 
 
 	void _estr_adm_proceso_print_y_log(){
-
-		void __estr_adm_fila_tabla_segmento_print_y_log(void* _fila_tabla){
-
-			void ___estr_adm_fila_tabla_paginas_print_y_log(void* _fila_tabla_pag){
-				t_fila_tabla_paginas_SPA* fila_tabla_pag = (t_fila_tabla_paginas_SPA*) _fila_tabla_pag;
-				log_info(logger, "\t\tNro pag: %d, Nro frame: %d", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
-				printf("\t\tNro pag: %d, Nro frame: %d\n", fila_tabla_pag->nro_pagina, fila_tabla_pag->nro_frame);
-			}
-
-
-			t_fila_tabla_segmento_SPA* fila_tabla = (t_fila_tabla_segmento_SPA*) _fila_tabla;
-			log_info(logger, "\tSegmento: %d", fila_tabla->nro_seg);
-			printf("\tSegmento: %d\n", fila_tabla->nro_seg);
-
-			list_iterate(fila_tabla->lista_tabla_paginas, ___estr_adm_fila_tabla_paginas_print_y_log);
-		}
-
-		void __bitmap_frames_print_y_log(){
-			char* bitmap_str = string_new();
-			int i;
-
-			for(i = 0; i < cant_frames; i++){
-				string_append(&bitmap_str, bitarray_test_bit(bitmap_frames, i) ? "1" : "0");
-				string_append(&bitmap_str, ", ");
-			}
-
-			if(i > 0) bitmap_str[strlen(bitmap_str) - 2] = '\0'; // Saco la ultima coma
-
-			log_info(logger, "Bitmap de frames:");
-			printf("Bitmap de frames:\n");
-			log_info(logger, "\t[%s]", bitmap_str);
-			printf("\t[%s]\n", bitmap_str);
-			free(bitmap_str);
-		}
-
-
 		pthread_mutex_lock(&sem_mutex_bitmap_frames);
-		__bitmap_frames_print_y_log();
+		_SPA_estr_adm_bitmap_frames_print_y_log();
 		pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
-		log_info(logger, "Tabla de segmentos del proceso %d:", proceso->pid);
-		printf("Tabla de segmentos del proceso %d: \n", proceso->pid);
-		list_iterate(proceso->lista_tabla_segmentos, __estr_adm_fila_tabla_segmento_print_y_log);
+		_SPA_estr_adm_tabla_segmentos_proceso_print_y_log(proceso);
 	}
 
 	void _fila_tabla_segmento_print_y_log(void* _fila_tabla){
@@ -271,6 +304,16 @@ void _SPA_fm9_dump_pid(unsigned int pid){
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 
 	list_iterate(proceso->lista_tabla_segmentos, _fila_tabla_segmento_print_y_log);
+}
+
+void _SPA_dump_estructuras(){
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	_SPA_estr_adm_bitmap_frames_print_y_log();
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+	pthread_mutex_lock(&sem_mutex_lista_procesos);
+	list_iterate(lista_procesos, (void (*)(void*)) _SPA_estr_adm_tabla_segmentos_proceso_print_y_log);
+	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
 

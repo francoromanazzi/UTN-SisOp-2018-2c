@@ -64,6 +64,7 @@ int fm9_initialize(){
 
 				fm9_dir_logica_a_fisica = &_SEG_dir_logica_a_fisica;
 				fm9_dump_pid = &_SEG_dump_pid;
+				fm9_dump_estructuras = &_SEG_dump_estructuras;
 				fm9_close = &_SEG_close;
 				fm9_liberar_memoria_proceso = &_SEG_liberar_memoria_proceso;
 			break;
@@ -87,6 +88,7 @@ int fm9_initialize(){
 
 				fm9_dir_logica_a_fisica = &_SPA_dir_logica_a_fisica;
 				fm9_dump_pid = &_SPA_fm9_dump_pid;
+				fm9_dump_estructuras = &_SPA_dump_estructuras;
 				fm9_close = &_SPA_fm9_close;
 				fm9_liberar_memoria_proceso = &_SPA_fm9_liberar_memoria_proceso;
 			break;

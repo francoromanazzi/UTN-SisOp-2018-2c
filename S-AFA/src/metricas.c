@@ -10,6 +10,7 @@ void metricas_initialize(){
 	tiempo_promedio = -1;
 	pthread_mutex_init(&sem_mutex_tiempo_promedio, NULL);
 
+	pthread_mutex_init(&sem_mutex_dict_sentencias_ejecutadas, NULL);
 	dict_sentencias_ejecutadas = dictionary_create();
 	dictionary_put(dict_sentencias_ejecutadas, string_itoa(SAFA), 0);
 	dictionary_put(dict_sentencias_ejecutadas, string_itoa(CPU), 0);
@@ -70,7 +71,10 @@ void metricas_nueva_sentencia_ejecutada(e_emisor modulo_destinatario){
 	safa_protocol_encolar_msg_y_avisar(S_AFA, PLP, SENTENCIA_EJECUTADA_);
 
 	char* key = string_itoa(modulo_destinatario);
-	dictionary_put(dict_sentencias_ejecutadas, key, (void*) (1 + (int) dictionary_get(dict_sentencias_ejecutadas, key)));
+	pthread_mutex_lock(&sem_mutex_dict_sentencias_ejecutadas);
+	int cant_anterior_sentencias = (int) dictionary_get(dict_sentencias_ejecutadas, key);
+	dictionary_put(dict_sentencias_ejecutadas, key, (void*) (cant_anterior_sentencias + 1));
+	pthread_mutex_unlock(&sem_mutex_dict_sentencias_ejecutadas);
 	free(key);
 }
 
@@ -81,7 +85,9 @@ static int metricas_cantidad_sentencias_ejecutadas_total(){
 		ret += (int) data;
 	}
 
+	pthread_mutex_lock(&sem_mutex_dict_sentencias_ejecutadas);
 	dictionary_iterator(dict_sentencias_ejecutadas, _acumular_sentencias);
+	pthread_mutex_unlock(&sem_mutex_dict_sentencias_ejecutadas);
 
 	return ret;
 }
@@ -89,10 +95,14 @@ static int metricas_cantidad_sentencias_ejecutadas_total(){
 double metricas_porcentaje_sentencias_hacia_diego(){
 	int cant_sentencias_total = metricas_cantidad_sentencias_ejecutadas_total();
 	char* dam_key = string_itoa(DAM);
+
+	pthread_mutex_lock(&sem_mutex_dict_sentencias_ejecutadas);
 	int cant_sentencias_diego = (int) dictionary_get(dict_sentencias_ejecutadas, dam_key);
+	pthread_mutex_unlock(&sem_mutex_dict_sentencias_ejecutadas);
+
 	free(dam_key);
 
-	return cant_sentencias_total > 0 ? cant_sentencias_diego/cant_sentencias_total : (double) 0;
+	return cant_sentencias_total > 0 ? ((double) cant_sentencias_diego/ (double) cant_sentencias_total) * 100 : (double) 0;
 }
 
 
