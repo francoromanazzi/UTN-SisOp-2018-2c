@@ -54,14 +54,8 @@ void consola_procesar_comando(char* linea){
 		printf("salir:\t\t\tCierra la consola\n\n");
 	}
 
-	/* Comando ejecutar [ruta] */
-	else if(argc == 2 && !strcmp(argv[0],"ejecutar")){
-		metricas_tiempo_add_start((unsigned) dtb_get_gdt_id_count(false));
-		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, CREAR_DTB, strdup(argv[1]));
-	}
-
 	/* Comando ejecutar [ruta]+ */
-	else if(argc > 2 && !strcmp(argv[0],"ejecutar")){
+	else if(argc >= 2 && !strcmp(argv[0],"ejecutar")){
 		int i;
 		for(i = 1; i < argc; i++){
 			sem_wait(&sem_bin_crear_dtb_1);
@@ -212,6 +206,7 @@ void consola_procesar_comando(char* linea){
 }
 
 void consola_print_metricas(){
+	printf("Porcentaje de sentencias hacia diego: %.2f\%%\n", metricas_porcentaje_sentencias_hacia_diego());
 	printf("Tiempo de respuesta promedio: %.2fs\n\n", metricas_tiempo_get_promedio());
 }
 

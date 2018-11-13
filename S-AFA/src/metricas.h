@@ -13,10 +13,11 @@
 
 	t_dictionary* dict_tiempo_respuesta;
 	pthread_mutex_t sem_mutex_dict_tiempo_respuesta;
-
 	double tiempo_promedio;
 	unsigned int cant_procesos_tiempo_promedio;
 	pthread_mutex_t sem_mutex_tiempo_promedio;
+
+	t_dictionary* dict_sentencias_ejecutadas;
 
 	void metricas_initialize();
 
@@ -25,5 +26,6 @@
 	void metricas_tiempo_add_finish(unsigned int id, struct timespec time);
 
 	void metricas_nueva_sentencia_ejecutada(e_emisor modulo_destinatario);
+	double metricas_porcentaje_sentencias_hacia_diego();
 
 #endif /* METRICAS_H_ */

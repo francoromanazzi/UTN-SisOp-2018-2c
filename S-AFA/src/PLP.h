@@ -5,9 +5,11 @@
 	#include <shared/protocol.h>
 
 	int cant_procesos;
-	bool dummy_disponible;
+	bool dummy_disponible, avisar_a_pcp_nuevo_DTB_en_READY;
 	unsigned int id_solicitante_actual_op_dummy;
 	t_list* lista_procesos_a_mover_a_ready_finalizados_por_consola;
+
+
 
 	void plp_iniciar();
 	void plp_gestionar_msg(t_safa_msg* msg);

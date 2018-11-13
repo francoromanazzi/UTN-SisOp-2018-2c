@@ -2,7 +2,7 @@
 
 void plp_iniciar(){
 	cant_procesos = 0;
-	dummy_disponible = true;
+	dummy_disponible = true, avisar_a_pcp_nuevo_DTB_en_READY= false;
 	lista_procesos_a_mover_a_ready_finalizados_por_consola = list_create();
 
 	/* Espero mensajes */
@@ -84,6 +84,11 @@ void plp_gestionar_msg(t_safa_msg* msg){
 				case FIN_OP_DUMMY:
 					op_dummy_en_progreso = false;
 					plp_intentar_iniciar_op_dummy();
+					if(avisar_a_pcp_nuevo_DTB_en_READY){
+						safa_protocol_encolar_msg_y_avisar(PLP, PCP, NUEVO_DTB_EN_READY);
+						avisar_a_pcp_nuevo_DTB_en_READY = false;
+					}
+
 				break;
 			}
 		break;
@@ -227,8 +232,8 @@ void plp_mover_dtb(unsigned int id, e_estado fin){
 			pthread_mutex_lock(&sem_mutex_cola_ready);
 			list_add(cola_ready, (void*) dtb);
 			pthread_mutex_unlock(&sem_mutex_cola_ready);
-			safa_protocol_encolar_msg_y_avisar(PLP, PCP, NUEVO_DTB_EN_READY);
 
+			avisar_a_pcp_nuevo_DTB_en_READY = true;
 			safa_protocol_encolar_msg_y_avisar(PLP, PLP, FIN_OP_DUMMY);
 		break;
 
