@@ -404,7 +404,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			int j=0;
 			if(cantPaginas<_TPI_nro_frames_disponibles()){
 				while(j<cantPaginas){
-					//mutex lock
+					pthread_mutex_lock(&sem_mutex_lista_procesos);
 					frame_libre=_TPI_SPA_obtener_frame_libre();
 					nueva_fila_tablaDePaginas->nro_frame=frame_libre;
 					nueva_fila_tablaDePaginas->pid=id;
@@ -412,7 +412,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 					list_add(tablaPaginasInvertida,nueva_fila_tablaDePaginas);
 
 					bitarray_set_bit(bitmap_frames,frame_libre);
-					//mutex unlock
+					pthread_mutex_unlock(&sem_mutex_lista_procesos);
 					log_info(logger, "Agrego la pagina %d del PID: %d, al frame: %d",
 										nueva_fila_tablaDePaginas->nro_pagina, nueva_fila_tablaDePaginas->pid, nueva_fila_tablaDePaginas->nro_frame);
 					j++;
@@ -495,6 +495,8 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 	t_fila_tabla_segmento_SPA* fila_tabla_segmento_SPA;
 	t_fila_tabla_paginas_SPA* nueva_fila_tabla_paginas_SPA;
 
+	t_fila_tabla_paginas_invertida* nueva_fila_tabla_paginas_TPI;
+
 	t_list* backup_lineas, *backup_dir_logicas;
 	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0, ret_dir_logica, dir_logica_aux;
 	char* linea;
@@ -521,8 +523,6 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 
 
 			pthread_mutex_lock(&sem_mutex_lista_huecos_storage);
-			log_info(logger, "Antes de liberar y best fit:"); // TODO Sacar
-			__huecos_print_y_log();// TODO Sacar
 			_SEG_nuevo_hueco_disponible(fila_tabla->base, fila_tabla->base + fila_tabla->limite);
 			base_nuevo_segmento = _SEG_best_fit(offset + 1);
 			__huecos_print_y_log();
@@ -563,6 +563,37 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 
 		case TPI:
 			/* Le agrego otra pagina */
+			pthread_mutex_lock(&sem_mutex_lista_procesos);
+			proceso = list_find(lista_procesos, _mismo_id);
+			if(proceso == NULL){
+				pthread_mutex_unlock(&sem_mutex_lista_procesos);
+				log_error(logger, "No se encontro el proceso al intentar agregar una pagina");
+				*ok = FM9_ERROR_NO_ENCONTRADO_EN_ESTR_ADM;
+				return;
+			}
+
+			pthread_mutex_lock(&sem_mutex_bitmap_frames);
+			int nro_frame = _TPI_SPA_obtener_frame_libre();
+			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+			if(nro_frame == -1){
+				pthread_mutex_unlock(&sem_mutex_lista_procesos);
+				log_error(logger, "No hay frames disponibles");
+				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+				return;
+			}
+
+			nueva_fila_tabla_paginas_TPI = malloc(sizeof(t_fila_tabla_paginas_invertida));
+			nueva_fila_tabla_paginas_TPI->nro_pagina = list_size(tablaPaginasInvertida) < 1 ? 0 : list_size(tablaPaginasInvertida);
+			//TODO: revisar
+			//		1 + ((t_fila_tabla_paginas_invertida*) list_get(fila_tabla_segmento_SPA->lista_tabla_paginas, list_size(fila_tabla_segmento_SPA->lista_tabla_paginas) - 1))->nro_pagina;
+			nueva_fila_tabla_paginas_TPI->nro_frame = nro_frame;
+
+			list_add(tablaPaginasInvertida, nueva_fila_tabla_paginas_TPI);
+			log_info(logger, "Agrego una pagina a la tabla invertida del PID: %d. Nro pag: %d, nro frame: %d",
+					proceso->pid, nueva_fila_tabla_paginas_TPI->nro_pagina, nueva_fila_tabla_paginas_TPI->nro_frame);
+
+			pthread_mutex_lock(&sem_mutex_lista_procesos);
 		break;
 
 		case SPA:
