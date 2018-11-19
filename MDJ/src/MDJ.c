@@ -52,16 +52,19 @@ int main(void) {
 }
 
 static int _mkpath(char* file_path, mode_t mode) {
-  assert(file_path && *file_path);
-  char* p;
-  for (p=strchr(file_path+1, '/'); p; p=strchr(p+1, '/')) {
-    *p='\0';
-    if (mkdir(file_path, mode)==-1) {
-      if (errno!=EEXIST) { *p='/'; return -1; }
-    }
-    *p='/';
-  }
-  return 0;
+	assert(file_path && *file_path);
+	char* p;
+	for (p=strchr(file_path+1, '/'); p; p=strchr(p+1, '/')) {
+		*p='\0';
+		if (mkdir(file_path, mode)==-1) {
+			if (errno!=EEXIST) {
+				*p='/';
+				return -1;
+			}
+		}
+		*p='/';
+	}
+	return 0;
 }
 
 int mdj_send(int socket, e_tipo_msg tipo_msg, ...){
@@ -267,8 +270,10 @@ void crearEstructuras(){
 	fseek(f_bitmap, 0, SEEK_END);
 	int file_size = ftell(f_bitmap);
 	fseek(f_bitmap, 0, SEEK_SET);
-	log_debug(logger, "%d", file_size);
-	char* bitarray_str = bitarray_str = malloc(file_size);
+	char* bitarray_str = (char*) mmap(NULL, file_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, fileno(f_bitmap), 0);
+	if(bitarray_str == (char*) -1) {
+		log_error(logger, "Fallo el mmap: %s", strerror(errno));
+	}
 	fread((void*) bitarray_str, sizeof(char), file_size, f_bitmap);
 	bitmap = bitarray_create_with_mode(bitarray_str, file_size, MSB_FIRST);
 	log_info(logger, "Creado el archivo Bitmap.bin");
@@ -386,12 +391,6 @@ static void _hardcodear_archivos(){
 			"\n");
 }
 
-void mdj_bitmap_save(){
-	fseek(f_bitmap, 0, SEEK_SET);
-	fwrite((void*) bitmap->bitarray, sizeof(char), bitmap->size, f_bitmap);
-	fflush(f_bitmap);
-}
-
 void validarArchivo(char* path, int* ok){
 
 	int isDirectory(const char *path) {
@@ -452,7 +451,6 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 			bitarray_set_bit(bitmap, i);
 		}
 	}
-	mdj_bitmap_save();
 
 	if(lista_nro_bloques->elements_count < bloques_necesarios){ // Espacio insuficiente
 		*ok = MDJ_ERROR_ESPACIO_INSUFICIENTE;
@@ -462,7 +460,6 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 			bitarray_clean_bit(bitmap, (int) list_get(lista_nro_bloques, i));
 		}
 		list_destroy(lista_nro_bloques);
-		mdj_bitmap_save();
 		return;
 	}
 
@@ -626,7 +623,6 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			return NULL;
 		}
 		bitarray_set_bit(bitmap, nro_bloque);
-		mdj_bitmap_save();
 		nro_bloque_str = string_itoa(nro_bloque);
 
 		string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
@@ -661,7 +657,6 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 
 		char** nros_bloques = string_get_string_as_array(bloques_str);
 		string_iterate_lines(nros_bloques, __borrar_bloque_de_fifa);
-		mdj_bitmap_save();
 		split_liberar(nros_bloques);
 	}
 
@@ -699,7 +694,6 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			free(bloques_arr_strings[i]);
 			bloques_arr_strings[i] = NULL;
 		}
-		mdj_bitmap_save();
 
 		bloques_arr_strings_len = split_cant_elem(bloques_arr_strings);
 
@@ -801,7 +795,6 @@ void borrarArchivo(char* path, int* ok){
 
 	char** bloques_strings = config_get_array_value(config_archivo, "BLOQUES");
 	string_iterate_lines(bloques_strings, _borrar_bloque);
-	mdj_bitmap_save();
 
 	remove(rutaFinal);
 	free(rutaFinal);

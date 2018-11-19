@@ -4,6 +4,7 @@
 	#include <stdlib.h>
 	#include <stdarg.h>
 	#include <sys/stat.h>
+	#include <sys/mman.h>
 	#include <sys/types.h>
 	#include <limits.h>
 	#include <errno.h>
@@ -49,8 +50,6 @@
 
 	int mdj_send(int socket, e_tipo_msg tipo_msg, ...);
 	int mdj_manejador_de_eventos(int socket, t_msg* msg);
-
-	void mdj_bitmap_save();
 
 	void validarArchivo(char* path, int* ok);
 	void crearArchivo(char* path, int cant_lineas, int* ok);
