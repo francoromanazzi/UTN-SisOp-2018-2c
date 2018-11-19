@@ -45,6 +45,8 @@ int safa_initialize(){
 	tabla_recursos = dictionary_create();
 	pthread_mutex_init(&sem_mutex_tabla_recursos, NULL);
 
+	sem_init(&sem_cont_recepcion_interrupcion_cpu, 0, 0);
+
 	return 1;
 }
 
@@ -59,6 +61,9 @@ void safa_iniciar_estado_operatorio(){
 
 	sem_init(&sem_bin_crear_dtb_1, 0, 1);
 	sem_init(&sem_bin_crear_dtb_0, 0, 0);
+
+	lista_cpus_desalojables = list_create();
+	pthread_mutex_init(&sem_mutex_lista_cpus_desalojables, NULL);
 
 	/* Creo el hilo consola */
 	pthread_t thread_consola;
@@ -119,6 +124,10 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
  		case RESULTADO_SIGNAL:
  			mensaje_a_enviar = empaquetar_int(OK);
  		break;
+
+ 		case INTERRUPCION:
+ 			mensaje_a_enviar = empaquetar_int(OK);
+ 		break;
 	}
 
 	mensaje_a_enviar->header->emisor = SAFA;
@@ -130,6 +139,27 @@ int safa_send(int socket, e_tipo_msg tipo_msg, ...){
 }
 
 int safa_manejador_de_eventos(int socket, t_msg* msg){
+
+	void _eliminar_socket_cpu_desalojable(){
+
+		bool _mismo_socket(void* _socket){
+			return (int) _socket == socket;
+		}
+
+
+		pthread_mutex_lock(&sem_mutex_lista_cpus_desalojables);
+		(void) list_remove_by_condition(lista_cpus_desalojables, _mismo_socket);
+		pthread_mutex_unlock(&sem_mutex_lista_cpus_desalojables);
+	}
+
+	bool _verificar_interrupcion_ok(t_msg* _msg){
+		t_dtb* dtb = desempaquetar_dtb(msg);
+		bool ret = dtb->gdt_id != 0;
+		dtb_destroy(dtb);
+		return ret;
+	}
+
+
 	log_info(logger, "[S-AFA] EVENTO: Emisor: %d, Tipo: %d, Tamanio: %d",msg->header->emisor,msg->header->tipo_mensaje,msg->header->payload_size);
 
 	void* data;
@@ -192,12 +222,18 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 	else if(msg->header->emisor == CPU){
 		switch(msg->header->tipo_mensaje){
 			case CONEXION:
+				ultimo_socket_cpu = socket;
+
+				safa_send(socket, HANDSHAKE);
+			break;
+
+			case CONEXION_INTERRUPCIONES:
 				log_info(logger, "[S-AFA] Se conecto un CPU");
 				cpu_conectado = true;
 
-				conexion_cpu_add_new(socket); // Agrego el nuevo socket a la lista de CPUs
-
 				safa_send(socket, HANDSHAKE);
+
+				conexion_cpu_add_new(ultimo_socket_cpu, socket); // Agrego el nuevo socket a la lista de CPUs
 
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, NUEVO_CPU_DISPONIBLE);
 
@@ -225,16 +261,27 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 
 			case BLOCK:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				_eliminar_socket_cpu_desalojable(); // Por si estaba en la cola de baja prioridad
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, BLOCK_DTB, desempaquetar_dtb(msg));
 			break;
 
 			case READY:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				_eliminar_socket_cpu_desalojable(); // Por si estaba en la cola de baja prioridad
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, READY_DTB, desempaquetar_dtb(msg));
+			break;
+
+			case INTERRUPCION:
+				if(_verificar_interrupcion_ok(msg)){ // Por ahi CPU ya habia desalojado antes el DTB por otras razones
+					conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+					safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, READY_DTB, desempaquetar_dtb(msg));
+				}
+				sem_post(&sem_cont_recepcion_interrupcion_cpu);
 			break;
 
 			case EXIT:
 				conexion_cpu_set_active(socket); // Esta CPU es seleccionable de nuevo
+				_eliminar_socket_cpu_desalojable(); // Por si estaba en la cola de baja prioridad
 				safa_protocol_encolar_msg_y_avisar(S_AFA, PCP, EXIT_DTB, desempaquetar_dtb(msg));
 			break;
 

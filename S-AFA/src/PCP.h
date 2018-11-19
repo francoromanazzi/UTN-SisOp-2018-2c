@@ -16,6 +16,7 @@
 	void pcp_iniciar();
 	void pcp_gestionar_msg(t_safa_msg* msg);
 	void pcp_intentar_ejecutar_dtb();
+	void pcp_intentar_desalojar();
 	bool pcp_intentar_solicitar_liberacion_memoria();
 	void pcp_actualizar_dtb(t_dtb* dtb);
 	void pcp_cargar_archivo(t_dtb* dtb_a_actualizar, char* path, int base);

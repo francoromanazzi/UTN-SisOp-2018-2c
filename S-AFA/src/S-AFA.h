@@ -52,12 +52,18 @@
 	int listening_socket;
 	int dam_socket;
 	int fd_inotify;
+	int ultimo_socket_cpu;
 
 	t_list* cpu_conexiones;
 	pthread_mutex_t sem_mutex_cpu_conexiones;
 
 	t_dictionary* tabla_recursos; // Key->nombre_recurso, Value->t_safa_semaforo
 	pthread_mutex_t sem_mutex_tabla_recursos;
+
+	sem_t sem_cont_recepcion_interrupcion_cpu;
+
+	t_list* lista_cpus_desalojables; // Para algoritmos con desalojo
+	pthread_mutex_t sem_mutex_lista_cpus_desalojables;
 
 	typedef struct{
 		int valor;

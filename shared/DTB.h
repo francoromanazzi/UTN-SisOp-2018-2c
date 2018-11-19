@@ -24,6 +24,8 @@
 
 	typedef struct dtb_metricas {
 		int cant_sentencias_ejecutadas_en_new;
+		int cant_sentencias_DAM;
+		int cant_sentencias_totales;
 	} t_dtb_metricas;
 
 	typedef struct dtb {

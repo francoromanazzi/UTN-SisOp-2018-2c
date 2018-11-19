@@ -318,16 +318,6 @@ static void _hardcodear_archivos(){
 	}
 
 
-	__nuevo_escriptorio("/Escriptorios/test1.bin",
-			"crear /Equipos/Boca.txt 3\n"
-			"crear /Equipos/Racing.txt 3\n"
-			"crear /Equipos/SanLorenzo.txt 5\n"
-			"abrir /Equipos/Boca.txt\n"
-			"abrir /Equipos/Racing.txt\n"
-			"close /Equipos/Boca.txt\n"
-			"abrir /Equipos/SanLorenzo.txt\n"
-			"\n");
-
 	__nuevo_escriptorio("/Escriptorios/test2.bin",
 			"crear /Equipos/River.txt 3\n"
 			"abrir /Equipos/River.txt\n"
@@ -366,6 +356,33 @@ static void _hardcodear_archivos(){
 			"asignar /Equipos/River.txt 3 PityMartinez\n"
 			"asignar /Equipos/River.txt 5 Armani\n"
 			"flush /Equipos/River.txt\n"
+			"\n");
+
+	__nuevo_escriptorio("/Escriptorios/cpuBound.bin",
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"\n");
+
+	__nuevo_escriptorio("/Escriptorios/ioBound.bin",
+			"crear /Equipos/Boca.txt 3\n"
+			"crear /Equipos/Racing.txt 2\n"
+			"crear /Equipos/SanLorenzo.txt 2\n"
+			"abrir /Equipos/Boca.txt\n"
+			"close /Equipos/Boca.txt\n"
+			"abrir /Equipos/Racing.txt\n"
+			"abrir /Equipos/SanLorenzo.txt\n"
+			"borrar /Equipos/Racing.txt\n"
+			"flush /Equipos/SanLorenzo.txt\n"
+			"borrar /Equipos/SanLorenzo.txt\n"
 			"\n");
 }
 

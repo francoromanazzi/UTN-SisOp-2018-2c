@@ -28,9 +28,13 @@
 	t_config* config;
 	t_log* logger;
 
+	pthread_t thread_interrupt_listenner; // Solo para algoritmos con desalojo
+	bool interrupcion;
+	pthread_mutex_t sem_mutex_interrupcion;
+
 	int retardo_ejecucion;
 
-	int safa_socket;
+	int safa_socket, safa_socket_interrupciones;
 	int dam_socket;
 	int fm9_socket;
 
@@ -47,6 +51,9 @@
 	char* cpu_fetch(t_dtb* dtb, int base_escriptorio);
 	t_operacion* cpu_decodificar(char* instruccion);
 	int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion);
+
+	void cpu_interrupt_listenner_start();
+	bool cpu_chequear_interrupciones(bool fifo, bool cancel_thread);
 
 	void cpu_exit();
 

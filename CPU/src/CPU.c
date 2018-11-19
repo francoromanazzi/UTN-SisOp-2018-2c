@@ -63,6 +63,8 @@ int cpu_initialize(){
 	}
 	log_info(logger, "Me conecte a FM9");
 
+	pthread_mutex_init(&sem_mutex_interrupcion, NULL);
+
 	return 1;
 }
 
@@ -74,7 +76,7 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 	char* datos;
 	char* recurso;
 	unsigned int id;
-	int base, offset, cant_lineas, direccion_logica;
+	int base, offset, cant_lineas, direccion_logica, ok;
 	t_dtb* dtb;
 	struct timespec time;
 	e_emisor destinatario_sentencia_ejecutada;
@@ -84,6 +86,7 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 
 	switch(tipo_msg){
 		case CONEXION: // A SAFA, DAM y FM9
+		case CONEXION_INTERRUPCIONES: // A SAFA
 			mensaje_a_enviar = empaquetar_int(OK);
 		break;
 
@@ -150,6 +153,15 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 		case EXIT: // A SAFA
 		case READY: // A SAFA
 			dtb = va_arg(arguments, t_dtb*);
+			mensaje_a_enviar = empaquetar_dtb(dtb);
+		break;
+
+		case INTERRUPCION: // A SAFA
+			dtb = va_arg(arguments, t_dtb*);
+			ok = va_arg(arguments, int);
+			if(ok == NO_OK){ // Esto representa que hubo una interrupcion, pero igual CPU justo queria desalojar al DTB
+				dtb->gdt_id = 0; // Esto lo sabe interpretar safa
+			}
 			mensaje_a_enviar = empaquetar_dtb(dtb);
 		break;
 
@@ -249,8 +261,15 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 		int operaciones_realizadas = 0;
 		int nro_error;
 		int base_escriptorio = (int) dictionary_get(dtb->archivos_abiertos, dtb->ruta_escriptorio);
+		bool fifo = false;
 
-		while(dtb->quantum_restante > 0){
+		if(dtb->quantum_restante == 0){ // No tengo quantum => ejecuto indefinidamente, creo un hilo para escuchar interrupciones de safa
+			fifo = true;
+			pthread_create(&thread_interrupt_listenner, NULL, (void* (*)(void*)) cpu_interrupt_listenner_start, NULL);
+			pthread_detach(thread_interrupt_listenner);
+		}
+
+		while(dtb->quantum_restante > 0 || fifo){
 			usleep(retardo_ejecucion);
 
 			/* ------------------------- 1RA FASE: FETCH ------------------------- */
@@ -260,11 +279,17 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			while(instruccion[0] == '#'); // Bucle, para ignorar las lineas con comentarios
 			if(!strcmp(instruccion, " ")){ // No hay mas instrucciones para leer
 				log_info(logger, "Termine de ejecutar todo el DTB con ID: %d", dtb->gdt_id);
+
 				cpu_send(safa_socket, EXIT, dtb); // Le aviso a SAFA que ya termine de ejecutar este DTB
 				free(instruccion);
+
+				if(cpu_chequear_interrupciones(fifo, true))
+					cpu_send(safa_socket, INTERRUPCION, dtb, NO_OK);
+
 				return;
 			}
 			log_info(logger, "La proxima instruccion es: %s", instruccion);
+			printf("~~~~~~~~ %s ~~~~~~~~\n\n", instruccion);
 
 			/* ---------------------- 2DA FASE: DECODIFICACION ---------------------- */
 			t_operacion* operacion = cpu_decodificar(instruccion);
@@ -277,6 +302,7 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 			dtb->quantum_restante--;
 
 			if ((nro_error = cpu_ejecutar_operacion(dtb, operacion)) != OK){
+
 				if(nro_error == BLOCK){ // Tengo que pedir a SAFA que bloquee
 					log_info(logger, "Le pido a SAFA que bloquee el DTB con ID:%d", dtb->gdt_id);
 					cpu_send(safa_socket, BLOCK, dtb);
@@ -287,13 +313,40 @@ void cpu_ejecutar_dtb(t_dtb* dtb){
 					cpu_send(safa_socket, EXIT, dtb);
 				}
 				operacion_free(&operacion);
+
+				if(cpu_chequear_interrupciones(fifo, true))
+					cpu_send(safa_socket, INTERRUPCION, dtb, NO_OK);
+
 				return; // Desalojo el DTB
 			}
 			operacion_free(&operacion);
+
+			if(cpu_chequear_interrupciones(fifo, false)){ // Al finalizar de ejecutar una instruccion, chequeo que no hayan interrupciones
+				log_info(logger, "Desalojo el DTB debido a una interrupcion por parte de SAFA");
+				cpu_send(safa_socket, INTERRUPCION, dtb, OK);
+				return;
+			}
+
 		} // Fin while(dtb->quantum_restante > 0)
 		log_info(logger, "Se me termino el quantum");
 		cpu_send(safa_socket, READY, dtb);
 	}
+}
+
+bool cpu_chequear_interrupciones(bool fifo, bool cancel_thread){
+	if(fifo){
+		pthread_mutex_lock(&sem_mutex_interrupcion);
+		if(interrupcion){
+			interrupcion = false; // Reseteo la variable global
+			pthread_mutex_unlock(&sem_mutex_interrupcion);
+			return true; // No tengo que hacer pthread_cancel ya que el hilo hizo exit por su cuenta
+		}
+		pthread_mutex_unlock(&sem_mutex_interrupcion);
+
+		if(cancel_thread)
+			pthread_cancel(thread_interrupt_listenner);
+	}
+	return false;
 }
 
 char* cpu_fetch(t_dtb* dtb, int base_escriptorio){
@@ -347,6 +400,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
+			(dtb->metricas.cant_sentencias_DAM) ++;
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -355,6 +410,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 		case OP_CONCENTRAR:
 			/* Le aviso a SAFA que ejecute una sentencia que usa a CPU*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, CPU);
+			(dtb->metricas.cant_sentencias_totales) ++;
 		break;
 
 		case OP_ASIGNAR:
@@ -382,6 +438,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a FM9*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, FM9);
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			return ok;
 		break;
@@ -402,6 +459,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a SAFA*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, SAFA);
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			if(ok == NO_OK){
 				/* Le envio a SAFA el DTB, y le pido que lo bloquee */
@@ -424,6 +482,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a SAFA*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, SAFA);
+			(dtb->metricas.cant_sentencias_totales) ++;
 		break;
 
 		case OP_FLUSH:
@@ -438,6 +497,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
+			(dtb->metricas.cant_sentencias_DAM) ++;
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -469,6 +530,7 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a FM9*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, FM9);
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			return ok;
 		break;
@@ -482,6 +544,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
+			(dtb->metricas.cant_sentencias_DAM) ++;
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -495,6 +559,8 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 
 			/* Le aviso a SAFA que ejecute una sentencia que usa a DAM*/
 			cpu_send(safa_socket, SENTENCIA_EJECUTADA, DAM);
+			(dtb->metricas.cant_sentencias_DAM) ++;
+			(dtb->metricas.cant_sentencias_totales) ++;
 
 			/* Le envio a SAFA el DTB, y le pido que lo bloquee */
 			return BLOCK;
@@ -503,8 +569,33 @@ int cpu_ejecutar_operacion(t_dtb* dtb, t_operacion* operacion){
 	return OK;
 }
 
+void cpu_interrupt_listenner_start(){
+	(void) pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	t_msg* msg = malloc(sizeof(t_msg));
+	int resultado_await = msg_await(safa_socket_interrupciones, msg);
+	if(resultado_await <= 0){
+		log_debug(logger, "[INTERRUPT_LISTENNER] resultado_await <= 0");
+		free(msg);
+		pthread_exit(NULL); // Cierro mi hilo
+	}
+
+	if(msg->header->tipo_mensaje == INTERRUPCION){
+		log_info(logger, "[INTERRUPT_LISTENNER] Recibi una interrupcion de SAFA");
+		pthread_mutex_lock(&sem_mutex_interrupcion);
+		interrupcion = true;
+		pthread_mutex_unlock(&sem_mutex_interrupcion);
+	}
+	else{
+		log_debug(logger, "[INTERRUPT_LISTENNER] No entendi el mensaje de SAFA de tipo: %d", msg->header->tipo_mensaje);
+	}
+	msg_free(&msg);
+	pthread_exit(NULL); // Cierro mi hilo
+}
+
 int cpu_connect_to_safa(){
 	safa_socket = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
+	safa_socket_interrupciones = socket_connect_to_server(config_get_string_value(config, "IP_SAFA"), config_get_string_value(config, "PUERTO_SAFA"));
 	log_info(logger, "Intento conectarme a SAFA");
 
 	int resultado_send = cpu_send(safa_socket, CONEXION);
@@ -520,7 +611,22 @@ int cpu_connect_to_safa(){
 		msg_free(&msg);
 		return -1;
 	}
-	return safa_socket > 0 && resultado_send > 0 && result_recv > 0;
+
+	resultado_send = cpu_send(safa_socket_interrupciones, CONEXION_INTERRUPCIONES);
+
+	msg = malloc(sizeof(t_msg));
+	result_recv = msg_await(safa_socket_interrupciones, msg);
+	if(msg->header->tipo_mensaje == HANDSHAKE){
+		log_info(logger, "Recibi handshake de SAFA en el socket de interrupciones");
+		msg_free(&msg);
+	}
+	else{
+		log_error(logger, "No entendi el mensaje de SAFA");
+		msg_free(&msg);
+		return -1;
+	}
+
+	return safa_socket > 0 && safa_socket_interrupciones > 0 && resultado_send > 0 && result_recv > 0;
 }
 
 int cpu_connect_to_dam(){

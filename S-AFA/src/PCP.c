@@ -327,8 +327,16 @@ void pcp_intentar_ejecutar_dtb(){
 
 	/* 2DA CONDICION: Que haya CPU disponible */
 	int cpu_socket;
+	bool _mismo_cpu_socket(void* _socket){
+		return (int) _socket == cpu_socket;
+	}
+
 	if((cpu_socket = conexion_cpu_get_available()) == -1){
-		return;
+		log_debug(logger, "\tIntento desalojar");
+		pcp_intentar_desalojar(); // Por si es un algoritmo con desalojo
+		if((cpu_socket = conexion_cpu_get_available()) == -1)
+			return;
+		log_debug(logger, "\tPude desalojar");
 	}
 
 	/* OK, mando a ejecutar un DTB segun el algoritmo */
@@ -357,8 +365,26 @@ void pcp_intentar_ejecutar_dtb(){
 				}
 			}
 		}
-		else if(!strcmp(algoritmo, "PROPIO")){
+		else if(!strcmp(algoritmo, "IOBF")){
+			/* IO BOUND FIRST (IOBF)*/
+			double _obtener_nivel_de_IO_bound(void* _dtb){
+				t_dtb* dtb = (t_dtb*) _dtb;
+				if(dtb->pc == 0) return 0.55; // Si no se habia ejecutado, entra en la cola de ALTA PRIORIDAD pero con un nivel bajo
+				return (double) dtb->metricas.cant_sentencias_DAM
+					/ (double) (dtb->metricas.cant_sentencias_totales - dtb->metricas.cant_sentencias_DAM + 1);
+			}
 
+			void* _mayor_nivel_de_IO_bound(void* dtb1, void* dtb2){
+				if(dtb1 == NULL) return dtb2;
+				return _obtener_nivel_de_IO_bound(dtb1) >= _obtener_nivel_de_IO_bound(dtb2) ? dtb1 : dtb2;
+			}
+
+
+			dtb_seleccionado = (t_dtb*) list_fold(cola_ready, NULL, _mayor_nivel_de_IO_bound);
+			int quantum_config = safa_config_get_int_value("QUANTUM");
+			double nivel_io_bound = _obtener_nivel_de_IO_bound((void*) dtb_seleccionado);
+			bool cola_maxima_prioridad = nivel_io_bound > 0.5;
+			dtb_seleccionado->quantum_restante = cola_maxima_prioridad ? quantum_config : 0; // Decido en cual de las 2 colas de planificacion estaba el DTB
 		}
 	}
 	pthread_mutex_unlock(&sem_mutex_cola_ready);
@@ -373,11 +399,34 @@ void pcp_intentar_ejecutar_dtb(){
 		log_info(logger, "[PCP] Mando a ejecutar el DUMMY. El ID del solicitante es: %d", dtb_seleccionado->gdt_id);
 		dummy_en_ready = false;
 	}
-	else
+	else{
 		log_info(logger, "[PCP] Mando a ejecutar el DTB con ID: %d por %d unidades de quantum", dtb_seleccionado->gdt_id, dtb_seleccionado->quantum_restante);
+		if(dtb_seleccionado->quantum_restante <= 0){ // El DTB estaba en la cola de baja prioridad
+			log_info(logger, "[PCP] Cola de BAJA PRIORIDAD");
+			pthread_mutex_lock(&sem_mutex_lista_cpus_desalojables);
+			if(list_find(lista_cpus_desalojables, _mismo_cpu_socket) == NULL) // Si no estaba este socket en la lista, lo agrego
+				list_add(lista_cpus_desalojables, (void*) cpu_socket);
+			pthread_mutex_unlock(&sem_mutex_lista_cpus_desalojables);
+		}
+	}
 
 	pcp_mover_dtb(dtb_seleccionado->gdt_id, ESTADO_READY, ESTADO_EXEC);
 	safa_send(cpu_socket, EXEC, dtb_seleccionado);
+}
+
+void pcp_intentar_desalojar(){
+	pthread_mutex_lock(&sem_mutex_lista_cpus_desalojables);
+	if(list_size(lista_cpus_desalojables) <= 0) {
+		log_debug(logger, "\tNo hay CPUs desalojables en este momento");
+		pthread_mutex_unlock(&sem_mutex_lista_cpus_desalojables);
+		return;
+	}
+	int socket_cpu_a_desalojar = (int) list_remove(lista_cpus_desalojables, 0);
+	pthread_mutex_unlock(&sem_mutex_lista_cpus_desalojables);
+	int socket_interrupciones = conexion_cpu_get_socket_interrupciones(socket_cpu_a_desalojar);
+	safa_send(socket_interrupciones, INTERRUPCION);
+
+	sem_wait(&sem_cont_recepcion_interrupcion_cpu); // Espero a que CPU haya recibido la interrupcion, y haya desalojado y notificado a SAFA
 }
 
 void pcp_actualizar_dtb(t_dtb* dtb_recibido){
@@ -402,6 +451,8 @@ void pcp_actualizar_dtb(t_dtb* dtb_recibido){
 		dtb_a_actualizar->pc = dtb_recibido->pc;
 		dtb_a_actualizar->quantum_restante = dtb_recibido->quantum_restante;
 		dtb_a_actualizar->flags.error_nro = dtb_recibido->flags.error_nro;
+		dtb_a_actualizar->metricas.cant_sentencias_DAM = dtb_recibido->metricas.cant_sentencias_DAM;
+		dtb_a_actualizar->metricas.cant_sentencias_totales = dtb_recibido->metricas.cant_sentencias_totales;
 		dictionary_clean(dtb_a_actualizar->archivos_abiertos); // Borro los archivos abiertos
 		dictionary_iterator(dtb_recibido->archivos_abiertos, _actualizar_archivos_abiertos); // Los vuelvo a poner, uno por uno
 	}

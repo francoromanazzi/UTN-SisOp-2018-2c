@@ -188,6 +188,7 @@ void consola_procesar_comando(char* linea){
 			}
 			safa_protocol_msg_free(msg_recibido);
 
+			printf("~~~~~~~~~~\n");
 			consola_print_metricas();
 		}
 	}

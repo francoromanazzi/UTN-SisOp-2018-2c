@@ -22,10 +22,11 @@ void conexion_cpu_set_inactive(int socket){
 	pthread_mutex_unlock(&sem_mutex_cpu_conexiones);
 }
 
-void conexion_cpu_add_new(int socket){
+void conexion_cpu_add_new(int socket, int socket_interrupciones){
 	t_conexion_cpu*  nueva_conexion_cpu = malloc(sizeof(t_conexion_cpu));
 	nueva_conexion_cpu->socket = socket;
 	nueva_conexion_cpu->en_uso = 0;
+	nueva_conexion_cpu->socket_interrupciones = socket_interrupciones;
 
 	pthread_mutex_lock(&sem_mutex_cpu_conexiones);
 	list_add(cpu_conexiones, (void*) nueva_conexion_cpu);
@@ -59,7 +60,18 @@ int conexion_cpu_get_available(){
 	return -1;
 }
 
+int conexion_cpu_get_socket_interrupciones(int socket){
 
+	bool _mismo_fd_socket(void* conexion_cpu_en_lista){
+		return ((t_conexion_cpu*) conexion_cpu_en_lista)->socket == socket;
+	}
+
+	pthread_mutex_lock(&sem_mutex_cpu_conexiones);
+	int ret = ((t_conexion_cpu*) list_find(cpu_conexiones, _mismo_fd_socket))->socket_interrupciones;
+	pthread_mutex_unlock(&sem_mutex_cpu_conexiones);
+
+	return ret;
+}
 
 
 
