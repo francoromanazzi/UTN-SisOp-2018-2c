@@ -155,6 +155,10 @@ void plp_gestionar_msg(t_safa_msg* msg){
 
 					msg->data = NULL;
 				break;
+
+				case METRICAS_SENTENCIAS_EXIT:
+					safa_protocol_encolar_msg_y_avisar(PLP, CONSOLA, METRICAS_SENTENCIAS_EXIT, plp_metricas_sentencias_exit());
+				break;
 			}
 		break;
 	}
@@ -195,6 +199,21 @@ void plp_intentar_iniciar_op_dummy(){
 void plp_cargar_archivo(t_dtb* dtb_a_actualizar, int base){
 	dictionary_remove(dtb_a_actualizar->archivos_abiertos, dtb_a_actualizar->ruta_escriptorio);
 	dictionary_put(dtb_a_actualizar->archivos_abiertos, dtb_a_actualizar->ruta_escriptorio, (void*) base);
+}
+
+int plp_metricas_sentencias_exit(){
+	int cant_dtbs = 0, acumulador_cant_sentencias = 0;
+
+	void _acumular_sentencias(void* dtb){
+		cant_dtbs++;
+		acumulador_cant_sentencias += ((t_dtb*) dtb)->metricas.cant_sentencias_totales;
+	}
+
+	pthread_mutex_lock(&sem_mutex_cola_exit);
+	list_iterate(cola_exit, _acumular_sentencias);
+	pthread_mutex_unlock(&sem_mutex_cola_exit);
+
+	return cant_dtbs > 0 ? acumulador_cant_sentencias / cant_dtbs : -1;
 }
 
 t_status* plp_empaquetar_status(){

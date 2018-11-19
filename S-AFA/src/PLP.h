@@ -17,6 +17,7 @@
 	void plp_crear_dtb_y_encolar(char* path_escriptorio);
 	void plp_intentar_iniciar_op_dummy();
 	void plp_cargar_archivo(t_dtb* dtb_a_actualizar, int base);
+	int plp_metricas_sentencias_exit();
 	t_status* plp_empaquetar_status();
 	void plp_mover_dtb(unsigned int id, e_estado fin);
 

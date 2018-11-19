@@ -181,10 +181,10 @@ void consola_procesar_comando(char* linea){
 			msg_recibido->data = NULL;
 
 			if(ret == -1){
-				printf("No se ha encontrado el proceso con ID: %d\n", (unsigned) atoi(argv[1]));
+				printf("1.No se ha encontrado el proceso con ID: %d\n", (unsigned) atoi(argv[1]));
 			}
 			else {
-				printf("Cant de sentencias ejecutadas que espero en NEW: %d\n", ret);
+				printf("1.Cant de sentencias ejecutadas que espero en NEW: %d\n", ret);
 			}
 			safa_protocol_msg_free(msg_recibido);
 
@@ -207,8 +207,21 @@ void consola_procesar_comando(char* linea){
 }
 
 void consola_print_metricas(){
-	printf("Porcentaje de sentencias hacia diego: %.2f\%%\n", metricas_porcentaje_sentencias_hacia_diego());
-	printf("Tiempo de respuesta promedio: %.2fs\n\n", metricas_tiempo_get_promedio());
+
+	int _cantidad_sentencias_terminar_exit(){
+		safa_protocol_encolar_msg_y_avisar(CONSOLA, PLP, METRICAS_SENTENCIAS_EXIT);
+		t_safa_msg* msg_recibido = consola_esperar_msg(METRICAS_SENTENCIAS_EXIT);
+		int ret = (int) msg_recibido->data;
+		msg_recibido->data = NULL;
+		safa_protocol_msg_free(msg_recibido);
+		return ret;
+	}
+
+
+	printf("2.Cantidad de sentencias hacia diego: %d\n", metricas_cantidad_sentencias_hacia_diego());
+	printf("3.Cantidad de sentencias promedio para que DTB termine en exit: %d\n", _cantidad_sentencias_terminar_exit());
+	printf("4.Porcentaje de sentencias hacia diego: %.2f\%%\n", metricas_porcentaje_sentencias_hacia_diego());
+	printf("5.Tiempo de respuesta promedio: %.2fs\n\n", metricas_tiempo_get_promedio());
 }
 
 t_safa_msg* consola_esperar_msg(e_safa_tipo_msg tipo_msg){

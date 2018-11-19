@@ -22,11 +22,12 @@
 
 	void metricas_initialize();
 
-	double metricas_tiempo_get_promedio();
+	double metricas_tiempo_get_promedio(); // Metricas punto 5
 	void metricas_tiempo_add_start(unsigned int id);
 	void metricas_tiempo_add_finish(unsigned int id, struct timespec time);
 
 	void metricas_nueva_sentencia_ejecutada(e_emisor modulo_destinatario);
-	double metricas_porcentaje_sentencias_hacia_diego();
+	int metricas_cantidad_sentencias_hacia_diego(); // Metricas punto 2
+	double metricas_porcentaje_sentencias_hacia_diego(); // Metricas punto 4
 
 #endif /* METRICAS_H_ */

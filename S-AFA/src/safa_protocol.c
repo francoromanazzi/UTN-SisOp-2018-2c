@@ -77,6 +77,9 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 					id = va_arg(arguments, unsigned int);
 					msg->data = (void*) id;
 				break;
+
+				case METRICAS_SENTENCIAS_EXIT:
+				break;
 			}
 			pthread_mutex_lock(&sem_mutex_cola_msg_plp);
 			list_add(cola_msg_plp, msg);
@@ -170,6 +173,11 @@ void safa_protocol_encolar_msg_y_avisar(e_safa_modulo emisor, e_safa_modulo rece
 				break;
 
 				case METRICAS_DTB:
+					cant_sentencias = va_arg(arguments, int);
+					msg->data = (void*) cant_sentencias;
+				break;
+
+				case METRICAS_SENTENCIAS_EXIT:
 					cant_sentencias = va_arg(arguments, int);
 					msg->data = (void*) cant_sentencias;
 				break;

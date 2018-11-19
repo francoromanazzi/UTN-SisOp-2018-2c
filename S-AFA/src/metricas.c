@@ -92,6 +92,18 @@ static int metricas_cantidad_sentencias_ejecutadas_total(){
 	return ret;
 }
 
+int metricas_cantidad_sentencias_hacia_diego(){
+	char* dam_key = string_itoa(DAM);
+
+	pthread_mutex_lock(&sem_mutex_dict_sentencias_ejecutadas);
+	int cant_sentencias_diego = (int) dictionary_get(dict_sentencias_ejecutadas, dam_key);
+	pthread_mutex_unlock(&sem_mutex_dict_sentencias_ejecutadas);
+
+	free(dam_key);
+
+	return cant_sentencias_diego;
+}
+
 double metricas_porcentaje_sentencias_hacia_diego(){
 	int cant_sentencias_total = metricas_cantidad_sentencias_ejecutadas_total();
 	char* dam_key = string_itoa(DAM);
@@ -104,15 +116,6 @@ double metricas_porcentaje_sentencias_hacia_diego(){
 
 	return cant_sentencias_total > 0 ? ((double) cant_sentencias_diego/ (double) cant_sentencias_total) * 100 : (double) 0;
 }
-
-
-
-
-
-
-
-
-
 
 
 
