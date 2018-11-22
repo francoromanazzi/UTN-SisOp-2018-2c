@@ -63,6 +63,14 @@
 		int _TPI_cantidad_paginas_del_archivo(int tamArchivo);
 		int _TPI_nro_frames_disponibles();
 
+		typedef struct{
+			unsigned int pid;
+			unsigned int nro_pag_inicial;
+			unsigned int nro_pag_final;
+		}t_fila_TPI_archivos;
+
+		t_list* tabla_archivos_TPI;
+		pthread_mutex_t sem_mutex_archivos_TPI;
 
 	/* SEGMENTACION PAGINADA */
 		typedef struct {
@@ -78,7 +86,6 @@
 		int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok);
 		void _SPA_fm9_close(unsigned int id, int base, int* ok);
 		void _SPA_fm9_liberar_memoria_proceso(unsigned int id);
-
 
 	/* SEGMENTACION PURA x SEGMENTACION PAGINADA */
 		typedef struct {
@@ -127,5 +134,8 @@
 	void (*fm9_liberar_memoria_proceso)(unsigned int id);
 
 	void fm9_exit();
+
+	unsigned int pagina_final(unsigned int pid);
+	unsigned int ultima_pagina_proceso_TPI(t_list* lista, unsigned int pid);
 
 #endif /* FM9_H_ */
