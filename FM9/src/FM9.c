@@ -402,7 +402,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			int cantPaginas; //=cantidad_paginas_del_archivo(tamArchivo);
 			int frame_libre;
 			int j=0;
-			if(cantPaginas<_TPI_nro_frames_d4isponibles()){
+			if(cantPaginas<_TPI_nro_frames_disponibles()){
 				while(j<cantPaginas){
 					pthread_mutex_lock(&sem_mutex_lista_procesos);
 					frame_libre=_TPI_SPA_obtener_frame_libre();
