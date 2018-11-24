@@ -18,7 +18,7 @@
 
 	#include "FM9_consola.h"
 
-	/* Constantes */
+/* Constantes */
 		#define IP "127.0.0.1"
 
 		#define CONFIG_PATH "../configs/FM9.txt"
@@ -31,7 +31,7 @@
 
 		typedef enum {SEG, TPI, SPA} e_modo;
 
-	/* SEGMENTACION PURA */
+/* SEGMENTACION PURA */
 		typedef struct {
 			unsigned int nro_seg;
 			unsigned int base;
@@ -51,28 +51,35 @@
 		void _SEG_liberar_memoria_proceso(unsigned int id);
 
 
-	/* TABLA DE PAGINAS INVERTIDA */
+/* TABLA DE PAGINAS INVERTIDA */
 		typedef struct {
-			unsigned int nro_frame;
 			unsigned int pid;
 			unsigned int nro_pagina;
+			unsigned int bit_validez : 1;
 		} t_fila_tabla_paginas_invertida;
 
-		t_list* tablaPaginasInvertida;
-
-		int _TPI_cantidad_paginas_del_archivo(int tamArchivo);
-		int _TPI_nro_frames_disponibles();
+		t_list* tabla_paginas_invertida; // lista de t_fila_tabla_paginas_invertida
+		pthread_mutex_t sem_mutex_tabla_paginas_invertida;
 
 		typedef struct{
 			unsigned int pid;
 			unsigned int nro_pag_inicial;
 			unsigned int nro_pag_final;
-		}t_fila_TPI_archivos;
+		} t_fila_TPI_archivos;
 
-		t_list* tabla_archivos_TPI;
-		pthread_mutex_t sem_mutex_archivos_TPI;
+		t_list* tabla_archivos_TPI; // lista de t_fila_TPI_archivos
+		pthread_mutex_t sem_mutex_tabla_archivos_TPI;
 
-	/* SEGMENTACION PAGINADA */
+		int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok);
+		void _TPI_close(unsigned int id, int base, int* ok);
+		void _TPI_liberar_memoria_proceso(unsigned int id);
+
+		unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid, int pag_inicial);
+		// unsigned int _TPI_pagina_final(unsigned int pid);
+		unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid);
+
+
+/* SEGMENTACION PAGINADA */
 		typedef struct {
 			unsigned int nro_seg;
 			t_list* lista_tabla_paginas; // lista de t_fila_tabla_paginas_SPA
@@ -84,30 +91,31 @@
 		} t_fila_tabla_paginas_SPA;
 
 		int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok);
-		void _SPA_fm9_close(unsigned int id, int base, int* ok);
-		void _SPA_fm9_liberar_memoria_proceso(unsigned int id);
+		void _SPA_close(unsigned int id, int base, int* ok);
+		void _SPA_liberar_memoria_proceso(unsigned int id);
 
-	/* SEGMENTACION PURA x SEGMENTACION PAGINADA */
+
+/* SEGMENTACION PURA x SEGMENTACION PAGINADA */
 		typedef struct {
 			unsigned int pid;
 			t_list* lista_tabla_segmentos; // lista de t_fila_tabla_segmento_{SEG|SPA}
 		} t_proceso;
 
 
-	/* TABLA DE PAGINAS INVERTIDA x SEGMENTACION PAGINADA */
+/* TABLA DE PAGINAS INVERTIDA x SEGMENTACION PAGINADA */
 		t_bitarray* bitmap_frames;
 		pthread_mutex_t sem_mutex_bitmap_frames;
 
 		int _TPI_SPA_obtener_frame_libre();
 
 
-	/* Variables globales */
+/* Variables globales */
 		t_config* config;
 		t_log* logger;
 		int listening_socket;
 
 
-	/* Config: */
+/* Config */
 		e_modo modo;
 		int tamanio;
 		int max_linea;
@@ -134,8 +142,5 @@
 	void (*fm9_liberar_memoria_proceso)(unsigned int id);
 
 	void fm9_exit();
-
-	unsigned int pagina_final(unsigned int pid);
-	unsigned int ultima_pagina_proceso_TPI(t_list* lista, unsigned int pid);
 
 #endif /* FM9_H_ */

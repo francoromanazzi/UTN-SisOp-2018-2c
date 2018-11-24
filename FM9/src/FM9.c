@@ -46,6 +46,26 @@ int main(void) {
 
 int fm9_initialize(){
 
+	t_list* _TPI_crear_tabla(){
+		t_list* ret = list_create();
+		int i;
+
+		void __agregar_nueva_fila(){
+			t_fila_tabla_paginas_invertida* nueva_fila = malloc(sizeof(t_fila_tabla_paginas_invertida));
+			nueva_fila->bit_validez = 0; // Este frame esta vacio inicialmente
+			nueva_fila->nro_pagina = 0;
+			nueva_fila->pid = 0;
+			list_add(ret, (void*) nueva_fila);
+		}
+
+		for(i = 0; i < cant_frames; i++){
+			__agregar_nueva_fila();
+		}
+
+		return ret;
+	}
+
+
 	void _modo_y_estr_administrativas_init(){
 		char* bitMapStr;
 
@@ -74,8 +94,17 @@ int fm9_initialize(){
 				bitmap_frames= bitarray_create_with_mode(bitMapStr, ceiling(cant_frames, 8), MSB_FIRST);
 				pthread_mutex_init(&sem_mutex_bitmap_frames, NULL);
 
+				tabla_paginas_invertida = _TPI_crear_tabla();
+				pthread_mutex_init(&sem_mutex_tabla_paginas_invertida, NULL);
 
-				tablaPaginasInvertida=calloc(cant_frames,sizeof(t_fila_tabla_paginas_invertida));
+				tabla_archivos_TPI = list_create();
+				pthread_mutex_init(&sem_mutex_tabla_archivos_TPI, NULL);
+
+				fm9_dir_logica_a_fisica = &_TPI_dir_logica_a_fisica;
+				fm9_dump_pid = &_TPI_dump_pid;
+				fm9_dump_estructuras = &_TPI_dump_estructuras;
+				fm9_close = &_TPI_close;
+				fm9_liberar_memoria_proceso = &_TPI_liberar_memoria_proceso;
 			break;
 
 			case SPA:
@@ -87,10 +116,10 @@ int fm9_initialize(){
 				pthread_mutex_init(&sem_mutex_bitmap_frames, NULL);
 
 				fm9_dir_logica_a_fisica = &_SPA_dir_logica_a_fisica;
-				fm9_dump_pid = &_SPA_fm9_dump_pid;
+				fm9_dump_pid = &_SPA_dump_pid;
 				fm9_dump_estructuras = &_SPA_dump_estructuras;
-				fm9_close = &_SPA_fm9_close;
-				fm9_liberar_memoria_proceso = &_SPA_fm9_liberar_memoria_proceso;
+				fm9_close = &_SPA_close;
+				fm9_liberar_memoria_proceso = &_SPA_liberar_memoria_proceso;
 			break;
 		}
 	}
@@ -350,7 +379,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 	t_proceso* proceso;
 	t_fila_tabla_segmento_SEG* nueva_fila_tabla_SEG;
 
-	t_fila_tabla_paginas_invertida* nueva_fila_tablaDePaginas;
+	t_fila_tabla_paginas_invertida* fila_TPI;
 
 	t_fila_tabla_segmento_SPA* nueva_fila_tabla_segmentos_SPA;
 	t_fila_tabla_paginas_SPA* nueva_fila_tabla_paginas_SPA;
@@ -363,6 +392,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			pthread_mutex_unlock(&sem_mutex_lista_huecos_storage);
 
 			if(nro_linea == -1){
+				log_error(logger, "No hay espacio para un nuevo archivo");
 				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
 				return 0;
 			}
@@ -397,39 +427,36 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 		break;
 
 		case TPI:
+			pthread_mutex_lock(&sem_mutex_bitmap_frames);
+			int nro_frame_seleccionado = _TPI_SPA_obtener_frame_libre();
+			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
-			nueva_fila_tablaDePaginas = malloc(sizeof(t_fila_tabla_paginas_invertida));
-			int cantPaginas; //=cantidad_paginas_del_archivo(tamArchivo);
-			int frame_libre;
-			int j=0;
-			if(cantPaginas<_TPI_nro_frames_disponibles()){
-				while(j<cantPaginas){
-					pthread_mutex_lock(&sem_mutex_lista_procesos);
-					frame_libre=_TPI_SPA_obtener_frame_libre();
-					nueva_fila_tablaDePaginas->nro_frame=frame_libre;
-					nueva_fila_tablaDePaginas->pid=id;
-					nueva_fila_tablaDePaginas->nro_pagina=j;
-					list_add(tablaPaginasInvertida,nueva_fila_tablaDePaginas);
-
-					bitarray_set_bit(bitmap_frames,frame_libre);
-					pthread_mutex_unlock(&sem_mutex_lista_procesos);
-					log_info(logger, "Agrego la pagina %d del PID: %d, al frame: %d",
-										nueva_fila_tablaDePaginas->nro_pagina, nueva_fila_tablaDePaginas->pid, nueva_fila_tablaDePaginas->nro_frame);
-					j++;
-				}
-			t_fila_TPI_archivos* nueva_entrada_archivos_TPI;
-			nueva_entrada_archivos_TPI->pid = nueva_fila_tablaDePaginas->pid;
-			pthread_mutex_lock(&sem_mutex_archivos_TPI);
-			nueva_entrada_archivos_TPI->nro_pag_inicial = ultima_pagina_proceso_TPI(tabla_archivos_TPI, nueva_entrada_archivos_TPI->pid);
-			nueva_entrada_archivos_TPI->nro_pag_final = nueva_entrada_archivos_TPI->nro_pag_inicial + j;
-			list_add(tabla_archivos_TPI, nueva_entrada_archivos_TPI);
-			pthread_mutex_unlock(&sem_mutex_archivos_TPI);
-
-			}
-			else{
+			if(nro_frame_seleccionado == -1){
+				log_error(logger, "No hay espacio para un nuevo archivo");
 				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
+				return 0;
 			}
 
+			pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+			fila_TPI = (t_fila_tabla_paginas_invertida*) list_get(tabla_paginas_invertida, nro_frame_seleccionado);
+			fila_TPI->pid = id;
+			fila_TPI->bit_validez = 1;
+			int nro_pagina_base = _TPI_primera_pagina_disponible_proceso(id);
+			fila_TPI->nro_pagina = nro_pagina_base;
+			pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+
+			log_info(logger, "Agrego la pagina %d del PID: %d, al frame: %d",
+					nro_pagina_base, id, nro_frame_seleccionado);
+
+			t_fila_TPI_archivos* nueva_entrada_archivos_TPI = malloc(sizeof(t_fila_TPI_archivos));
+			nueva_entrada_archivos_TPI->pid = id;
+			nueva_entrada_archivos_TPI->nro_pag_inicial = nro_pagina_base;
+			nueva_entrada_archivos_TPI->nro_pag_final = nueva_entrada_archivos_TPI->nro_pag_inicial;
+			pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+			list_add(tabla_archivos_TPI, nueva_entrada_archivos_TPI);
+			pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+
+			ret_base = nro_pagina_base;
 		break;
 
 		case SPA:
@@ -438,6 +465,7 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
 			if(nro_frame == -1){
+				log_error(logger, "No hay espacio para un nuevo archivo");
 				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
 				return 0;
 			}
@@ -505,10 +533,10 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 	t_fila_tabla_paginas_SPA* nueva_fila_tabla_paginas_SPA;
 
     t_fila_TPI_archivos* fila_tabla_archivos_TPI;
-	t_fila_tabla_paginas_invertida* nueva_fila_tabla_paginas_TPI;
+	t_fila_tabla_paginas_invertida* fila_TPI;
 
 	t_list* backup_lineas, *backup_dir_logicas;
-	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0, ret_dir_logica, dir_logica_aux;
+	int i, lineas_contiguas_disponibles = 0, base_nuevo_segmento = 0, ret_dir_logica, dir_logica_aux, nro_frame;
 	char* linea;
 
 	switch(modo){
@@ -575,29 +603,30 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			/* Le agrego otra pagina */
 
 			pthread_mutex_lock(&sem_mutex_bitmap_frames);
-			int nro_frame = _TPI_SPA_obtener_frame_libre();
+			nro_frame = _TPI_SPA_obtener_frame_libre();
 			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
 			if(nro_frame == -1){
-				pthread_mutex_unlock(&sem_mutex_lista_procesos);
 				log_error(logger, "No hay frames disponibles");
 				*ok = FM9_ERROR_INSUFICIENTE_ESPACIO;
 				return;
 			}
 
-			nueva_fila_tabla_paginas_TPI = malloc(sizeof(t_fila_tabla_paginas_invertida));
+			pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+			int nro_pag_nueva = _TPI_incrementar_ultima_pagina_archivo_de_proceso(id, base);
+			pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
 
-			pthread_mutex_lock(&sem_mutex_archivos_TPI);
-			nueva_fila_tabla_paginas_TPI->nro_pagina = pagina_final(proceso->pid);
-			pthread_mutex_unlock(&sem_mutex_archivos_TPI);
-			nueva_fila_tabla_paginas_TPI->nro_frame = nro_frame;
+			pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+			fila_TPI = (t_fila_tabla_paginas_invertida*) list_get(tabla_paginas_invertida, nro_frame);
+			fila_TPI->pid = id;
+			fila_TPI->bit_validez = 1;
+			fila_TPI->nro_pagina = nro_pag_nueva;
+			pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
 
-			list_add(tablaPaginasInvertida, nueva_fila_tabla_paginas_TPI);
-			log_info(logger, "Agrego una pagina a la tabla invertida del PID: %d. Nro pag: %d, nro frame: %d",
-					proceso->pid, nueva_fila_tabla_paginas_TPI->nro_pagina, nueva_fila_tabla_paginas_TPI->nro_frame);
-
-			pthread_mutex_lock(&sem_mutex_lista_procesos);
+			log_info(logger, "Asigno una pagina en la tabla invertida. PID: %d. Nro pag: %d, nro frame: %d",
+					id, nro_pag_nueva, nro_frame);
 		break;
+
 		case SPA:
 			/* Le agrego otra pagina dentro del segmento al proceso */
 			pthread_mutex_lock(&sem_mutex_lista_procesos);
@@ -619,7 +648,7 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			log_info(logger, "Le intento dar otra pagina al segmento %d del PID: %d", fila_tabla_segmento_SPA->nro_seg, proceso->pid);
 
 			pthread_mutex_lock(&sem_mutex_bitmap_frames);
-			int nro_frame = _TPI_SPA_obtener_frame_libre();
+			nro_frame = _TPI_SPA_obtener_frame_libre();
 			pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
 			if(nro_frame == -1){
@@ -862,27 +891,115 @@ void _SEG_liberar_memoria_proceso(unsigned int pid){
 }
 
 
-int _TPI_nro_frames_disponibles(){
+int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok){
+	int nro_pagina_target = offset / tam_frame_lineas;
+	int offset_en_pagina = offset % tam_frame_lineas;
 
-	int i,j=0;
-	for(i=0;i<cant_frames;i++){
-		if(bitarray_test_bit(bitmap_frames,i)==0){
-			j++;
-		}
+
+	bool _mismo_pid_y_nro_pag(void* _pagina){
+		t_fila_tabla_paginas_invertida* pagina = (t_fila_tabla_paginas_invertida*) _pagina;
+		return pagina->pid == pid && pagina->bit_validez == 1 && pagina->nro_pagina == nro_pagina_target;
 	}
-	return j;
+
+	bool _archivo_mismo_pid_y_pag_inicial(void* _archivo){
+		t_fila_TPI_archivos* archivo = (t_fila_TPI_archivos*) _archivo;
+		return archivo->pid == pid && archivo->nro_pag_inicial == pag_inicial;
+	}
+
+	int list_get_index(t_list* list, bool (*closure)(void*)){
+		int i;
+		for(i = 0; i < list_size(list); i++) {
+			void* elem = list_get(list, i);
+			if(closure(elem)){
+				return i;
+			}
+		}
+
+		return -1;
+	}
+
+	pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+	t_fila_tabla_paginas_invertida* fila_TPI = list_find(tabla_paginas_invertida, _mismo_pid_y_nro_pag);
+	if(fila_TPI == NULL) {
+		*ok = FM9_ERROR_SEG_FAULT;
+		pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+		return -1;
+	}
+
+	/* Compruebo que esa pagina sea de ese archivo */
+	pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+	t_fila_TPI_archivos* archivo = list_find(tabla_archivos_TPI, _archivo_mismo_pid_y_pag_inicial);
+	if(!(fila_TPI->nro_pagina >= archivo->nro_pag_inicial && fila_TPI->nro_pagina <= archivo->nro_pag_final)) {
+		*ok = FM9_ERROR_SEG_FAULT;
+		pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+		pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+		return -1;
+	}
+	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+
+	int nro_frame = list_get_index(tabla_paginas_invertida, _mismo_pid_y_nro_pag);
+	pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+
+	*ok = OK;
+	return (nro_frame * tam_frame_lineas) + offset_en_pagina;
 }
 
-int _TPI_cantidad_paginas_del_archivo(int tamArchivo){
-	int x=0;
-	/*
-	if(tamArchivo%tam_frame!=0){
-		x=tamArchivo/tam_frame+1;
-	}else{
-		x=tamArchivo/tam_frame;
+void _TPI_close(unsigned int id, int base, int* ok){
+
+}
+
+void _TPI_liberar_memoria_proceso(unsigned int id){
+
+}
+
+/*
+unsigned int _TPI_pagina_final(unsigned int pid){
+
+	bool _mismo_pid(void* proceso){
+			return ((t_fila_TPI_archivos*) proceso)->pid == pid;
+		}
+
+	t_fila_TPI_archivos* fila = list_find(tabla_archivos_TPI, _mismo_pid);
+	fila->nro_pag_final++;
+
+	return fila->nro_pag_final;
+}
+*/
+
+unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid, int pag_inicial){
+
+	bool _mismo_pid_y_pag_inicial(void* _archivo){ // (para encontrar el archivo)
+		t_fila_TPI_archivos* archivo = (t_fila_TPI_archivos*) _archivo;
+		return archivo->pid == pid && archivo->nro_pag_inicial == pag_inicial;
 	}
-	*/
-	return x;
+
+
+	t_fila_TPI_archivos* archivo = (t_fila_TPI_archivos*) list_find(tabla_archivos_TPI, _mismo_pid_y_pag_inicial);
+	return ++(archivo->nro_pag_final); // Incremento y retorno
+}
+
+unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid){
+
+	unsigned int ultima_pagina = 0;
+
+	bool _mismo_pid_TPI(void* arch){
+		return ((t_fila_TPI_archivos*) arch)->pid == pid;
+	}
+
+	void* _nro_pag_mayor(void* arch1, void* arch2){
+		if(arch1 == NULL) return arch2;
+		return ((t_fila_TPI_archivos*) arch1)->nro_pag_inicial > ((t_fila_TPI_archivos*) arch2)->nro_pag_inicial ? arch1 : arch2;
+	}
+
+	pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+	t_list* lista_archivos_pid = list_filter(tabla_archivos_TPI, _mismo_pid_TPI);
+
+	ultima_pagina = list_size(lista_archivos_pid) > 0 ?
+			((t_fila_TPI_archivos*) list_fold(lista_archivos_pid, NULL, _nro_pag_mayor))->nro_pag_final + 1
+			: 0;
+
+	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+	return ultima_pagina;
 }
 
 
@@ -949,7 +1066,7 @@ int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok)
 	return ret;
 }
 
-void _SPA_fm9_close(unsigned int pid, int nro_seg, int* ok){
+void _SPA_close(unsigned int pid, int nro_seg, int* ok){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -999,7 +1116,7 @@ void _SPA_fm9_close(unsigned int pid, int nro_seg, int* ok){
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
-void _SPA_fm9_liberar_memoria_proceso(unsigned int pid){
+void _SPA_liberar_memoria_proceso(unsigned int pid){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -1034,36 +1151,6 @@ void _SPA_fm9_liberar_memoria_proceso(unsigned int pid){
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
-unsigned int pagina_final(unsigned int pid){
-
-	bool _mismo_pid(void* proceso){
-			return ((t_fila_TPI_archivos*) proceso)->pid == pid;
-		}
-
-	t_fila_TPI_archivos* fila = list_find(tabla_archivos_TPI, _mismo_pid);
-	fila->nro_pag_final++;
-
-	return fila->nro_pag_final;
-}
-
-unsigned int ultima_pagina_proceso_TPI(t_list* lista_archivos, unsigned int pid){
-
-	unsigned int ultima_pagina = 0;
-
-	bool _mismo_pid_TPI(void* proceso){
-				return ((t_fila_TPI_archivos*) proceso)->pid == pid;
-			}
-
-	t_list* lista_procesos_paginas_aux = list_filter(lista_archivos, _mismo_pid_TPI);
-
-	if(list_size(lista_procesos_paginas_aux) > 0){
-
-		t_fila_TPI_archivos ultimo_elemento = (t_fila_TPI_archivos) list_get(lista_procesos_paginas_aux, list_size(lista_procesos_paginas_aux)-1);
-		ultima_pagina = ultimo_elemento->nro_pag_final + 1;
-	}
-
-	return ultima_pagina;
-}
 
 void fm9_exit(){
 	free(storage);

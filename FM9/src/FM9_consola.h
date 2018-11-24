@@ -16,11 +16,13 @@
 
 	void (*fm9_dump_pid)(unsigned int);
 	void _SEG_dump_pid(unsigned int id);
-	void _SPA_fm9_dump_pid(unsigned int id);
+	void _SPA_dump_pid(unsigned int id);
+	void _TPI_dump_pid(unsigned int id);
 
 	void (*fm9_dump_estructuras)();
 	void _SEG_dump_estructuras();
 	void _SPA_dump_estructuras();
+	void _TPI_dump_estructuras();
 
 	char** fm9_consola_autocompletar();
 	char* fm9_consola_autocompletar_command_generator();

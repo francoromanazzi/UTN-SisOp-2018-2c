@@ -3,8 +3,10 @@
 static void _SEG_estr_adm_huecos_print_y_log();
 static void _SEG_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso);
 
-static void _SPA_estr_adm_bitmap_frames_print_y_log();
+static void _TPI_SPA_estr_adm_bitmap_frames_print_y_log();
+
 static void _SPA_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso);
+
 
 void fm9_consola_init(){
 	char* linea;
@@ -193,7 +195,116 @@ void _SEG_dump_estructuras(){
 	pthread_mutex_unlock(&sem_mutex_lista_procesos);
 }
 
-static void _SPA_estr_adm_bitmap_frames_print_y_log(){
+
+void _TPI_dump_pid(unsigned int id){
+
+	int nro_frame = 0;
+
+	bool _mismo_pid(void* pag){
+		return ((t_fila_tabla_paginas_invertida*) pag)->bit_validez == 1 && ((t_fila_tabla_paginas_invertida*) pag)->pid == id;
+	}
+
+	void _TPI_estr_adm_pid_print_y_log(unsigned int pid){
+
+	}
+
+	void __estr_adm_pagina_print_y_log(void* pagina){
+		if(_mismo_pid(pagina)){
+			t_fila_tabla_paginas_invertida* pag = (t_fila_tabla_paginas_invertida*) pagina;
+			log_info(logger, "NRO_FRAME: %d, NRO_PAG: %d, VALIDEZ: %d", nro_frame, pag->nro_pagina, pag->bit_validez);
+			printf("NRO_FRAME: %d, NRO_PAG: %d, VALIDEZ: %d\n", nro_frame, pag->nro_pagina, pag->bit_validez);
+		}
+		nro_frame++;
+	}
+
+	void __lineas_pagina_print_y_log(void* pagina){
+
+		bool ___mismo_archivo(void* arch){
+			return ((t_fila_TPI_archivos*) arch)->pid == id
+					&& ((t_fila_tabla_paginas_invertida*) pagina)->nro_pagina >= ((t_fila_TPI_archivos*) arch)->nro_pag_inicial
+					&& ((t_fila_tabla_paginas_invertida*) pagina)->nro_pagina <= ((t_fila_TPI_archivos*) arch)->nro_pag_final
+					&& ((t_fila_tabla_paginas_invertida*) pagina)->bit_validez == 1;
+		}
+
+		if(_mismo_pid(pagina)){
+			t_fila_tabla_paginas_invertida* pag = (t_fila_tabla_paginas_invertida*) pagina;
+			log_info(logger, "NRO_PAG: %d", pag->nro_pagina);
+			printf("NRO_PAG: %d\n", pag->nro_pagina);
+
+			pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+			int nro_pag_inicial_base = ((t_fila_TPI_archivos*) list_find(tabla_archivos_TPI, ___mismo_archivo))->nro_pag_inicial;
+			pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+
+			int i, ok;
+			char* linea;
+			for(i = 0; i < tam_frame_lineas; i++){
+				pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+				linea = fm9_storage_leer(id, nro_pag_inicial_base, i + (pag->nro_pagina * tam_frame_lineas), &ok, false);
+				pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+
+				log_info(logger,"\t%d: %s", i, linea);
+				printf("\t%d: %s\n", i, linea);
+				free(linea);
+			}
+		}
+	}
+
+
+	pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+	if((list_find(tabla_paginas_invertida, _mismo_pid)) == NULL) {
+		pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+		printf("No se encontro dicho proceso\n\n");
+		log_info(logger, "No se encontro dicho proceso");
+		return;
+	}
+
+	log_info(logger, "~~~~~~~~~~ ESTR ADM ~~~~~~~~~~");
+	printf("~~~~~~~~~~ ESTR ADM ~~~~~~~~~~\n");
+
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	_TPI_SPA_estr_adm_bitmap_frames_print_y_log();
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+	list_iterate(tabla_paginas_invertida, __estr_adm_pagina_print_y_log);
+
+	log_info(logger, "~~~~~~~~~~ LINEAS ~~~~~~~~~~");
+	printf("\n~~~~~~~~~~ LINEAS ~~~~~~~~~~\n");
+
+
+	list_iterate(tabla_paginas_invertida, __lineas_pagina_print_y_log);
+
+	pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+
+	printf("\n");
+}
+
+void _TPI_dump_estructuras(){
+	int i = 0;
+
+	void __pagina_print_y_log(void* _pagina) {
+		t_fila_tabla_paginas_invertida* pagina = (t_fila_tabla_paginas_invertida*) _pagina;
+		printf("PID: %d, NRO_PAG: %d, NRO_FRAME: %d, VALIDEZ: %d\n", pagina->pid, pagina->nro_pagina, i, pagina->bit_validez);
+		log_info(logger, "PID: %d, NRO_PAG: %d, NRO_FRAME: %d, VALIDEZ: %d", pagina->pid, pagina->nro_pagina, i, pagina->bit_validez);
+		i++;
+	}
+
+
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	_TPI_SPA_estr_adm_bitmap_frames_print_y_log();
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
+
+	log_info(logger, "Tabla de paginas invertida:");
+	printf("Tabla de paginas invertida: \n");
+
+	pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+	list_iterate(tabla_paginas_invertida, __pagina_print_y_log);
+	pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+
+	printf("\n");
+}
+
+
+static void _TPI_SPA_estr_adm_bitmap_frames_print_y_log(){
 	char* bitmap_str = string_new();
 	int i;
 
@@ -235,7 +346,7 @@ static void _SPA_estr_adm_tabla_segmentos_proceso_print_y_log(t_proceso* proceso
 	list_iterate(proceso->lista_tabla_segmentos, __SPA_estr_adm_fila_tabla_segmento_print_y_log);
 }
 
-void _SPA_fm9_dump_pid(unsigned int pid){
+void _SPA_dump_pid(unsigned int pid){
 
 	bool _mismo_id(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -247,7 +358,7 @@ void _SPA_fm9_dump_pid(unsigned int pid){
 
 	void _estr_adm_proceso_print_y_log(){
 		pthread_mutex_lock(&sem_mutex_bitmap_frames);
-		_SPA_estr_adm_bitmap_frames_print_y_log();
+		_TPI_SPA_estr_adm_bitmap_frames_print_y_log();
 		pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
 		_SPA_estr_adm_tabla_segmentos_proceso_print_y_log(proceso);
@@ -308,7 +419,7 @@ void _SPA_fm9_dump_pid(unsigned int pid){
 
 void _SPA_dump_estructuras(){
 	pthread_mutex_lock(&sem_mutex_bitmap_frames);
-	_SPA_estr_adm_bitmap_frames_print_y_log();
+	_TPI_SPA_estr_adm_bitmap_frames_print_y_log();
 	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 
 	pthread_mutex_lock(&sem_mutex_lista_procesos);
