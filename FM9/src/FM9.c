@@ -982,21 +982,38 @@ void _TPI_close(unsigned int id, int pag_inicial, int* ok){
 
 void _TPI_liberar_memoria_proceso(unsigned int id){
 
-}
+	int nro_frame = 0;
 
-/*
-unsigned int _TPI_pagina_final(unsigned int pid){
+	bool _mismo_pid(void* arch){
+		return ((t_fila_TPI_archivos*) arch)->pid == id;
+	}
 
-	bool _mismo_pid(void* proceso){
-			return ((t_fila_TPI_archivos*) proceso)->pid == pid;
+	void list_remove_and_destroy_all_by_condition(t_list* list, bool (*condition)(void*), void (*elem_destroyer)(void*)){
+		while((list_find(list, condition)) != NULL)
+			list_remove_and_destroy_by_condition(list, condition, elem_destroyer);
+	}
+
+	void _limpiar_bit_validez_y_limpiar_en_bitmap(void* _pag){
+		t_fila_tabla_paginas_invertida* pag = (t_fila_tabla_paginas_invertida*) _pag;
+		if(pag->pid == id){
+			pag->bit_validez = 0;
+			bitarray_clean_bit(bitmap_frames, nro_frame);
 		}
 
-	t_fila_TPI_archivos* fila = list_find(tabla_archivos_TPI, _mismo_pid);
-	fila->nro_pag_final++;
+		nro_frame++;
+	}
 
-	return fila->nro_pag_final;
+
+	pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+	list_remove_and_destroy_all_by_condition(tabla_archivos_TPI, _mismo_pid, free);
+	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+
+	pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	list_iterate(tabla_paginas_invertida, _limpiar_bit_validez_y_limpiar_en_bitmap);
+	pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 }
-*/
 
 unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid, int pag_inicial){
 

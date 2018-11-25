@@ -73,9 +73,7 @@
 		int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok);
 		void _TPI_close(unsigned int id, int base, int* ok);
 		void _TPI_liberar_memoria_proceso(unsigned int id);
-
 		unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid, int pag_inicial);
-		// unsigned int _TPI_pagina_final(unsigned int pid);
 		unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid);
 
 
