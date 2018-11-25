@@ -389,6 +389,24 @@ static void _hardcodear_archivos(){
 			"flush /Equipos/SanLorenzo.txt\n"
 			"borrar /Equipos/SanLorenzo.txt\n"
 			"\n");
+
+	__nuevo_escriptorio("/Escriptorios/testTPI.bin",
+			"crear /Equipos/Boca.txt 5\n"
+			"crear /Equipos/Racing.txt 2\n"
+			"abrir /Equipos/Boca.txt\n"
+			"abrir /Equipos/Racing.txt\n"
+			"asignar /Equipos/Boca.txt 1 Club\n"
+			"asignar /Equipos/Boca.txt 2 Atletico\n"
+			"asignar /Equipos/Boca.txt 3 Boca\n"
+			"asignar /Equipos/Boca.txt 4 Juniors\n"
+			"asignar /Equipos/Boca.txt 5 Bombonera\n"
+			"asignar /Equipos/Racing.txt 1 Racing\n"
+			"asignar /Equipos/Racing.txt 2 Club\n"
+			"flush /Equipos/Boca.txt\n"
+			"flush /Equipos/Racing.txt\n"
+			"close /Equipos/Boca.txt\n"
+			"\n");
+
 }
 
 void validarArchivo(char* path, int* ok){

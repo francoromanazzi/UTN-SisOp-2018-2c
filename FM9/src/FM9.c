@@ -892,7 +892,7 @@ void _SEG_liberar_memoria_proceso(unsigned int pid){
 
 
 int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok){
-	int nro_pagina_target = offset / tam_frame_lineas;
+	int nro_pagina_target = pag_inicial + (offset / tam_frame_lineas);
 	int offset_en_pagina = offset % tam_frame_lineas;
 
 
@@ -917,6 +917,7 @@ int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int*
 
 		return -1;
 	}
+
 
 	pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
 	t_fila_tabla_paginas_invertida* fila_TPI = list_find(tabla_paginas_invertida, _mismo_pid_y_nro_pag);
@@ -944,8 +945,39 @@ int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int*
 	return (nro_frame * tam_frame_lineas) + offset_en_pagina;
 }
 
-void _TPI_close(unsigned int id, int base, int* ok){
+void _TPI_close(unsigned int id, int pag_inicial, int* ok){
+	int pag_arch_inicio = -1, pag_arch_fin = -1, nro_frame = 0;
 
+	bool _misma_pag_inicial_y_pid(void* arch){
+		return ((t_fila_TPI_archivos*) arch)->pid == id && ((t_fila_TPI_archivos*) arch)->nro_pag_inicial == pag_inicial;
+	}
+
+	void _limpiar_bit_validez_y_limpiar_en_bitmap(void* _pag){
+		t_fila_tabla_paginas_invertida* pag = (t_fila_tabla_paginas_invertida*) _pag;
+		if(pag->pid == id && pag->nro_pagina >= pag_arch_inicio && pag->nro_pagina <= pag_arch_fin){
+			pag->bit_validez = 0;
+			bitarray_clean_bit(bitmap_frames, nro_frame);
+		}
+
+		nro_frame++;
+	}
+
+	void _free_y_setear_limites_arch(void* arch){
+		pag_arch_inicio = ((t_fila_TPI_archivos*) arch)->nro_pag_inicial;
+		pag_arch_fin = ((t_fila_TPI_archivos*) arch)->nro_pag_final;
+		free(arch);
+	}
+
+
+	pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
+	list_remove_and_destroy_by_condition(tabla_archivos_TPI, _misma_pag_inicial_y_pid, _free_y_setear_limites_arch);
+	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+
+	pthread_mutex_lock(&sem_mutex_tabla_paginas_invertida);
+	pthread_mutex_lock(&sem_mutex_bitmap_frames);
+	list_iterate(tabla_paginas_invertida, _limpiar_bit_validez_y_limpiar_en_bitmap);
+	pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+	pthread_mutex_unlock(&sem_mutex_bitmap_frames);
 }
 
 void _TPI_liberar_memoria_proceso(unsigned int id){
@@ -975,7 +1007,8 @@ unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid,
 
 
 	t_fila_TPI_archivos* archivo = (t_fila_TPI_archivos*) list_find(tabla_archivos_TPI, _mismo_pid_y_pag_inicial);
-	return ++(archivo->nro_pag_final); // Incremento y retorno
+	archivo->nro_pag_final++;
+	return archivo->nro_pag_final; // Incremento y retorno
 }
 
 unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid){
