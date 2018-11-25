@@ -395,7 +395,7 @@ static void _hardcodear_archivos(){
 			"crear /Equipos/Racing.txt 2\n"
 			"abrir /Equipos/Boca.txt\n"
 			"abrir /Equipos/Racing.txt\n"
-			"asignar /Equipos/Boca.txt 1 Club\n"
+			"asignar /Equipos/Boca.txt 1 Club Atletico Boca Juniors 3 abril 1905\n"
 			"asignar /Equipos/Boca.txt 2 Atletico\n"
 			"asignar /Equipos/Boca.txt 3 Boca\n"
 			"asignar /Equipos/Boca.txt 4 Juniors\n"
@@ -465,7 +465,7 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 	/* Busco en el bitmap la cantidad de bloques necesarios */
 	for(i = 0; i < bitmap->size * 8 && lista_nro_bloques->elements_count < bloques_necesarios; i++){
 		if(!bitarray_test_bit(bitmap, i)){ // Bloque disponible
-			list_add(lista_nro_bloques, (void*) i);
+			list_add(lista_nro_bloques, (void*) (i + 1)); // +1 porque los bloques empiezan en 1 y no en 0
 			bitarray_set_bit(bitmap, i);
 		}
 	}
@@ -475,7 +475,7 @@ void crearArchivo(char* path, int cant_lineas, int* ok){
 		free(rutaFinal);
 		/* Limpio del bitmap los bloques que reserve */
 		for(i = 0; i < list_size(lista_nro_bloques); i++){
-			bitarray_clean_bit(bitmap, (int) list_get(lista_nro_bloques, i));
+			bitarray_clean_bit(bitmap, ((int) list_get(lista_nro_bloques, i)) - 1); // -1 porque los bloques empiezan en 1 y no en 0
 		}
 		list_destroy(lista_nro_bloques);
 		return;
@@ -641,7 +641,7 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			return NULL;
 		}
 		bitarray_set_bit(bitmap, nro_bloque);
-		nro_bloque_str = string_itoa(nro_bloque);
+		nro_bloque_str = string_itoa(nro_bloque + 1); // +1 porque los bloques empiezan en 1 y no en 0
 
 		string_append(&ruta_bloque, paths_estructuras[BLOQUES]);
 		string_append(&ruta_bloque, nro_bloque_str);
@@ -668,7 +668,7 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			string_append(&ruta_bloque, ".bin");
 			remove(ruta_bloque);
 
-			bitarray_clean_bit(bitmap, atoi(nro_bloque));
+			bitarray_clean_bit(bitmap, atoi(nro_bloque) - 1); // -1 porque los bloques empiezan en 1 y no en 0
 
 			free(ruta_bloque);
 		}
@@ -707,7 +707,7 @@ void guardarDatos(char* path, int offset, int bytes_restantes, void* buffer, int
 			remove(ruta_bloque);
 			free(ruta_bloque);
 
-			bitarray_clean_bit(bitmap, atoi(nro_bloque));
+			bitarray_clean_bit(bitmap, atoi(nro_bloque) - 1); // -1 porque los bloques empiezan en 1 y no en 0
 
 			free(bloques_arr_strings[i]);
 			bloques_arr_strings[i] = NULL;
@@ -798,7 +798,7 @@ void borrarArchivo(char* path, int* ok){
 		string_append(&ruta_bloque, ".bin");
 		remove(ruta_bloque);
 
-		bitarray_clean_bit(bitmap, atoi(nro_bloque));
+		bitarray_clean_bit(bitmap, atoi(nro_bloque) - 1); // -1 porque los bloques empiezan en 1 y no en 0
 
 		free(ruta_bloque);
 	}

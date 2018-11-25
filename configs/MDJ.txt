@@ -1,5 +1,5 @@
 PUERTO=8002
-PUNTO_MONTAJE="/home/utnso/fifa-examples/fifa-checkpoint/"
-RETARDO=250
+PUNTO_MONTAJE="/home/utnso/fifa-examples/fifa-entrega/"
+RETARDO=350
 CANTIDAD_BLOQUES=512
 TAMANIO_BLOQUES=50

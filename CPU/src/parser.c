@@ -35,10 +35,27 @@ t_operacion* parse(char* linea){
 
 	/* ASIGNAR path linea datos */
 	else if(!strcmp(argv[0], "asignar")){
+
+		char* _obtener_datos(){
+			int i;
+			char* ret = string_new();
+			//strdup(argv[3]);
+
+			for(i = 3; i < argc; i++){
+				string_append(&ret, argv[i]);
+				if(i < argc - 1){ // Si hay mas parametros, agrego un espacio para separar
+					string_append(&ret, " ");
+				}
+			}
+
+			return ret;
+		}
+
+
 		ret->tipo_operacion = OP_ASIGNAR;
 		dictionary_put(ret->operandos, "path", (void*) strdup(argv[1]));
 		dictionary_put(ret->operandos, "linea", (void*) strdup(argv[2]));
-		dictionary_put(ret->operandos, "datos", (void*) strdup(argv[3]));
+		dictionary_put(ret->operandos, "datos", (void*) _obtener_datos());
 	}
 
 	/* WAIT recurso */
