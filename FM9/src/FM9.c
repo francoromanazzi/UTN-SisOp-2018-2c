@@ -1048,6 +1048,7 @@ unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid){
 			((t_fila_TPI_archivos*) list_fold(lista_archivos_pid, NULL, _nro_pag_mayor))->nro_pag_final + 1
 			: 0;
 
+	list_destroy(lista_archivos_pid);
 	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
 	return ultima_pagina;
 }

@@ -295,6 +295,8 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				else 									   // No pude asignarle el recurso
 					safa_send(socket, RESULTADO_WAIT, NO_OK);
 				pthread_mutex_unlock(&sem_mutex_tabla_recursos);
+
+				free(nombre_recurso);
 			break;
 
 			case SIGNAL:
@@ -304,6 +306,8 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 				pthread_mutex_lock(&sem_mutex_tabla_recursos);
 				safa_recursos_signal(id, nombre_recurso);
 				pthread_mutex_unlock(&sem_mutex_tabla_recursos);
+
+				free(nombre_recurso);
 
 				safa_send(socket, RESULTADO_SIGNAL);
 			break;
@@ -443,7 +447,7 @@ void safa_recursos_signal(unsigned int id_signal, char* nombre_recurso){
 	}
 
 
-	t_safa_semaforo* sem = _safa_recursos_encontrar_o_crear(nombre_recurso, 0);
+	t_safa_semaforo* sem = _safa_recursos_encontrar_o_crear(nombre_recurso, 1);
 
 	/* Le desasigno una instancia del recurso a id_signal, si es que tenia */
 	t_vector2* asignacion;
