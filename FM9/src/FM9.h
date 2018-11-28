@@ -82,7 +82,7 @@
 		typedef struct {
 			unsigned int nro_seg;
 			t_list* lista_tabla_paginas; // lista de t_fila_tabla_paginas_SPA
-			unsigned int frag_interna_ult_pagina; // cantidad de lineas perdidas en la ult pag del segmento
+			unsigned int fragm_interna_ult_pagina; // cantidad de lineas perdidas en la ult pag del segmento
 		} t_fila_tabla_segmento_SPA;
 
 		typedef struct {

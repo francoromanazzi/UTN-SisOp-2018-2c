@@ -481,6 +481,8 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			}
 
 			nueva_fila_tabla_segmentos_SPA = malloc(sizeof(t_fila_tabla_segmento_SPA));
+			nueva_fila_tabla_segmentos_SPA->fragm_interna_ult_pagina = tam_frame_lineas; // Al principio, la FI es toda la pag
+			log_debug(logger, "\t{nuevo_archivo} FI: %d", nueva_fila_tabla_segmentos_SPA->fragm_interna_ult_pagina);
 			nueva_fila_tabla_segmentos_SPA->lista_tabla_paginas = list_create();
 			nueva_fila_tabla_paginas_SPA = malloc(sizeof(t_fila_tabla_paginas_SPA));
 
@@ -667,6 +669,8 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 			nueva_fila_tabla_paginas_SPA->nro_frame = nro_frame;
 
 			list_add(fila_tabla_segmento_SPA->lista_tabla_paginas, nueva_fila_tabla_paginas_SPA);
+			fila_tabla_segmento_SPA->fragm_interna_ult_pagina = tam_frame_lineas; // Reset
+
 			log_info(logger, "Agrego una pagina al segmento %d del PID: %d. Nro pag: %d, nro frame: %d",
 					fila_tabla_segmento_SPA->nro_seg, proceso->pid, nueva_fila_tabla_paginas_SPA->nro_pagina, nueva_fila_tabla_paginas_SPA->nro_frame);
 
@@ -1078,9 +1082,6 @@ unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid){
 	}
 	else {
 		primera_pag_disponible = arch->nro_pag_final + 1;
-		//log_debug(logger, "\t{_TPI_primera_pagina_disponible_proceso} FI antes: %d", arch->fragm_interna_ult_pagina);
-		//arch->fragm_interna_ult_pagina = tam_frame_lineas; // Se resetea la FI ya que es una pag nueva en blanco
-		//log_debug(logger, "\t{_TPI_primera_pagina_disponible_proceso} FI despues: %d", arch->fragm_interna_ult_pagina);
 	}
 
 	list_destroy(lista_archivos_pid);
@@ -1107,6 +1108,25 @@ int _TPI_SPA_obtener_frame_libre(){
 
 
 int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok, bool permisos_totales){
+
+	bool es_ultima_pag_del_segmento(int _nro_pag, t_list* _lista_tabla_pags){
+
+		int __mayor_nro_pag(){
+
+			void* ___criterio_mayor_nro_pag(void* _pag1, void* _pag2){
+				if(_pag1 == NULL) return _pag2;
+				t_fila_tabla_paginas_SPA* pag1 = (t_fila_tabla_paginas_SPA*) _pag1;
+				t_fila_tabla_paginas_SPA* pag2 = (t_fila_tabla_paginas_SPA*) _pag2;
+				return pag1->nro_pagina > pag2->nro_pagina ? _pag1 : _pag2;
+			}
+
+			t_fila_tabla_paginas_SPA* pag = list_fold(_lista_tabla_pags, NULL, ___criterio_mayor_nro_pag);
+			return pag->nro_pagina;
+		}
+
+		return _nro_pag == __mayor_nro_pag();
+	}
+
 
 	int nro_pagina_target = offset / tam_frame_lineas;
 	int offset_en_pagina = offset % tam_frame_lineas;
@@ -1144,6 +1164,27 @@ int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok,
 		*ok = FM9_ERROR_SEG_FAULT;
 		pthread_mutex_unlock(&sem_mutex_lista_procesos);
 		return -1;
+	}
+
+	/* Compruebo que, si es la ultima pag, no sea frag int */
+	if(es_ultima_pag_del_segmento(nro_pagina_target, fila_tabla->lista_tabla_paginas)){
+		/* Es la ultima pagina */
+		/* Chequeo la frag int */
+		int ultima_linea_valida_en_pag = tam_frame_lineas - fila_tabla->fragm_interna_ult_pagina - 1; // -1 por empezar a contar en 0
+		log_debug(logger, "\tULTIMA PAGINA. Ultima_linea_valida_en_pag: %d. FI: %d", ultima_linea_valida_en_pag, fila_tabla->fragm_interna_ult_pagina);
+		if(offset_en_pagina > ultima_linea_valida_en_pag){
+			/* Esta linea esta dentro de la fragmentacion interna */
+			/* Segun los permisos, es error o la frag int disminuye*/
+			if(!permisos_totales){ // CPU o DAM GET
+				*ok = FM9_ERROR_SEG_FAULT;
+				pthread_mutex_unlock(&sem_mutex_lista_procesos);
+				return -1;
+			}
+			else{ // DAM ESCRIBIR
+				fila_tabla->fragm_interna_ult_pagina = tam_frame_lineas - offset_en_pagina - 1;
+				log_debug(logger, "\tNuevo FI: %d", fila_tabla->fragm_interna_ult_pagina);
+			}
+		}
 	}
 
 	*ok = OK;
