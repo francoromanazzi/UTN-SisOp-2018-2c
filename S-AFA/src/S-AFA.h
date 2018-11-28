@@ -28,8 +28,6 @@
 
 
 	/* Constantes */
-	#define IP "127.0.0.1"
-
 	#define CONFIG_PATH "../configs/S-AFA.txt"
 	#define LOG_DIRECTORY_PATH "../logs/"
 	#define LOG_PATH "../logs/S-AFA.log"

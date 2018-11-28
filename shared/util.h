@@ -3,6 +3,11 @@
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <string.h>
+	#include <sys/socket.h>
+	#include <arpa/inet.h>
+	#include <netinet/in.h>
+	#include <netdb.h>
+	#include <unistd.h>
 
 	#include <commons/config.h>
 	#include <commons/string.h>
@@ -41,5 +46,7 @@
 	void split_liberar(char** split);
 
 	int split_cant_elem(char**split);
+
+	char* get_local_ip();
 
 #endif /* SHARED_UTIL_H_ */

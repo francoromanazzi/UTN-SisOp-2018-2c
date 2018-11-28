@@ -147,11 +147,15 @@ int fm9_initialize(){
 	}
 	log_info(logger,"Se creo el hilo para la consola");
 
-	if((listening_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
+	char* local_ip = get_local_ip();
+	if((listening_socket = socket_create_listener(local_ip, config_get_string_value(config, "PUERTO"))) == -1){
+		free(local_ip);
 		log_error(logger,"No se pudo crear socket de escucha");
 		return -1;
 	}
-	log_info(logger, "Comienzo a escuchar  por el socket %d", listening_socket);
+	log_info(logger, "Comienzo a escuchar  por el socket %d. Mi IP es: %s", listening_socket, local_ip);
+	free(local_ip);
+
 	return 1;
 }
 

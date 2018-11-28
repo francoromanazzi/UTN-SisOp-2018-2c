@@ -9,12 +9,15 @@ int main(void){
 	}
 
 	/* Creo el socket de escucha y comienzo el select */
-	if((listening_socket = socket_create_listener(IP, safa_config_get_string_value("PUERTO"))) == -1){
+	char* local_ip = get_local_ip();
+	if((listening_socket = socket_create_listener(local_ip, safa_config_get_string_value("PUERTO"))) == -1){
 		log_error(logger, "[S-AFA] No pude crear el socket de escucha");
+		free(local_ip);
 		safa_exit();
 		exit(EXIT_FAILURE);
 	}
-	log_info(logger, "[S-AFA] Escucho en el socket %d",listening_socket);
+	log_info(logger, "[S-AFA] Escucho en el socket %d. Mi IP es: %s",listening_socket, local_ip);
+	free(local_ip);
 
 	socket_start_listening_select(listening_socket, safa_manejador_de_eventos, 1, SAFA, INOTIFY, fd_inotify);
 

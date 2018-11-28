@@ -19,8 +19,6 @@
 	#include "FM9_consola.h"
 
 /* Constantes */
-		#define IP "127.0.0.1"
-
 		#define CONFIG_PATH "../configs/FM9.txt"
 		#define LOG_DIRECTORY_PATH "../logs/"
 		#define LOG_PATH "../logs/FM9.log"

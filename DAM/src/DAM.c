@@ -40,11 +40,15 @@ int dam_initialize(){
 
 	log_info(logger, "Me conecte a SAFA");
 
-	if((listenning_socket = socket_create_listener(IP, config_get_string_value(config, "PUERTO"))) == -1){
+	char* local_ip = get_local_ip();
+	if((listenning_socket = socket_create_listener(local_ip, config_get_string_value(config, "PUERTO"))) == -1){
 		log_error(logger, "No pude crear el socket de escucha");
+		free(local_ip);
 		return -1;
 	}
-	log_info(logger, "Escucho en el socket %d", listenning_socket);
+	log_info(logger, "Escucho en el socket %d. Mi IP es: %s", listenning_socket, local_ip);
+	free(local_ip);
+
 	return 1;
 }
 
