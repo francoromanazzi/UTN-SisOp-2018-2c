@@ -44,7 +44,7 @@
 		t_list* lista_huecos_storage; // lista de t_vector2
 		pthread_mutex_t sem_mutex_lista_huecos_storage; // Mutex sobre dump y operacion asignar
 
-		int _SEG_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok);
+		int _SEG_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok, bool permisos_totales);
 		int _SEG_best_fit(int cant_lineas);
 		void _SEG_nuevo_hueco_disponible(int linea_inicio, int linea_fin);
 		void _SEG_close(unsigned int id, int base, int* ok);
@@ -65,12 +65,13 @@
 			unsigned int pid;
 			unsigned int nro_pag_inicial;
 			unsigned int nro_pag_final;
+			unsigned int fragm_interna_ult_pagina;
 		} t_fila_TPI_archivos;
 
 		t_list* tabla_archivos_TPI; // lista de t_fila_TPI_archivos
 		pthread_mutex_t sem_mutex_tabla_archivos_TPI;
 
-		int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok);
+		int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok, bool permisos_totales);
 		void _TPI_close(unsigned int id, int base, int* ok);
 		void _TPI_liberar_memoria_proceso(unsigned int id);
 		unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid, int pag_inicial);
@@ -81,6 +82,7 @@
 		typedef struct {
 			unsigned int nro_seg;
 			t_list* lista_tabla_paginas; // lista de t_fila_tabla_paginas_SPA
+			unsigned int frag_interna_ult_pagina; // cantidad de lineas perdidas en la ult pag del segmento
 		} t_fila_tabla_segmento_SPA;
 
 		typedef struct {
@@ -88,7 +90,7 @@
 			unsigned int nro_pagina;
 		} t_fila_tabla_paginas_SPA;
 
-		int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok);
+		int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok, bool permisos_totales);
 		void _SPA_close(unsigned int id, int base, int* ok);
 		void _SPA_liberar_memoria_proceso(unsigned int id);
 
@@ -131,7 +133,7 @@
 	void fm9_nuevo_cliente_iniciar(int socket);
 	int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg);
 
-	int (*fm9_dir_logica_a_fisica)(unsigned int id, int base, int offset, int* ok);
+	int (*fm9_dir_logica_a_fisica)(unsigned int id, int base, int offset, int* ok, bool permisos_totales);
 	void fm9_storage_escribir(unsigned int id, int base, int offset, char* str, int* ok, bool permisos_totales);
 	char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales);
 	int fm9_storage_nuevo_archivo(unsigned int id, int* ok);

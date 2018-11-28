@@ -290,7 +290,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				offset--; // [IMPORTANTE] Le resto 1 ya que las lineas comienzan en 1 y yo quiero que empiecen en 0 (v1.5)
 				log_info(logger,"DAM me pidio la operacion GET del ID: %d con base: %d y offset: %d", id, base, offset);
 
-				datos = fm9_storage_leer(id, base, offset, &operacion_ok, true);
+				datos = fm9_storage_leer(id, base, offset, &operacion_ok, false); // false para que considere la FI de la ult pag
 
 				fm9_send(socket, RESULTADO_GET_FM9, operacion_ok, datos);
 				if(datos != NULL) free(datos);
@@ -319,7 +319,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 
 				fm9_storage_escribir(id, base, offset, datos, &operacion_ok, false);
 				free(datos);
-				if(operacion_ok == FM9_ERROR_SEG_FAULT){
+				if(operacion_ok != OK){
 					operacion_ok = ERROR_ASIGNAR_FALLO_SEGMENTO;
 				}
 				fm9_send(socket, RESULTADO_ESCRIBIR_FM9, operacion_ok);
@@ -343,7 +343,7 @@ int fm9_manejar_nuevo_mensaje(int socket, t_msg* msg){
 				log_info(logger,"CPU me pidio liberar el archivo de ID: %d con base: %d", id, base);
 
 				fm9_close(id, base, &operacion_ok);
-				if(operacion_ok == FM9_ERROR_SEG_FAULT){
+				if(operacion_ok != OK){
 					operacion_ok = ERROR_CLOSE_FALLO_SEGMENTO;
 				}
 				fm9_send(socket, RESULTADO_CLOSE, operacion_ok);
@@ -452,6 +452,8 @@ int fm9_storage_nuevo_archivo(unsigned int id, int* ok){
 			nueva_entrada_archivos_TPI->pid = id;
 			nueva_entrada_archivos_TPI->nro_pag_inicial = nro_pagina_base;
 			nueva_entrada_archivos_TPI->nro_pag_final = nueva_entrada_archivos_TPI->nro_pag_inicial;
+			nueva_entrada_archivos_TPI->fragm_interna_ult_pagina = tam_frame_lineas; // Al principio, la FI es toda la pag
+			log_debug(logger, "\t{nuevo_archivo} FI: %d", nueva_entrada_archivos_TPI->fragm_interna_ult_pagina);
 			pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
 			list_add(tabla_archivos_TPI, nueva_entrada_archivos_TPI);
 			pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
@@ -675,7 +677,7 @@ void fm9_storage_realocar(unsigned int id, int base, int offset, int* ok){
 
 void fm9_storage_escribir(unsigned int id, int base,  int offset, char* str, int* ok, bool permisos_totales){
 
-	int dir_fisica = fm9_dir_logica_a_fisica(id, base, offset, ok);
+	int dir_fisica = fm9_dir_logica_a_fisica(id, base, offset, ok, permisos_totales);
 	if(*ok != OK) {
 		if(!permisos_totales)
 			log_error(logger, "Seg fault al traducir una direccion");
@@ -691,7 +693,7 @@ void fm9_storage_escribir(unsigned int id, int base,  int offset, char* str, int
 
 char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool permisos_totales){
 
-	int dir_fisica = fm9_dir_logica_a_fisica(id, base, offset, ok);
+	int dir_fisica = fm9_dir_logica_a_fisica(id, base, offset, ok, permisos_totales);
 	if(*ok != OK || offset < 0) {
 		if(!permisos_totales)
 			log_error(logger, "Seg fault al traducir una direccion");
@@ -713,7 +715,7 @@ char* fm9_storage_leer(unsigned int id, int base, int offset, int* ok, bool perm
 	return ret;
 }
 
-int _SEG_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok){
+int _SEG_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok, bool __permisos_totales){
 
 	bool _mismo_pid(void* proceso){
 		return ((t_proceso*) proceso)->pid == pid;
@@ -891,7 +893,7 @@ void _SEG_liberar_memoria_proceso(unsigned int pid){
 }
 
 
-int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok){
+int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int* ok, bool permisos_totales){
 	int nro_pagina_target = pag_inicial + (offset / tam_frame_lineas);
 	int offset_en_pagina = offset % tam_frame_lineas;
 
@@ -935,6 +937,26 @@ int _TPI_dir_logica_a_fisica(unsigned int pid, int pag_inicial, int offset, int*
 		pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
 		pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
 		return -1;
+	}
+	if(archivo->nro_pag_final == nro_pagina_target){
+		/* Es la ultima pagina */
+		/* Chequeo la frag int */
+		int ultima_linea_valida_en_pag = tam_frame_lineas - archivo->fragm_interna_ult_pagina - 1; // -1 por empezar a contar en 0
+		log_debug(logger, "\tULTIMA PAGINA. Ultima_linea_valida_en_pag: %d. FI: %d", ultima_linea_valida_en_pag, archivo->fragm_interna_ult_pagina);
+		if(offset_en_pagina > ultima_linea_valida_en_pag){
+			/* Esta linea esta dentro de la fragmentacion interna */
+			/* Segun los permisos, es error o la frag int disminuye*/
+			if(!permisos_totales){ // CPU o DAM GET
+				*ok = FM9_ERROR_SEG_FAULT;
+				pthread_mutex_unlock(&sem_mutex_tabla_paginas_invertida);
+				pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
+				return -1;
+			}
+			else{ // DAM ESCRIBIR
+				archivo->fragm_interna_ult_pagina = tam_frame_lineas - offset_en_pagina - 1;
+				log_debug(logger, "\tNuevo FI: %d", archivo->fragm_interna_ult_pagina);
+			}
+		}
 	}
 	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
 
@@ -1024,13 +1046,16 @@ unsigned int _TPI_incrementar_ultima_pagina_archivo_de_proceso(unsigned int pid,
 
 
 	t_fila_TPI_archivos* archivo = (t_fila_TPI_archivos*) list_find(tabla_archivos_TPI, _mismo_pid_y_pag_inicial);
+	log_debug(logger, "\t{_TPI_incrementar_ultima_pagina_archivo_de_proceso} VIEJO FI: %d", archivo->fragm_interna_ult_pagina);
+	archivo->fragm_interna_ult_pagina = tam_frame_lineas; // Reset
+	log_debug(logger, "\t{_TPI_incrementar_ultima_pagina_archivo_de_proceso} NUEVO FI: %d", archivo->fragm_interna_ult_pagina);
 	archivo->nro_pag_final++;
 	return archivo->nro_pag_final; // Incremento y retorno
 }
 
 unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid){
 
-	unsigned int ultima_pagina = 0;
+	unsigned int primera_pag_disponible = 0;
 
 	bool _mismo_pid_TPI(void* arch){
 		return ((t_fila_TPI_archivos*) arch)->pid == pid;
@@ -1041,16 +1066,26 @@ unsigned int _TPI_primera_pagina_disponible_proceso(unsigned int pid){
 		return ((t_fila_TPI_archivos*) arch1)->nro_pag_inicial > ((t_fila_TPI_archivos*) arch2)->nro_pag_inicial ? arch1 : arch2;
 	}
 
+
 	pthread_mutex_lock(&sem_mutex_tabla_archivos_TPI);
 	t_list* lista_archivos_pid = list_filter(tabla_archivos_TPI, _mismo_pid_TPI);
 
-	ultima_pagina = list_size(lista_archivos_pid) > 0 ?
-			((t_fila_TPI_archivos*) list_fold(lista_archivos_pid, NULL, _nro_pag_mayor))->nro_pag_final + 1
-			: 0;
+	t_fila_TPI_archivos* arch = (t_fila_TPI_archivos*) list_fold(lista_archivos_pid, NULL, _nro_pag_mayor);
+
+	if(list_size(lista_archivos_pid) <= 0){ // El pid no tenia paginas
+		log_debug(logger, "\t{_TPI_primera_pagina_disponible_proceso} NO TENIA PAGS");
+		primera_pag_disponible = 0;
+	}
+	else {
+		primera_pag_disponible = arch->nro_pag_final + 1;
+		//log_debug(logger, "\t{_TPI_primera_pagina_disponible_proceso} FI antes: %d", arch->fragm_interna_ult_pagina);
+		//arch->fragm_interna_ult_pagina = tam_frame_lineas; // Se resetea la FI ya que es una pag nueva en blanco
+		//log_debug(logger, "\t{_TPI_primera_pagina_disponible_proceso} FI despues: %d", arch->fragm_interna_ult_pagina);
+	}
 
 	list_destroy(lista_archivos_pid);
 	pthread_mutex_unlock(&sem_mutex_tabla_archivos_TPI);
-	return ultima_pagina;
+	return primera_pag_disponible;
 }
 
 
@@ -1071,7 +1106,7 @@ int _TPI_SPA_obtener_frame_libre(){
 }
 
 
-int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok){
+int _SPA_dir_logica_a_fisica(unsigned int pid, int nro_seg, int offset, int* ok, bool permisos_totales){
 
 	int nro_pagina_target = offset / tam_frame_lineas;
 	int offset_en_pagina = offset % tam_frame_lineas;
