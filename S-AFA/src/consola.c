@@ -5,7 +5,7 @@ void consola_iniciar(){
 
 	/* Cosas para el autocompletar: */
 	rl_attempted_completion_function = (CPPFunction *) consola_autocompletar;
-	t_config* config_mdj = config_create("/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/MDJ.txt");
+	t_config* config_mdj = config_create("../configs/MDJ.txt");
 	util_config_fix_comillas(&config_mdj, "PUNTO_MONTAJE");
 	ruta_fs_archivos = strdup(config_get_string_value(config_mdj, "PUNTO_MONTAJE"));
 	string_append(&ruta_fs_archivos, "Archivos");
