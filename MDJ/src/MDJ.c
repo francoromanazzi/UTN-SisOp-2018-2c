@@ -29,7 +29,7 @@ int main(void) {
 	logger = log_create(LOG_PATH, "MDJ", false, LOG_LEVEL_TRACE);
 
 	crearEstructuras();
-	_hardcodear_archivos();
+	//_hardcodear_archivos();
 
 	char* local_ip = get_local_ip();
 	if((listenning_socket = socket_create_listener(local_ip, config_get_string_value(config, "PUERTO"))) == -1){

@@ -30,6 +30,7 @@
 
 	char** consola_autocompletar();
 	char* consola_autocompletar_command_generator();
+	char* consola_autocompletar_comando_config_generator();
 	extern char** completion_matches(char *, rl_compentry_func_t *);
 
 #endif /* CONSOLA_H_ */

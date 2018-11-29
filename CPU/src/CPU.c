@@ -167,7 +167,7 @@ int cpu_send(int socket, e_tipo_msg tipo_msg, ...){
 
 		case TIEMPO_RESPUESTA: // A SAFA
 			id = va_arg(arguments, unsigned int);
-			clock_gettime(CLOCK_MONOTONIC, &time);
+			clock_gettime(CLOCK_REALTIME, &time);
 			mensaje_a_enviar = empaquetar_tiempo_respuesta(id, time);
 		break;
 

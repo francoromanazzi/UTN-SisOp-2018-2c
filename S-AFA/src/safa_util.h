@@ -27,6 +27,7 @@
 	void safa_config_create_fixed();
 	int safa_config_get_int_value(char* key);
 	char* safa_config_get_string_value(char* key);
+	void safa_config_update_value_and_flush(char* key, char* value);
 
 	void status_free(t_status* status);
 	t_status* status_copiar(t_status* otro_status);

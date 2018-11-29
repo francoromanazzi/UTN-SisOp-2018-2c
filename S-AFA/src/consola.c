@@ -1,7 +1,7 @@
 #include "consola.h"
 
 void consola_iniciar(){
-	char * linea;
+	char* linea;
 
 	/* Cosas para el autocompletar: */
 	rl_attempted_completion_function = (CPPFunction *) consola_autocompletar;
@@ -50,7 +50,8 @@ void consola_procesar_comando(char* linea){
 		printf("finalizar [pcb_id]:\tFinaliza la ejecucion de un GDT especificado\n");
 		printf("metricas:\t\tMuestra distintas metricas del sistema\n");
 		printf("metricas [pcb_id]:\tMuestra distintas metricas del sistema y del DTB especificado\n");
-		printf("clear:\t\tLimpia la pantalla\n");
+		printf("metricas [pcb_id]:\tMuestra distintas metricas del sistema y del DTB especificado\n");
+		printf("config [key] [value]:\tSetea un atributo del archivo de config\n");
 		printf("salir:\t\t\tCierra la consola\n\n");
 	}
 
@@ -193,6 +194,11 @@ void consola_procesar_comando(char* linea){
 		}
 	}
 
+	/* Comando config */
+	else if(argc == 3 && !strcmp(argv[0], "config")){
+		safa_config_update_value_and_flush(argv[1], argv[2]);
+	}
+
 	/* Comando clear */
 	else if(argc == 1 && !strcmp(argv[0], "clear")){
 		system("clear");
@@ -254,31 +260,45 @@ t_safa_msg* consola_esperar_msg(e_safa_tipo_msg tipo_msg){
    entire line in case we want to do some simple parsing.  Return the
    array of matches, or NULL if there aren't any. */
 char** consola_autocompletar (text, start, end)
-     char *text;
+     char* text;
      int start, end;
 {
-  char **matches;
 
-  matches = (char **)NULL;
+	bool _comando_config(){
+		char** _split = string_split(rl_line_buffer, " ");
+		int _split_len = split_cant_elem(_split);
+		bool ret = (_split_len == 1 || _split_len == 2) && !strcmp(_split[0], "config");
+		split_liberar(_split);
+		return ret;
+	}
+
+
+  char** matches = (char**) NULL;
+
+
+  /* Autocompletar comando config con los atributos del archivo config */
+  if(_comando_config())
+	  matches = completion_matches(text, consola_autocompletar_comando_config_generator);
 
   /* If this word is at the start of the line, then it is a command
      to complete.  Otherwise it is the name of a file in the current
      directory. */
-  if (start == 0)
-    matches = completion_matches (text, consola_autocompletar_command_generator);
+  else if (start == 0)
+    matches = completion_matches(text, consola_autocompletar_command_generator);
 
-  return (matches);
+  return matches;
 }
 
 /* Generator function for command completion.  STATE lets us know whether to start
    from scratch; without any state (i.e. STATE == 0), then we start at the top of the list. */
 char* consola_autocompletar_command_generator (text, state)
-     char *text;
+     char* text;
      int state;
 {
 	static int list_index, len;
 	char *name;
-	static char* commands[] = {"ayuda", "ejecutar", "status", "finalizar", "metricas", "clear", "salir", (char*) NULL};
+	static char* commands[] = {"ayuda", "ejecutar", "status", "finalizar", "metricas", "config", "clear", "salir", (char*) NULL};
+
 
 	/* If this is a new word to complete, initialize now.  This includes
 	 saving the length of TEXT for efficiency, and initializing the index
@@ -292,32 +312,43 @@ char* consola_autocompletar_command_generator (text, state)
 	while ((name = commands[list_index]) != NULL){
 	  list_index++;
 
-	  if (strncmp (name, text, len) == 0)
-		return (strdup(name));
+	  if (strncmp (name, text, len) == 0){
+		  return strdup(name);
+	  }
+
 	}
 
 	/* If no names matched, then return NULL. */
-	return ((char *)NULL);
+	return (char*) NULL;
 }
 
+char* consola_autocompletar_comando_config_generator(text, state)
+	char* text;
+	int state;
+{
+	static int list_index, len;
+	char* name;
+	static char* commands[] = {"ALGORITMO", "QUANTUM", "MULTIPROGRAMACION", "RETARDO_PLANIF", (char*) NULL};
 
+	/* If this is a new word to complete, initialize now.  This includes
+	saving the length of TEXT for efficiency, and initializing the index
+	variable to 0. */
+	if(!state){
+	 list_index = 0;
+	 len = strlen (text);
+	}
 
+	/* Return the next name which partially matches from the command list. */
+	while ((name = commands[list_index]) != NULL){
+	 list_index++;
 
+	 if (strncmp (name, text, len) == 0)
+		return strdup(name);
+	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	/* If no names matched, then return NULL. */
+	return (char*) NULL;
+}
 
 
 

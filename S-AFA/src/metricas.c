@@ -22,7 +22,7 @@ void metricas_tiempo_add_start(unsigned int id){
 	char* key = string_itoa((int) id);
 
 	struct timespec time;
-	clock_gettime(CLOCK_MONOTONIC, &time);
+	clock_gettime(CLOCK_REALTIME, &time);
 
 	double* tiempo_inicio = malloc(sizeof(double));
 	*tiempo_inicio = timespec_to_double(time);

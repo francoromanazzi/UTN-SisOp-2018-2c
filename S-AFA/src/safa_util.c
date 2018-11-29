@@ -32,6 +32,65 @@ char* safa_config_get_string_value(char* key){
 	return ret;
 }
 
+void safa_config_update_value_and_flush(char* key, char* value){
+
+	void _flush(){
+		/* Hardcodeado, porque hice chdir en consola para poder autocompletar del filesystem */
+		char* path_config_1 = "/home/utnso/workspace/tp-2018-2c-RegorDTs/configs/S-AFA.txt";
+		char* path_config_2 = "/home/utnso/tp-2018-2c-RegorDTs/configs/S-AFA.txt";
+
+		/* RETARDO */
+		int retardo_microsegundos = config_get_int_value(config, "RETARDO_PLANIF");
+		char* retardo_microsegundos_str = string_itoa(retardo_microsegundos);
+		char* retardo_milisegundos_str = string_itoa(retardo_microsegundos / 1000);
+		config_set_value(config, "RETARDO_PLANIF", retardo_milisegundos_str);
+		free(retardo_milisegundos_str);
+
+		/* ALGORITMO */
+		char* algoritmo_sin_comillas = strdup(config_get_string_value(config, "ALGORITMO"));
+		char* algoritmo_con_comillas = strdup("\"");
+		string_append(&algoritmo_con_comillas, algoritmo_sin_comillas);
+		string_append(&algoritmo_con_comillas, "\"");
+		config_set_value(config, "ALGORITMO", algoritmo_con_comillas);
+		free(algoritmo_con_comillas);
+
+		int result = config_save_in_file(config, path_config_2);
+		if(result < 0){
+			result = config_save_in_file(config, path_config_1);
+		}
+
+		config_set_value(config, "RETARDO_PLANIF", retardo_microsegundos_str);
+		config_set_value(config, "ALGORITMO", algoritmo_sin_comillas);
+
+		free(retardo_microsegundos_str);
+		free(algoritmo_sin_comillas);
+	}
+
+
+	pthread_mutex_lock(&sem_mutex_config);
+
+	/* Validacion */
+	if(!config_has_property(config, key)
+			|| !strcmp(key, "PUERTO")
+			|| (!strcmp(key, "ALGORITMO") && strcmp(value, "RR") && strcmp(value, "VRR") && strcmp(value, "IOBF"))){
+		pthread_mutex_unlock(&sem_mutex_config);
+		return;
+	}
+
+	config_set_value(config, key, value);
+
+	if(!strcmp(key, "RETARDO_PLANIF")){
+		/* Milisegundos a microsegundos */
+		char* retardo_microsegundos_str = string_itoa(1000 * config_get_int_value(config, "RETARDO_PLANIF"));
+		config_set_value(config, "RETARDO_PLANIF", retardo_microsegundos_str); // Milisegundos a microsegundos
+		free(retardo_microsegundos_str);
+	}
+
+	_flush();
+
+	pthread_mutex_unlock(&sem_mutex_config);
+}
+
 t_status* status_copiar(t_status* otro_status){
 	t_status* ret = malloc(sizeof(t_status));
 

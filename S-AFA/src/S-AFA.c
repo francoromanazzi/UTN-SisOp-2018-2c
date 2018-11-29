@@ -19,7 +19,7 @@ int main(void){
 	log_info(logger, "[S-AFA] Escucho en el socket %d. Mi IP es: %s",listening_socket, local_ip);
 	free(local_ip);
 
-	socket_start_listening_select(listening_socket, safa_manejador_de_eventos, 1, SAFA, INOTIFY, fd_inotify);
+	socket_start_listening_select(listening_socket, safa_manejador_de_eventos, 0 /*, 1, SAFA, INOTIFY, fd_inotify */); // TODO DESCOMENTAR
 
 	safa_exit();
 	return EXIT_SUCCESS;
@@ -28,14 +28,14 @@ int main(void){
 int safa_initialize(){
 
 	void _create_fd_inotify(){
-		fd_inotify = inotify_init1(IN_NONBLOCK);
-		inotify_add_watch(fd_inotify, CONFIG_PATH, IN_CLOSE_WRITE);
+		fd_inotify = inotify_init();
+		inotify_add_watch(fd_inotify, CONFIG_PATH, (IN_CLOSE_WRITE || IN_MOVED_TO || IN_MODIFY) /*(IN_CLOSE | IN_MOVE | IN_MODIFY | IN_MOVE_SELF | IN_IGNORED)*/);
 	}
 
 	safa_protocol_initialize();
 	safa_util_initialize();
 	metricas_initialize();
-	_create_fd_inotify();
+	//_create_fd_inotify(); // TODO DESCOMENTAR
 
 	estado_operatorio = false;
 	cpu_conectado = false;
@@ -327,6 +327,7 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 	else if(msg->header->emisor == SAFA){
 		switch(msg->header->tipo_mensaje){
 			case INOTIFY:
+				log_info(logger, "[INOTIFY] Nuevo evento");
 				safa_manejar_inotify();
 			break;
 		}
@@ -340,25 +341,31 @@ int safa_manejador_de_eventos(int socket, t_msg* msg){
 void safa_manejar_inotify(){
 	char buf[4096] __attribute__ ((aligned(__alignof__(struct inotify_event))));
 	const struct inotify_event *event;
-	int i;
 	ssize_t len;
 	char *ptr;
 
 	/* Read some events. */
-	len = read(fd_inotify, buf, sizeof buf);
+	len = read(fd_inotify, buf, 4096);
 	if (len == -1 && errno != EAGAIN) {
 		log_error(logger, "[INOTIFY] read");
 	    return;
 	}
 
-   if (len <= 0)
+
+   if (len <= 0){
+	   log_error(logger, "[INOTIFY] len <= 0");
 	   return;
+   }
+
 
    /* Loop over all events in the buffer */
    for (ptr = buf; ptr < buf + len; ptr += sizeof(struct inotify_event) + event->len) {
 	   event = (const struct inotify_event *) ptr;
 
-        if (event->mask & IN_CLOSE_WRITE){
+        if ((event->mask & IN_CLOSE_WRITE) ||
+			(event->mask & IN_MOVED_TO) ||
+			(event->mask & IN_MODIFY)
+        ){
 
 			/* Actualizo config */
 			pthread_mutex_lock(&sem_mutex_config);
@@ -387,6 +394,7 @@ void safa_manejar_inotify(){
 			free(viejo_algoritmo);
         }
     }
+
 }
 
 static t_safa_semaforo* _safa_recursos_encontrar_o_crear(char* nombre_recurso, int valor_iniciar_recurso){
