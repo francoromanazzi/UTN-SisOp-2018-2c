@@ -29,7 +29,7 @@ int main(void) {
 	logger = log_create(LOG_PATH, "MDJ", false, LOG_LEVEL_TRACE);
 
 	crearEstructuras();
-	//_hardcodear_archivos();
+	_hardcodear_archivos();
 
 	char* local_ip = get_local_ip();
 	if((listenning_socket = socket_create_listener(local_ip, config_get_string_value(config, "PUERTO"))) == -1){
@@ -248,10 +248,11 @@ void crearEstructuras(){
 	string_append(&bin_metadata, dir_metadata);
 	string_append(&bin_metadata, "/Metadata.bin");
 	if((f_metadata = fopen(bin_metadata, "r")) == NULL){ // Si no existe el archivo metadata
+		printf("[[FATAL ERROR]] FILESYSTEM NO ENCONTRADO (se creara uno nuevo)");
 		f_metadata = fopen(bin_metadata, "wb+");
 		config_metadata = config_create(bin_metadata);
-		config_set_value(config_metadata, "TAMANIO_BLOQUES", config_get_string_value(config, "TAMANIO_BLOQUES"));
-		config_set_value(config_metadata, "CANTIDAD_BLOQUES", config_get_string_value(config, "CANTIDAD_BLOQUES"));
+		config_set_value(config_metadata, "TAMANIO_BLOQUES", "64");
+		config_set_value(config_metadata, "CANTIDAD_BLOQUES", "256");
 		config_set_value(config_metadata, "MAGIC_NUMBER", "FIFA");
 		config_save(config_metadata);
 	}
@@ -289,7 +290,7 @@ void crearEstructuras(){
 	free(bin_bitmap);
 }
 
-static void _hardcodear_archivos(){
+static void _hardcodear_archivos(){ // PARA TESTEAR
 
 	void __nuevo_escriptorio(char* ruta, char* contenido){
 
@@ -325,48 +326,19 @@ static void _hardcodear_archivos(){
 		}
 	}
 
-
-	__nuevo_escriptorio("/Escriptorios/test2.bin",
-			"crear /Equipos/River.txt 3\n"
-			"abrir /Equipos/River.txt\n"
-			"asignar /Equipos/River.txt 1 Gallardo\n"
-			"asignar /Equipos/River.txt 2 Ponzio\n"
-			"asignar /Equipos/River.txt 3 PityMartinez\n"
-			"flush /Equipos/River.txt\n"
-			"\n");
-
-	__nuevo_escriptorio("/Escriptorios/test3.bin",
-			"crear /Equipos/EquiposChicos/Sacachispas.txt 2\n"
-			"abrir /Equipos/EquiposChicos/Sacachispas.txt\n"
-			"asignar /Equipos/EquiposChicos/Sacachispas.txt 1 SACA\n"
-			"asignar /Equipos/EquiposChicos/Sacachispas.txt 2 CHISPAS\n"
-			"flush /Equipos/EquiposChicos/Sacachispas.txt\n"
-			"borrar /Equipos/EquiposChicos/Sacachispas.txt\n"
-			"close /Equipos/EquiposChicos/Sacachispas.txt\n"
-			"\n");
-
-	__nuevo_escriptorio("/Escriptorios/testWait.bin",
-			"wait Conmebol\n"
-			"wait Conmebol\n"
-			"crear /Equipos/Huracan.txt 2\n"
+	/*
+	__nuevo_escriptorio("/scripts/cpu.escriptorio",
 			"concentrar\n"
-			"\n");
-
-	__nuevo_escriptorio("/Escriptorios/testSignal.bin",
-			"signal Conmebol\n"
-			"\n");
-
-	__nuevo_escriptorio("/Escriptorios/testSPA.bin",
-			"crear /Equipos/River.txt 11\n"
-			"abrir /Equipos/River.txt\n"
-			"asignar /Equipos/River.txt 1 Gallardo\n"
-			"asignar /Equipos/River.txt 2 Ponzio\n"
-			"asignar /Equipos/River.txt 3 PityMartinez\n"
-			"asignar /Equipos/River.txt 5 Armani\n"
-			"flush /Equipos/River.txt\n"
-			"\n");
-
-	__nuevo_escriptorio("/Escriptorios/cpuBound.bin",
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
+			"concentrar\n"
 			"concentrar\n"
 			"concentrar\n"
 			"concentrar\n"
@@ -380,36 +352,24 @@ static void _hardcodear_archivos(){
 			"concentrar\n"
 			"\n");
 
-	__nuevo_escriptorio("/Escriptorios/ioBound.bin",
-			"crear /Equipos/Boca.txt 3\n"
-			"crear /Equipos/Racing.txt 2\n"
-			"crear /Equipos/SanLorenzo.txt 2\n"
-			"abrir /Equipos/Boca.txt\n"
-			"close /Equipos/Boca.txt\n"
-			"abrir /Equipos/Racing.txt\n"
-			"abrir /Equipos/SanLorenzo.txt\n"
-			"borrar /Equipos/Racing.txt\n"
-			"flush /Equipos/SanLorenzo.txt\n"
-			"borrar /Equipos/SanLorenzo.txt\n"
+	__nuevo_escriptorio("/scripts/io_to_cpu.escriptorio",
+			"crear /estadisticas/goleadores.txt 10\n"
+			"abrir /estadisticas/goleadores.txt\n"
+			"asignar /estadisticas/goleadores.txt 1 E. Gigliotti - Independiente - 12\n"
+			"flush /estadisticas/goleadores.txt\n"
+			"asignar /estadisticas/goleadores.txt 2 L. Lopez - Racing Club - 9\n"
+			"asignar /estadisticas/goleadores.txt 3 L. Rodriguez - Atl. Tucuman - 7\n"
+			"asignar /estadisticas/goleadores.txt 4 F. Barcelo - Patronato - 6\n"
+			"asignar /estadisticas/goleadores.txt 5 M. Rojas - Defensa y Justicia - 6\n"
+			"asignar /estadisticas/goleadores.txt 6 D. Cvitanich - Banfield - 5\n"
+			"asignar /estadisticas/goleadores.txt 7 F. Zampedri - Rosario Central - 4\n"
+			"asignar /estadisticas/goleadores.txt 8 N. Fernandez - Defensa y Justicia - 4\n"
+			"asignar /estadisticas/goleadores.txt 9 N. Blandi - San Lorenzo - 4\n"
+			"asignar /estadisticas/goleadores.txt 10 R. Aliendro - Atl. Tucuman - 4\n"
+			"flush /estadisticas/goleadores.txt\n"
 			"\n");
 
-	__nuevo_escriptorio("/Escriptorios/testTPI.bin",
-			"crear /Equipos/Boca.txt 5\n"
-			"crear /Equipos/Racing.txt 2\n"
-			"abrir /Equipos/Boca.txt\n"
-			"abrir /Equipos/Racing.txt\n"
-			"asignar /Equipos/Boca.txt 1 Club Atletico Boca Juniors 3 abril 1905\n"
-			"asignar /Equipos/Boca.txt 2 Atletico\n"
-			"asignar /Equipos/Boca.txt 3 Boca\n"
-			"asignar /Equipos/Boca.txt 4 Juniors\n"
-			"asignar /Equipos/Boca.txt 5 Bombonera\n"
-			"asignar /Equipos/Racing.txt 1 Racing\n"
-			"asignar /Equipos/Racing.txt 2 Club\n"
-			"flush /Equipos/Boca.txt\n"
-			"flush /Equipos/Racing.txt\n"
-			"close /Equipos/Boca.txt\n"
-			"\n");
-
+	*/
 }
 
 void validarArchivo(char* path, int* ok){
