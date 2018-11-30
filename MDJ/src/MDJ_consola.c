@@ -163,6 +163,15 @@ void mdj_consola_procesar_comando(char* linea){
 		if(access(pwd_copy, F_OK) != -1 ){ // El archivo existe
 			int contenido_size;
 			void* contenido = _obtener_contenido_archivo(pwd_copy, &contenido_size);
+
+			/* DEBUG */
+			char* contenido_str = malloc(contenido_size + 1);
+			memcpy((void*) contenido_str, contenido, contenido_size);
+			contenido_str[contenido_size] = '\0';
+			printf("SIZE: %d\n%s.\n\n", contenido_size, contenido_str);
+			free(contenido_str);
+
+
 			unsigned char digest[MD5_DIGEST_LENGTH];
 			MD5_CTX context;
 			MD5_Init(&context);
