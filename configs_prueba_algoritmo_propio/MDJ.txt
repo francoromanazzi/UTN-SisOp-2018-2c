@@ -1,3 +1,3 @@
 PUERTO=8002
 PUNTO_MONTAJE="/home/utnso/tp-2018-2c-RegorDTs/fifa-propio/"
-RETARDO=600
+RETARDO=300
