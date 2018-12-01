@@ -19,7 +19,7 @@ int main(void){
 	log_info(logger, "[S-AFA] Escucho en el socket %d. Mi IP es: %s",listening_socket, local_ip);
 	free(local_ip);
 
-	socket_start_listening_select(listening_socket, safa_manejador_de_eventos, 0 /*, 1, SAFA, INOTIFY, fd_inotify */); // TODO DESCOMENTAR
+	socket_start_listening_select(listening_socket, safa_manejador_de_eventos, 0 /*, 1, SAFA, INOTIFY, fd_inotify */);
 
 	safa_exit();
 	return EXIT_SUCCESS;
@@ -35,7 +35,7 @@ int safa_initialize(){
 	safa_protocol_initialize();
 	safa_util_initialize();
 	metricas_initialize();
-	//_create_fd_inotify(); // TODO DESCOMENTAR
+	//_create_fd_inotify();
 
 	estado_operatorio = false;
 	cpu_conectado = false;

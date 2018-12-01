@@ -32,7 +32,7 @@ char* safa_config_get_string_value(char* key){
 	return ret;
 }
 
-void safa_config_update_value_and_flush(char* key, char* value){
+char* safa_config_update_value_and_flush(char* key, char* value){
 
 	void _flush(){
 		/* Hardcodeado, porque hice chdir en consola para poder autocompletar del filesystem */
@@ -70,12 +70,24 @@ void safa_config_update_value_and_flush(char* key, char* value){
 	pthread_mutex_lock(&sem_mutex_config);
 
 	/* Validacion */
-	if(!config_has_property(config, key)
-			|| !strcmp(key, "PUERTO")
-			|| (!strcmp(key, "ALGORITMO") && strcmp(value, "RR") && strcmp(value, "VRR") && strcmp(value, "IOBF"))){
+	if(!config_has_property(config, key)){
 		pthread_mutex_unlock(&sem_mutex_config);
-		return;
+		return strdup("La clave no existia en el archivo de config");
 	}
+	if(!strcmp(key, "PUERTO")){
+		pthread_mutex_unlock(&sem_mutex_config);
+		return strdup("No se puede modificar el puerto");
+	}
+	if(!strcmp(key, "ALGORITMO") && strcmp(value, "RR") && strcmp(value, "VRR") && strcmp(value, "IOBF")){
+		pthread_mutex_unlock(&sem_mutex_config);
+		return strdup("El algoritmo debe ser RR, VRR o IOBF");
+	}
+	if((!strcmp(key, "QUANTUM") || !strcmp(key, "MULTIPROGRAMACION") || !strcmp(key, "RETARDO_PLANIF"))
+			&& atoi(value) <= 0){
+		pthread_mutex_unlock(&sem_mutex_config);
+		return strdup("El valor debe ser numerico y positivo");
+	}
+
 
 	config_set_value(config, key, value);
 
@@ -89,6 +101,8 @@ void safa_config_update_value_and_flush(char* key, char* value){
 	_flush();
 
 	pthread_mutex_unlock(&sem_mutex_config);
+
+	return (char*) NULL;
 }
 
 t_status* status_copiar(t_status* otro_status){

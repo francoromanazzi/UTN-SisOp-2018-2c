@@ -196,7 +196,14 @@ void consola_procesar_comando(char* linea){
 
 	/* Comando config */
 	else if(argc == 3 && !strcmp(argv[0], "config")){
-		safa_config_update_value_and_flush(argv[1], argv[2]);
+		char* error = safa_config_update_value_and_flush(argv[1], argv[2]);
+		if(error == NULL){ // No hubo errores
+			printf("Config actualizada correctamente\n\n");
+		}
+		else{ // Error
+			printf("[ERROR] %s\n\n", error);
+			free(error);
+		}
 	}
 
 	/* Comando clear */
